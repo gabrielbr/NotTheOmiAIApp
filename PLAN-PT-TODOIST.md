@@ -11,19 +11,18 @@
 
 | Item | State |
 |---|---|
-| Whisper `language="auto"` when the loaded model is multilingual, otherwise `"en"` (`whisper_jni.cpp`) | Done. Native JNI safety suite passes (ASan+UBSan); cross-compiled for arm64-v8a and x86_64 |
-| Whisper model swapped to multilingual `ggml-small-q5_1.bin` (SHA-256 `ae85e4a9…11bb`, cross-checked against Hugging Face's LFS hash) | Done |
-| Vosk live-draft model swapped to `vosk-model-small-pt-0.3` (archive SHA-256 `6e1ce909…93b7`, per-file manifest regenerated) | Done. Installer host tests pass against the real archive |
-| `TaskExtractor`: offline PT+EN cue-phrase finder, plus `tests/tasks/run_host_checks.py` | Done; host checks pass |
-| `TasksActivity`: review/edit/select, then share each task to `com.todoist`, plus a "Find tasks for Todoist" button on each saved recording | Done; builds. Not run on a device yet |
-| All existing host suites (capture, hybrid, job, whisper-java, omi, omi-capture, omi-composition) | Pass |
-| `./gradlew assembleDebug assembleRelease assembleDebugAndroidTest lintDebug` | Pass. Lint shows only translation warnings, the same kind the existing screens have |
-| `tests/hybrid/verify_apk.py` on a signed arm64 release APK | Pass: both models pinned, native libs present, `internet_permission: false` |
-| On-device check: PT/EN accuracy with your Omi, and the Todoist share flow | **Pending; needs your phone** |
-| New applicationId `br.gabriel.omitarefas`, app name "Omi Tarefas" (Phase 0) | Done |
-| Release on every merge to `main`: signed APK in GitHub Releases, versionCode `100 + run number` (`.github/workflows/release.yml`, `RELEASING.md`) | Done; needs the two signing-key secrets once |
-| Notification after refinement ("N tarefas encontradas") | Deferred. The per-recording button covers v1 |
-| Portuguese UI strings | Deferred |
+| Whisper `language="auto"` when the model is multilingual (`whisper_jni.cpp`) | Done |
+| Whisper model: multilingual **medium Q5_0** (`ggml-medium-q5_0.bin`, SHA-256 `19fea4b3…220f`); old small weights deleted on update | Done |
+| Vosk live-draft model `vosk-model-small-pt-0.3` | Done |
+| `TaskExtractor` + `TasksActivity` (Todoist share) | **Moved to Sentient.** Removed from `:app`; restore from commit `d6165d4` |
+| "Transcript ready" notification after refinement (count only, opens the recording) | Done |
+| Own app identity: package `br.gabriel.omitarefas`, name **GVoice** (formerly Omi Tarefas) | Done |
+| Release on every merge to `main` (signed APK, versionCode `100 + run number`) | Done |
+| Design system after gabriellopes.com (`Ui.java`, `docs/DESIGN.md`) | Done |
+| Background running: one-time battery-optimization exemption prompt | Done |
+| On-device: basic use | Done (tested by you) |
+| Workday endurance, screen-off, reconnection | **Field test pending** ([docs/FIELD-TEST.md](docs/FIELD-TEST.md)); 2-minute no-audio limit still open |
+| Portuguese UI strings | Dropped |
 
 ## Feasibility: yes
 
