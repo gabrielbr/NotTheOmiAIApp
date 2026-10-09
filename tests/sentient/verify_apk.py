@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_PERMISSIONS = {
     'android.permission.INTERNET',
     'android.permission.RECEIVE_BOOT_COMPLETED',
+    'android.permission.REQUEST_INSTALL_PACKAGES',  # in-app updates; Android confirms each install
     'br.gabriel.omitarefas.permission.READ_TRANSCRIPTS',
 }
 # Computer control is out of scope: no accessibility, overlay, input or screen capture.

@@ -93,6 +93,8 @@ public final class SyncJobService extends JobService {
                         }
                     }
                     if (VaultFolder.folder(this) != null && VaultFolder.auto(this)) VaultFolder.export(this, db, now);
+                    try { UpdateInstaller.remember(this, Updates.latest(new UrlHttp()), now); }
+                    catch (Exception offlineOrLimited) { /* the next sync checks again */ }
                 }
                 setState(cancelled ? "Sync paused by Android · will resume"
                         : "Synced · " + added + " new, " + updated + " updated"

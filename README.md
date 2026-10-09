@@ -26,6 +26,8 @@ GVoice has no internet access, so it can't check for updates itself. Use [Obtain
 
 Obtainium checks in the background, notifies you of new releases and opens Android's install prompt.
 
+**Or update from GMind:** with GMind installed, open About (ⓘ) › **Updates**, or tap the "Update available" line on its home screen. GMind checks GitHub once a day, downloads GMind and GVoice updates, checks each file against the release's `SHA256SUMS.txt` and the installed app's signing key, and Android asks you to confirm the install. GVoice itself stays offline.
+
 ## What GVoice does
 
 - Omi Bluetooth LE Opus audio → encrypted phone-local PCM and transcript history.

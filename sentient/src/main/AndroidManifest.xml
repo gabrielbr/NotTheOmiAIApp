@@ -4,6 +4,8 @@
  <uses-permission android:name="android.permission.INTERNET"/>
  <!-- Keeps the daily sync job scheduled across reboots. -->
  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+ <!-- In-app updates of GMind and GVoice from GitHub releases; Android asks to confirm every install. -->
+ <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
  <!-- Same definition as Omi Tarefas (same signing key), so the grant works whichever app is
       installed first. Apps with different signers can't both define it, which is intended. -->
  <permission android:name="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS" android:protectionLevel="signature" android:label="Read GVoice transcripts"/>
@@ -21,6 +23,8 @@
   <activity android:name=".PeopleActivity" android:exported="false"/>
   <activity android:name=".PersonActivity" android:exported="false"/>
   <activity android:name=".TasksActivity" android:exported="false"/>
+  <activity android:name=".UpdatesActivity" android:exported="false"/>
+  <receiver android:name=".UpdateInstaller$Receiver" android:exported="false"/>
   <!-- Chat capture: reads WhatsApp and Signal notifications only; the user grants access in Settings. -->
   <service android:name=".MessagesListenerService" android:label="GMind message capture" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true">
    <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>

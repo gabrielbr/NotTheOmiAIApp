@@ -173,6 +173,21 @@ public final class SentientScreenshotTest {
         settle(); shot(t, "tasks");
     }
 
+    @Test public void updates() throws Exception {
+        android.app.Application app = org.robolectric.RuntimeEnvironment.getApplication();
+        Object json = br.gabriel.sentient.plugin.Json.parse(UpdatesTestData.RELEASE);
+        java.util.Map<String, String> sums = new java.util.HashMap<>();
+        sums.put("GMind-0.9.0.apk", "e42c7e1745e262028e7623da7158677d7068a2443cbfffdadb9b56782a9032c4");
+        sums.put("GVoice-0.9.0-arm64-v8a.apk", "45caa672aa9b99ced288f62aff9b31ba848b94a590806cabfcf8ce0b2dcd6964");
+        UpdateInstaller.remember(app, Updates.parse(json, sums), System.currentTimeMillis() - HOUR);
+        android.content.pm.PackageInfo gvoice = new android.content.pm.PackageInfo();
+        gvoice.packageName = Updates.GVOICE;
+        gvoice.versionName = "0.5.24";
+        org.robolectric.Shadows.shadowOf(app.getPackageManager()).installPackage(gvoice);
+        UpdatesActivity a = Robolectric.buildActivity(UpdatesActivity.class).setup().get();
+        settle(); a.draw(); settle(); shot(a, "updates");
+    }
+
     /** Same state plus a standing notice (row column 7). */
     static Sources.State noticed(Sources.State s, String notice) throws Exception {
         Constructor<Sources.State> c = Sources.State.class.getDeclaredConstructor(Object[].class);
