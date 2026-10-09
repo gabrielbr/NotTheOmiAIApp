@@ -225,6 +225,17 @@ The user picks, in GMind's UI, which groups or people in which apps (WhatsApp, S
 
 Onboarding asks the user's name (and nicknames or other spellings, like "Gabriel" / "Gabi"). Task detection uses it to keep only tasks meant for the user. A request addressed to someone else in a group ("Ana, send the report") isn't added. A message with no name, sent in a direct chat, counts as addressed to the user.
 
+### Update checker and in-app update for both APKs
+
+Both apps (GVoice and GMind) check for a newer release and update themselves from inside the app, instead of the user installing the APK by hand or through Obtainium (`RELEASING.md`).
+
+- Source: the repository's GitHub releases. A release is newer when its versionCode is higher than the installed app's.
+- GMind does the network part for both apps, because GVoice has no INTERNET permission and `tests/hybrid/verify_apk.py` keeps it that way. GMind checks once a day (in the daily sync) and on "Check for updates". It downloads the APK, checks it against the release's `SHA256SUMS.txt` and checks that its signer matches the installed app, then installs it with `PackageInstaller`. Android still asks the user to confirm each install.
+- GVoice gets an "Update" entry that opens GMind's update screen when GMind is installed. Without GMind, it links to the releases page in the browser. Either way GVoice itself stays offline.
+- The update screen shows each app's installed and latest version, the release notes, and an **Update** button per app.
+- `:sentient` gains `REQUEST_INSTALL_PACKAGES`, so the `tests/sentient/verify_apk.py` allow-list changes with it.
+- An update never uninstalls or changes the signing key, so recordings and the GMind store are kept (same rule as in `RELEASING.md`).
+
 ## Verification
 
 - **Host tests (no phone)**, in the same style as `tests/sentient/run_host_checks.py`: plugin contract and `RawItem` mapping per plugin using recorded JSON fixtures (Composio responses, a Matrix `/sync` page, MessagingStyle bundles), dedupe of re-posted WhatsApp history, cursor-advances-only-after-commit, the schema migration ladder, the SQL whitelist rejecting non-SELECT queries, and that Composio write tools are refused (except the allow-listed Todoist task tools, once the Todoist sync exists).
