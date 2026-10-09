@@ -206,24 +206,6 @@ GMind is the Android take on Sentient OS: collect what's new in your life every 
 | **Readable by Claude in any conversation** | Vault reachable outside the phone | 6 |
 | Computer control (Mac) | **Excluded on purpose.** GMind is read-only and has no accessibility service; `verify_apk.py` enforces this | — |
 
-## Backlog
-
-Ideas accepted but not yet planned into a phase.
-
-### Watched conversations for tasks
-
-Let the user pick, in GMind's UI, which groups or people to watch in each source app (WhatsApp, Signal, later Composio and Matrix). GMind checks new messages from those conversations for tasks as they arrive and adds them to the task review list.
-
-- **Example:** a company WhatsApp group tells Gabriel to fill in his hours sheet. GMind watches that group and adds the task "Gabriel: fill in hours sheet".
-- **Picker:** a per-app list of the conversations and people already in the store, with a toggle each. Nothing is watched by default.
-- **Timelines:** the extractor reads deadlines and dates from the message ("até sexta", "end of month", "amanhã às 14h") and keeps them as the task's due date. Relative dates are resolved against the message's timestamp, not the time it's processed.
-- **Evidence:** each task links back to the message it came from, shown in its conversation.
-- **Still read-only:** tasks go to the review list and are only sent to Todoist after review. GMind never replies in the watched conversation.
-
-### Ask for the user's name during onboarding
-
-Ask for the user's name (and nicknames) when GMind is first set up, and store it as the user's own identity. The task extractor uses it to keep only tasks aimed at the user: "Gabriel, preencha suas horas" becomes a task, "Ana, envie o relatório" does not. Group messages with no addressee need a rule, for example keep them only in watched conversations, or mark them "maybe for you". The name can be changed later in settings.
-
 ## Verification
 
 - **Host tests (no phone)**, in the same style as `tests/sentient/run_host_checks.py`: plugin contract and `RawItem` mapping per plugin using recorded JSON fixtures (Composio responses, a Matrix `/sync` page, MessagingStyle bundles), dedupe of re-posted WhatsApp history, cursor-advances-only-after-commit, the schema migration ladder, the SQL whitelist rejecting non-SELECT queries, and that Composio write tools are refused.
