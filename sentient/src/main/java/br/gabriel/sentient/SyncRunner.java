@@ -1,5 +1,6 @@
 package br.gabriel.sentient;
 
+import br.gabriel.sentient.plugin.Http;
 import br.gabriel.sentient.plugin.PluginContext;
 import br.gabriel.sentient.plugin.PullResult;
 import br.gabriel.sentient.plugin.RawItem;
@@ -32,20 +33,28 @@ public final class SyncRunner {
 
     public interface Clock { long now(); }
 
+    /** Saved secrets by name (decrypted on demand); null when missing. */
+    public interface Secrets { String get(String name); }
+
     public static List<Outcome> run(Db db, List<SourcePlugin> plugins, BooleanSupplier cancelled, Clock clock)
             throws Exception {
+        return run(db, plugins, cancelled, clock, name -> null, null);
+    }
+
+    public static List<Outcome> run(Db db, List<SourcePlugin> plugins, BooleanSupplier cancelled, Clock clock,
+                                    Secrets secrets, Http http) throws Exception {
         List<Outcome> outcomes = new ArrayList<>();
         for (SourcePlugin plugin : plugins) {
             if (cancelled.getAsBoolean()) break;
             Sources.State state = Sources.ensure(db, plugin.id());
             if (!state.enabled) continue;
-            outcomes.add(pullAll(db, plugin, state.cursor, cancelled, clock));
+            outcomes.add(pullAll(db, plugin, state.cursor, cancelled, clock, secrets, http));
         }
         return outcomes;
     }
 
     private static Outcome pullAll(Db db, SourcePlugin plugin, String cursor, BooleanSupplier cancelled,
-                                   Clock clock) throws Exception {
+                                   Clock clock, Secrets secrets, Http http) throws Exception {
         String id = plugin.id();
         PluginContext context = new PluginContext() {
             @Override public String config(String key) {
@@ -53,6 +62,12 @@ public final class SyncRunner {
                 catch (Exception failure) { throw new IllegalStateException(failure); }
             }
             @Override public boolean cancelled() { return cancelled.getAsBoolean(); }
+            @Override public String secret(String name) { return secrets.get(name); }
+            @Override public long now() { return clock.now(); }
+            @Override public Http http() {
+                if (http == null) throw new UnsupportedOperationException("No network for this source");
+                return http;
+            }
         };
         int added = 0, updated = 0;
         String status;
@@ -66,6 +81,7 @@ public final class SyncRunner {
                 Ingest.Stats stats = db.transaction(() -> {
                     Ingest.Stats s = Ingest.upsert(db, result.items, clock.now());
                     Sources.advance(db, id, next);
+                    if (result.notice != null) Sources.setNotice(db, id, result.notice.isEmpty() ? null : result.notice);
                     return s;
                 });
                 cursor = next;

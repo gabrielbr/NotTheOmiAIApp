@@ -10,17 +10,19 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
- * Turns one chat-app notification (WhatsApp or Signal, as a {@link Snapshot}) into message items.
- * Plain Java so host tests run it. Both apps re-post the recent history of a chat with every new
+ * Turns one chat-app notification (WhatsApp, Signal or Telegram, as a {@link Snapshot}) into message items.
+ * Plain Java so host tests run it. The apps re-post the recent history of a chat with every new
  * message, so each message gets a content-derived id and re-posts are no-ops at ingest.
  */
 public final class ChatMessages {
-    public static final String WHATSAPP = "whatsapp", SIGNAL = "signal";
+    public static final String WHATSAPP = "whatsapp", SIGNAL = "signal", TELEGRAM = "telegram";
 
     /** Chat apps GMind reads, by notification package. Each is its own source. */
     public enum App {
         WHATSAPP_APP(WHATSAPP, "WhatsApp", "com.whatsapp", "com.whatsapp.w4b"),
-        SIGNAL_APP(SIGNAL, "Signal", "org.thoughtcrime.securesms");
+        SIGNAL_APP(SIGNAL, "Signal", "org.thoughtcrime.securesms"),
+        TELEGRAM_APP(TELEGRAM, "Telegram", "org.telegram.messenger", "org.telegram.messenger.web",
+                "org.thunderdog.challegram");
 
         public final String id, displayName;
         final String[] packages;

@@ -75,7 +75,7 @@ public final class MessagesListenerTest {
                 .setContentTitle("WhatsApp").setContentText("5 messages from 3 chats").build();
         assertTrue(ChatMessages.parse(MessagesListenerService.snapshot(posted("com.whatsapp", summary))).isEmpty());
         assertEquals(ChatMessages.App.WHATSAPP_APP, ChatMessages.App.forPackage("com.whatsapp.w4b"));
-        assertNull(ChatMessages.App.forPackage("org.telegram.messenger"));
+        assertNull(ChatMessages.App.forPackage("com.facebook.orca"));
     }
 
     @Test public void signalConversation() {

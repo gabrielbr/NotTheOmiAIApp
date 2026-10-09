@@ -16,7 +16,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Saves chat messages (WhatsApp, Signal) as their notifications arrive. Reads only those apps'
+ * Saves chat messages (WhatsApp, Signal, Telegram) as their notifications arrive. Reads only those apps'
  * notifications, never dismisses or answers them, and never logs message text.
  */
 public final class MessagesListenerService extends NotificationListenerService {

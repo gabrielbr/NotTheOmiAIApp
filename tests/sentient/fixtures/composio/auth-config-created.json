@@ -1,0 +1,10 @@
+{
+ "toolkit": {
+  "slug": "gmail"
+ },
+ "auth_config": {
+  "id": "ac_new",
+  "auth_scheme": "OAUTH2",
+  "is_composio_managed": true
+ }
+}

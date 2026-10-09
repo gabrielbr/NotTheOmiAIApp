@@ -99,6 +99,38 @@ public final class SentientScreenshotTest {
         settle(); shot(t, "thread");
     }
 
+    @Test public void connect() throws Exception {
+        android.app.Application app = org.robolectric.RuntimeEnvironment.getApplication();
+        ConnectActivity a = Robolectric.buildActivity(ConnectActivity.class).setup().get();
+        settle(); shot(a, "connect");
+
+        // A saved key (the Keystore isn't available here, so only its file), Gmail connected, Calendar pending.
+        java.io.File key = new java.io.File(app.getNoBackupFilesDir(), "composio.key");
+        key.getParentFile().mkdirs();
+        try (FileOutputStream out = new FileOutputStream(key)) { out.write(new byte[40]); }
+        Connections.pending(app, new ComposioGmail(), "ca_1");
+        Connections.connected(app, new ComposioGmail());
+        Connections.pending(app, new ComposioCalendar(), "ca_2");
+        a.draw();
+        settle(); shot(a, "connect-composio");
+        key.delete();
+        Connections.remove(app, new ComposioGmail());
+        Connections.remove(app, new ComposioCalendar());
+
+        SentientActivity home = Robolectric.buildActivity(SentientActivity.class).setup().get();
+        settle();
+        grantWhatsApp(home, true);
+        long now = System.currentTimeMillis();
+        home.showSources(Arrays.asList(
+                state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
+                state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L),
+                state(ChatMessages.TELEGRAM, now - 2 * HOUR, "OK · live", 12, now - 50 * 60_000L),
+                state("composio.gmail", now - 2 * HOUR, "OK · 25 new, 0 updated", 214, now - 4 * HOUR),
+                noticed(state(MatrixPlugin.ID, now - 2 * HOUR, "OK · 9 new, 0 updated", 87, now - 6 * HOUR),
+                        "2 rooms are end-to-end encrypted. GMind can't read those yet; unencrypted rooms are saved.")));
+        settle(); shot(home, "home-connected");
+    }
+
     /** Same state plus a standing notice (row column 7). */
     static Sources.State noticed(Sources.State s, String notice) throws Exception {
         Constructor<Sources.State> c = Sources.State.class.getDeclaredConstructor(Object[].class);

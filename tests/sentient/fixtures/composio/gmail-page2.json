@@ -1,0 +1,23 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "messages": [
+   {
+    "messageId": "m3",
+    "threadId": "t1",
+    "messageTimestamp": "2026-10-08T14:30:00Z",
+    "labelIds": [
+     "SENT"
+    ],
+    "sender": "Me <me@example.com>",
+    "subject": "Re: Almoço domingo",
+    "preview": {
+     "subject": "Re: Almoço domingo",
+     "body": "Sim! 13h?"
+    }
+   }
+  ]
+ },
+ "log_id": "log_x"
+}

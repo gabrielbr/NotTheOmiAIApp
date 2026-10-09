@@ -109,7 +109,7 @@ public final class SentientActivity extends Activity {
     private EditText searchField() {
         EditText search = new EditText(this);
         search.setSingleLine(true);
-        search.setHint("Search messages and recordings");
+        search.setHint("Search everything synced");
         search.setTextSize(16);
         search.setTypeface(Ui.font(this, false));
         search.setTextColor(Ui.INK);
@@ -154,8 +154,14 @@ public final class SentientActivity extends Activity {
             List<Sources.State> states;
             try {
                 Db db = KnowledgeStore.get(this);
-                for (SourcePlugin plugin : PluginRegistry.plugins(this)) Sources.ensure(db, plugin.id());
-                states = Sources.all(db);
+                java.util.Set<String> registered = new java.util.HashSet<>();
+                for (SourcePlugin plugin : PluginRegistry.plugins(this)) {
+                    Sources.ensure(db, plugin.id());
+                    registered.add(plugin.id());
+                }
+                // A disconnected source keeps its items (searchable) but leaves the list.
+                states = new java.util.ArrayList<>();
+                for (Sources.State state : Sources.all(db)) if (registered.contains(state.pluginId)) states.add(state);
             } catch (Exception failure) {
                 main.post(() -> { if (!destroyed && query.isEmpty()) showStoreError(failure); });
                 return;
@@ -178,8 +184,8 @@ public final class SentientActivity extends Activity {
         if (empty) {
             // First launch: one explanation, then the sources so WhatsApp can be set up right away.
             body.addView(Ui.text(this, "Nothing synced yet.", 20, Ui.INK, true));
-            TextView hint = Ui.text(this, "GMind copies your GVoice transcripts once a day and saves WhatsApp "
-                    + "and Signal messages as they arrive. Start the first sync now.", 15, Ui.MUTED, false);
+            TextView hint = Ui.text(this, "GMind copies your GVoice transcripts once a day and saves WhatsApp, "
+                    + "Signal and Telegram messages as they arrive. Start the first sync now.", 15, Ui.MUTED, false);
             hint.setPadding(0, dp(8), 0, dp(20));
             body.addView(hint);
         }
@@ -190,6 +196,9 @@ public final class SentientActivity extends Activity {
             body.addView(sourceRow(s));
         }
         body.addView(Ui.divider(this));
+        Ui.gap(body, 12);
+        body.addView(Ui.button(this, "Connect Gmail, Calendar, Matrix…", Ui.Style.QUIET,
+                v -> startActivity(new Intent(this, ConnectActivity.class))), new LinearLayout.LayoutParams(-1, -2));
         Ui.gap(body, 20);
         if (!empty) {
             String line = busy ? "Getting new messages and recordings…"
@@ -212,6 +221,8 @@ public final class SentientActivity extends Activity {
         boolean needsAccess = chat && !ChatPlugin.accessGranted(this);
         boolean problem = chat ? needsAccess || s.notice != null
                 : s.lastStatus != null && !s.lastStatus.startsWith(OK);
+        // A network source's notice is a standing limit (e.g. Matrix encrypted rooms), not a failure.
+        String info = chat ? null : s.notice;
         if (problem) {
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, -2);
             cp.leftMargin = dp(10);
@@ -221,7 +232,7 @@ public final class SentientActivity extends Activity {
         String metaText;
         if (chat) metaText = s.lastItemAt == null ? "No messages yet"
                 : count(s.itemCount, "message") + " · last one " + ago(s.lastItemAt);
-        else metaText = count(s.itemCount, OmiTranscripts.ID.equals(s.pluginId) ? "recording" : "item") + " · "
+        else metaText = count(s.itemCount, noun(s.pluginId)) + " · "
                 + (s.lastSyncAt == null ? "Not synced yet" : "Synced " + ago(s.lastSyncAt));
         TextView meta = Ui.text(this, metaText, 13, Ui.MUTED, false);
         meta.setPadding(0, dp(6), 0, 0);
@@ -233,6 +244,11 @@ public final class SentientActivity extends Activity {
                     15, Ui.CORAL_TEXT, false);
             reason.setPadding(0, dp(8), 0, 0);
             r.addView(reason);
+        }
+        if (info != null) {
+            TextView hint = Ui.text(this, info, 13, Ui.MUTED, false);
+            hint.setPadding(0, dp(8), 0, 0);
+            r.addView(hint);
         }
         if (chat && s.notice == null && (needsAccess || s.lastItemAt == null)) {
             // Explain the limits once, on the first chat row being set up; later rows add only their own.
@@ -270,6 +286,17 @@ public final class SentientActivity extends Activity {
         // Android capitalises "Yesterday"; it reads mid-sentence here ("Synced yesterday").
         boolean english = "en".equals(java.util.Locale.getDefault().getLanguage());
         return english && !value.isEmpty() ? Character.toLowerCase(value.charAt(0)) + value.substring(1) : value;
+    }
+
+    /** What a source's items are called in its row. */
+    static String noun(String pluginId) {
+        if (OmiTranscripts.ID.equals(pluginId)) return "recording";
+        if (MatrixPlugin.ID.equals(pluginId)) return "message";
+        ComposioToolkit toolkit = ComposioToolkit.forSource(pluginId);
+        if (toolkit instanceof ComposioGmail) return "email";
+        if (toolkit instanceof ComposioCalendar) return "event";
+        if (toolkit instanceof ComposioDrive) return "file";
+        return "item";
     }
 
     private static String count(long n, String noun) { return n + " " + noun + (n == 1 ? "" : "s"); }
@@ -386,8 +413,9 @@ public final class SentientActivity extends Activity {
                 .setMessage("Your knowledge base: everything GMind collects, searchable in one place.\n\n"
                         + "• Encrypted on this phone. Uninstalling or clearing the app's data deletes it.\n"
                         + "• Syncs once a day while the battery isn't low, or when you tap Sync now.\n"
-                        + "• It reads your GVoice transcripts, and WhatsApp and Signal messages from their notifications once you allow access.\n"
-                        + "• Nothing leaves the phone, except when you ask Claude a question: then your question and the messages Claude looks up are sent to Anthropic. Ask can also answer on the phone, offline, with a downloaded model.\n"
+                        + "• It reads your GVoice transcripts, and WhatsApp, Signal and Telegram messages from their notifications once you allow access.\n"
+                        + "• Sources you connect are read from their servers: Matrix directly from your homeserver; Gmail, Calendar and Drive through Composio, whose servers fetch that data with your Composio key.\n"
+                        + "• Nothing you collected is uploaded anywhere, except when you ask Claude a question: then your question and the items Claude looks up are sent to Anthropic. Ask can also answer on the phone, offline, with a downloaded model.\n"
                         + "• Read-only: GMind never sends messages or acts for you.")
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Licenses", (d, w) -> licenses())

@@ -17,7 +17,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 
-/** A chat app (WhatsApp, Signal), captured live by MessagesListenerService. The daily sync only
+/** A chat app (WhatsApp, Signal, Telegram), captured live by MessagesListenerService. The daily sync only
  * checks that notification access is still on. One access grant covers every chat app. */
 final class ChatPlugin implements SourcePlugin {
     private final Context context;

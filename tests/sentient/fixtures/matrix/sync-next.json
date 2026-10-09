@@ -1,0 +1,25 @@
+{
+ "next_batch": "s2",
+ "rooms": {
+  "join": {
+   "!fam:example.org": {
+    "timeline": {
+     "limited": false,
+     "prev_batch": "p9",
+     "events": [
+      {
+       "type": "m.room.message",
+       "event_id": "$f4",
+       "sender": "@mae:example.org",
+       "origin_server_ts": 1791547201000,
+       "content": {
+        "msgtype": "m.emote",
+        "body": "acena"
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}

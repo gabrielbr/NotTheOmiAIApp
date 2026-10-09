@@ -2,19 +2,6 @@ package br.gabriel.sentient;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.security.keystore.KeyGenParameterSpec;
-import android.security.keystore.KeyProperties;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.security.KeyStore;
-
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.GCMParameterSpec;
 
 /**
  * Who answers questions, and the Claude API key. The key is kept only encrypted, by a
@@ -25,8 +12,6 @@ final class AskSettings {
     static final String HAIKU = "claude-haiku-5-5", SONNET = "claude-sonnet-5-5", OPUS = "claude-opus-5-5";
     static final String[] MODELS = {HAIKU, SONNET, OPUS};
     private static final String PREFS = "ask", BACKEND = "backend", MODEL = "model";
-    private static final String KEYSTORE = "AndroidKeyStore", ALIAS = "gmind_claude_key_v1", FILE = "claude.key";
-    private static final int IV_BYTES = 12, TAG_BITS = 128;
 
     private AskSettings() {}
 
@@ -50,62 +35,15 @@ final class AskSettings {
         }
     }
 
-    static boolean hasKey(Context c) { return keyFile(c).exists(); }
+    static boolean hasKey(Context c) { return SecretStore.CLAUDE.has(c); }
 
     /** The saved key's last four characters, for "Key saved · …abcd"; null if none. */
-    static String keyHint(Context c) {
-        String key = apiKey(c);
-        return key == null || key.length() < 4 ? null : key.substring(key.length() - 4);
-    }
+    static String keyHint(Context c) { return SecretStore.CLAUDE.hint(c); }
 
-    static void saveKey(Context c, String key) throws Exception {
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, wrappingKey());
-        cipher.updateAAD(ALIAS.getBytes(StandardCharsets.UTF_8));
-        byte[] sealed = cipher.doFinal(key.trim().getBytes(StandardCharsets.UTF_8));
-        File file = keyFile(c), temp = new File(file.getPath() + ".tmp");
-        try (FileOutputStream out = new FileOutputStream(temp)) {
-            out.write(cipher.getIV());
-            out.write(sealed);
-            out.getFD().sync();
-        }
-        if (!temp.renameTo(file)) throw new IllegalStateException("Could not save the key");
-    }
+    static void saveKey(Context c, String key) throws Exception { SecretStore.CLAUDE.save(c, key.trim()); }
 
-    static void deleteKey(Context c) {
-        File file = keyFile(c);
-        if (file.exists() && !file.delete()) file.deleteOnExit();
-    }
+    static void deleteKey(Context c) { SecretStore.CLAUDE.delete(c); }
 
     /** Null when no key is saved or it can no longer be decrypted (e.g. after a Keystore reset). */
-    static String apiKey(Context c) {
-        File file = keyFile(c);
-        if (!file.exists()) return null;
-        try {
-            byte[] blob = Files.readAllBytes(file.toPath());
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, wrappingKey(), new GCMParameterSpec(TAG_BITS, blob, 0, IV_BYTES));
-            cipher.updateAAD(ALIAS.getBytes(StandardCharsets.UTF_8));
-            return new String(cipher.doFinal(blob, IV_BYTES, blob.length - IV_BYTES), StandardCharsets.UTF_8);
-        } catch (Exception unreadable) {
-            return null;
-        }
-    }
-
-    private static File keyFile(Context c) { return new File(c.getNoBackupFilesDir(), FILE); }
-
-    private static SecretKey wrappingKey() throws Exception {
-        KeyStore store = KeyStore.getInstance(KEYSTORE);
-        store.load(null);
-        if (!store.containsAlias(ALIAS)) {
-            KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE);
-            generator.init(new KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setKeySize(256)
-                    .build());
-            generator.generateKey();
-        }
-        return (SecretKey) store.getKey(ALIAS, null);
-    }
+    static String apiKey(Context c) { return SecretStore.CLAUDE.read(c); }
 }

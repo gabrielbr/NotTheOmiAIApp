@@ -1,0 +1,73 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "messages": [
+   {
+    "messageId": "m1",
+    "threadId": "t1",
+    "messageTimestamp": "2026-10-08T12:00:00Z",
+    "labelIds": [
+     "INBOX",
+     "UNREAD"
+    ],
+    "sender": "Ana Souza <Ana@Example.com>",
+    "subject": "Almoço domingo",
+    "messageText": "Vamos almoçar domingo?",
+    "payload": {
+     "mimeType": "text/plain",
+     "body": {
+      "data": "VmFtb3MgYWxtb8OnYXIgZG9taW5nbz8"
+     }
+    }
+   },
+   {
+    "messageId": "m2",
+    "threadId": "t2",
+    "internalDate": "1791460800000",
+    "labelIds": [
+     "INBOX"
+    ],
+    "payload": {
+     "mimeType": "multipart/alternative",
+     "headers": [
+      {
+       "name": "From",
+       "value": "bob@corp.com"
+      },
+      {
+       "name": "Subject",
+       "value": "Report"
+      }
+     ],
+     "parts": [
+      {
+       "mimeType": "text/html",
+       "body": {
+        "data": "PHA-UmVsYXTDs3JpbyA8Yj5hbmV4bzwvYj48L3A-"
+       }
+      },
+      {
+       "mimeType": "text/plain",
+       "body": {
+        "data": "UmVsYXTDs3JpbyBhbmV4bw"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "messageId": "m4",
+    "threadId": "t4",
+    "messageTimestamp": "2026-10-08T13:00:00Z",
+    "labelIds": [
+     "DRAFT"
+    ],
+    "subject": "draft"
+   }
+  ],
+  "nextPageToken": "p2",
+  "resultSizeEstimate": 3
+ },
+ "log_id": "log_x"
+}

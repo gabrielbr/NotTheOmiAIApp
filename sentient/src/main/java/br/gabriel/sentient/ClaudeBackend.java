@@ -40,7 +40,7 @@ final class ClaudeBackend implements LlmBackend {
     private static final List<Tool> TOOLS = Collections.unmodifiableList(Arrays.asList(
             tool(KnowledgeTools.SEARCH, AskPrompts.SEARCH_DESCRIPTION, Collections.emptyList(),
                     prop("query", "string", "Words to find"),
-                    prop("source", "string", "omi.transcripts, whatsapp or signal"),
+                    prop("source", "string", "A source id, e.g. whatsapp, matrix or composio.gmail"),
                     prop("person", "string", "A person's or chat's name"),
                     prop("from", "string", "First day, YYYY-MM-DD"),
                     prop("to", "string", "Last day, YYYY-MM-DD"),
@@ -53,7 +53,7 @@ final class ClaudeBackend implements LlmBackend {
             tool(KnowledgeTools.TIMELINE, AskPrompts.TIMELINE_DESCRIPTION, Arrays.asList("from", "to"),
                     prop("from", "string", "First day, YYYY-MM-DD"),
                     prop("to", "string", "Last day, YYYY-MM-DD"),
-                    prop("source", "string", "omi.transcripts, whatsapp or signal"),
+                    prop("source", "string", "A source id, e.g. whatsapp, matrix or composio.gmail"),
                     prop("limit", "integer", "How many lines, up to 50"))));
 
     private final AnthropicClient client;

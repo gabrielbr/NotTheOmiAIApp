@@ -1,0 +1,12 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "file": {
+   "name": "Notas.txt",
+   "mimetype": "text/plain",
+   "s3url": "https://files.example.com/notas.txt"
+  }
+ },
+ "log_id": "log_x"
+}

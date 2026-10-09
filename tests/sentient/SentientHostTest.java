@@ -327,7 +327,7 @@ public final class SentientHostTest {
         check(!ChatMessages.contentHidden(signalSnap("Rui", false, msg("Rui", "Chego às 9", 1))), "real content isn't hidden");
         check(!ChatMessages.contentHidden(snap("Ana", null, false, false, "msg", msg("Ana", "New message", 1))),
                 "only Signal reports hidden content");
-        check(ChatMessages.parse(new ChatMessages.Snapshot("org.telegram.messenger", 1, "X", null, false, false, null, "msg",
+        check(ChatMessages.parse(new ChatMessages.Snapshot("com.facebook.orca", 1, "X", null, false, false, null, "msg",
                 Arrays.asList(msg("X", "hi", 1)))).isEmpty(), "other apps ignored");
         check(ChatMessages.App.forId("signal") == ChatMessages.App.SIGNAL_APP
                 && ChatMessages.App.forPackage("com.whatsapp.w4b") == ChatMessages.App.WHATSAPP_APP, "app table lookups");
