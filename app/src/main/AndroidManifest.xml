@@ -21,7 +21,6 @@
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
   </activity>
   <activity android:name=".OmiSettingsActivity" android:exported="false"/>
-  <activity android:name=".TasksActivity" android:exported="false"/>
   <service android:name=".OmiCaptureService" android:exported="false" android:foregroundServiceType="connectedDevice" android:stopWithTask="false"/>
   <service android:name=".CaptureService" android:exported="false" android:foregroundServiceType="microphone" android:stopWithTask="false"/>
   <provider android:name=".TranscriptProvider" android:authorities="br.gabriel.omitarefas.transcripts" android:exported="true" android:permission="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS"/>
