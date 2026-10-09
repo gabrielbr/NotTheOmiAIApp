@@ -13,10 +13,10 @@
  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
  <!-- Read-only transcript feed for the Sentient companion app; same signing key only. -->
- <permission android:name="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS" android:protectionLevel="signature" android:label="Read Omi Tarefas transcripts"/>
+ <permission android:name="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS" android:protectionLevel="signature" android:label="Read GVoice transcripts"/>
  <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
  <uses-feature android:name="android.hardware.microphone" android:required="false"/>
- <application android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:label="Omi Tarefas" android:icon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:supportsRtl="true">
+ <application android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:label="GVoice" android:icon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:supportsRtl="true">
   <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
   </activity>

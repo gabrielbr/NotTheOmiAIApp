@@ -97,8 +97,8 @@ jobs:
           chmod 600 "$KEY_DIR"/*
           python3 scripts/sign_release.py --sdk "$ANDROID_HOME" --key-dir "$KEY_DIR" --version "$APP_VERSION_NAME"
           rm -rf "$KEY_DIR"
-          python3 tests/hybrid/verify_apk.py --sdk "$ANDROID_HOME" --version-code "$APP_VERSION_CODE" --version-name "$APP_VERSION_NAME" "dist/OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk"
-          python3 tests/sentient/verify_apk.py --sdk "$ANDROID_HOME" --version-code "$APP_VERSION_CODE" --version-name "$APP_VERSION_NAME" --omi-apk "dist/OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk" "dist/Sentient-$APP_VERSION_NAME.apk"
+          python3 tests/hybrid/verify_apk.py --sdk "$ANDROID_HOME" --version-code "$APP_VERSION_CODE" --version-name "$APP_VERSION_NAME" "dist/GVoice-$APP_VERSION_NAME-arm64-v8a.apk"
+          python3 tests/sentient/verify_apk.py --sdk "$ANDROID_HOME" --version-code "$APP_VERSION_CODE" --version-name "$APP_VERSION_NAME" --omi-apk "dist/GVoice-$APP_VERSION_NAME-arm64-v8a.apk" "dist/Sentient-$APP_VERSION_NAME.apk"
 
       - name: Publish GitHub Release
         env:
@@ -108,22 +108,22 @@ jobs:
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Release $TAG already exists"; exit 0
           fi
-          APK="dist/OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk"
+          APK="dist/GVoice-$APP_VERSION_NAME-arm64-v8a.apk"
           SENTIENT="dist/Sentient-$APP_VERSION_NAME.apk"
           # Same bytes under a fixed name, so .../releases/latest/download/Sentient.apk always
           # points at the newest Sentient. Obtainium tracks it as a "Direct APK Link" source,
-          # separately from Omi Tarefas, which uses this repository's URL.
+          # separately from GVoice, which uses this repository's URL.
           cp "$SENTIENT" dist/Sentient.apk
           {
-            echo "Omi Tarefas $APP_VERSION_NAME (versionCode $APP_VERSION_CODE), built from ${GITHUB_SHA::7}."
+            echo "GVoice $APP_VERSION_NAME (versionCode $APP_VERSION_CODE), built from ${GITHUB_SHA::7}."
             echo
-            echo "Install \`OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk\` on your phone. It updates the previous Omi Tarefas release in place and keeps your recordings."
+            echo "Install \`GVoice-$APP_VERSION_NAME-arm64-v8a.apk\` on your phone. It updates the previous GVoice release in place and keeps your recordings."
             echo
-            echo "Optional: \`Sentient-$APP_VERSION_NAME.apk\` is the companion knowledge base. It reads Omi Tarefas transcripts (same signing key) and is the only one of the two apps with internet access."
+            echo "Optional: \`Sentient-$APP_VERSION_NAME.apk\` is the companion knowledge base. It reads GVoice transcripts (same signing key) and is the only one of the two apps with internet access."
             echo
             echo '```'
             grep -E 'arm64-v8a|Sentient' dist/SHA256SUMS.txt
             echo '```'
           } > "$RUNNER_TEMP/notes.md"
           gh release create "$TAG" "$APK" "$SENTIENT" dist/Sentient.apk dist/SHA256SUMS.txt \
-            --target "$GITHUB_SHA" --title "Omi Tarefas $APP_VERSION_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+            --target "$GITHUB_SHA" --title "GVoice $APP_VERSION_NAME" --notes-file "$RUNNER_TEMP/notes.md"

@@ -53,7 +53,7 @@ def main():
     if any(name in services for name in ('CaptureService', 'OmiCaptureService', 'RefinementJobService')):
         raise SystemExit('App service active; not interrupting it')
     version = field(r"appVersionName'\) \?: '([^']+)'", (ROOT/'app/build.gradle').read_text())
-    apk = ROOT/'dist'/f'OmiTarefas-{version}-x86_64.apk'
+    apk = ROOT/'dist'/f'GVoice-{version}-x86_64.apk'
     original_test = ROOT/'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
     tools = sdk/'build-tools/34.0.0'
     key, password = args.key_dir/'release.p12', args.key_dir/'password'
