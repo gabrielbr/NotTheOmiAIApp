@@ -6,31 +6,35 @@ public final class AskPrompts {
 
     public static final String SYSTEM =
             "You answer questions about the user's own life using GMind, a private knowledge base on their phone. "
-            + "It holds transcripts of their recordings (source omi.transcripts) and messages from WhatsApp "
-            + "(source whatsapp) and Signal (source signal).\n\n"
+            + "It holds transcripts of their recordings (source omi.transcripts); messages from WhatsApp "
+            + "(whatsapp), Signal (signal), Telegram (telegram) and Matrix (matrix); and, when connected, Gmail "
+            + "emails (composio.gmail), Google Calendar events (composio.googlecalendar) and Google Drive files "
+            + "(composio.googledrive).\n\n"
             + "Look things up with the tools before answering, and answer only from what they return. Each line "
             + "a tool returns starts with an id like [#123]. Cite every fact with the ids it came from, right after "
             + "the sentence, for example: \"Ana suggested lunch on Sunday [#41].\" If the tools don't show the answer, "
             + "say you couldn't find it instead of guessing.\n\n"
-            + "Messages marked \"me\" were written by the user. Answer in the language of the question, briefly, "
+            + "Items marked \"me\" were written, sent or organized by the user. Answer in the language of the question, briefly, "
             + "in plain sentences.";
 
     /** For the on-device model, which gets the sources in the prompt instead of tools. */
     public static final String LOCAL_SYSTEM =
             "You answer questions about the user's own life from the sources below, which come from their "
-            + "recordings and WhatsApp/Signal messages. Each source starts with an id like [#123]. Use only these "
+            + "recordings, messages, emails, calendar events and files. Each source starts with an id like [#123]. Use only these "
             + "sources and cite the ids you used right after each sentence, like [#123]. If the sources don't "
             + "contain the answer, say you couldn't find it. Messages marked \"me\" are the user's own. Answer in the "
             + "language of the question, in two or three short sentences.";
 
     public static final String SEARCH_DESCRIPTION =
-            "Full-text search over all recordings and messages (accent-insensitive, word prefixes). Returns up to "
+            "Full-text search over everything: recordings, messages, emails, events and files (accent-insensitive, "
+            + "word prefixes). Returns up to "
             + "`limit` lines like \"[#id] YYYY-MM-DD HH:MM · source · chat · author: snippet\". Narrow with source "
-            + "(omi.transcripts, whatsapp, signal), person (a name), and from/to dates (YYYY-MM-DD, inclusive). "
+            + "(omi.transcripts, whatsapp, signal, telegram, matrix, composio.gmail, composio.googlecalendar, "
+            + "composio.googledrive), person (a name), and from/to dates (YYYY-MM-DD, inclusive). "
             + "With only a person, lists their latest items.";
     public static final String CONVERSATION_DESCRIPTION =
-            "Shows an item in context: the messages before and after it in the same chat, oldest first. Use it to "
-            + "read a whole exchange around a search hit.";
+            "Shows an item in context: the items before and after it in the same chat, email thread or calendar, "
+            + "oldest first. Use it to read a whole exchange around a search hit.";
     public static final String PEOPLE_DESCRIPTION =
             "Finds people by name: which apps they appear in, how many items, when last, and their chats.";
     public static final String TIMELINE_DESCRIPTION =

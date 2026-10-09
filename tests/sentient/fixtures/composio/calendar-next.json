@@ -1,0 +1,24 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "items": [
+   {
+    "id": "e1",
+    "status": "cancelled",
+    "summary": "Dentista",
+    "start": {
+     "dateTime": "2026-10-12T10:00:00-03:00"
+    },
+    "end": {
+     "dateTime": "2026-10-12T11:00:00-03:00"
+    },
+    "organizer": {
+     "email": "me@example.com",
+     "self": true
+    }
+   }
+  ]
+ },
+ "log_id": "log_x"
+}

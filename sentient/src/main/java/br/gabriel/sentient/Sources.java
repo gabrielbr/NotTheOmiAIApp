@@ -59,6 +59,31 @@ public final class Sources {
                 now, status, pluginId, pluginId);
     }
 
+    /**
+     * Forgets a source and everything it brought in: its items (search index included, through
+     * the delete trigger), conversations, identities, and people left with no identity at all.
+     * Call inside a transaction.
+     */
+    public static int forget(Db db, String pluginId) throws Exception {
+        List<Object[]> count = db.query("SELECT COUNT(*) FROM items WHERE source = ?", pluginId);
+        db.exec("DELETE FROM mentions WHERE item_id IN (SELECT id FROM items WHERE source = ?)", pluginId);
+        db.exec("UPDATE relations SET evidence_item_id = NULL"
+                + " WHERE evidence_item_id IN (SELECT id FROM items WHERE source = ?)", pluginId);
+        db.exec("UPDATE facts SET evidence_item_id = NULL"
+                + " WHERE evidence_item_id IN (SELECT id FROM items WHERE source = ?)", pluginId);
+        db.exec("DELETE FROM items WHERE source = ?", pluginId);
+        db.exec("DELETE FROM conversation_members WHERE conversation_id IN"
+                + " (SELECT id FROM conversations WHERE source = ?)", pluginId);
+        db.exec("DELETE FROM conversations WHERE source = ?", pluginId);
+        db.exec("DELETE FROM conversation_members WHERE identity_id IN"
+                + " (SELECT id FROM identities WHERE source = ?)", pluginId);
+        db.exec("DELETE FROM identities WHERE source = ?", pluginId);
+        db.exec("DELETE FROM people WHERE is_me = 0 AND id NOT IN (SELECT person_id FROM identities)");
+        db.exec("DELETE FROM source_config WHERE plugin_id = ?", pluginId);
+        db.exec("DELETE FROM sources WHERE plugin_id = ?", pluginId);
+        return ((Number) count.get(0)[0]).intValue();
+    }
+
     public static String config(Db db, String pluginId, String key) throws Exception {
         List<Object[]> rows = db.query("SELECT value FROM source_config WHERE plugin_id = ? AND key = ?", pluginId, key);
         return rows.isEmpty() ? null : (String) rows.get(0)[0];

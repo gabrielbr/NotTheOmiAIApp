@@ -1,0 +1,20 @@
+{
+ "items": [
+  {
+   "id": "ac_custom",
+   "is_composio_managed": false,
+   "toolkit": {
+    "slug": "gmail"
+   },
+   "status": "ENABLED"
+  },
+  {
+   "id": "ac_managed",
+   "is_composio_managed": true,
+   "toolkit": {
+    "slug": "gmail"
+   },
+   "status": "ENABLED"
+  }
+ ]
+}

@@ -16,6 +16,7 @@
   <activity android:name=".ItemActivity" android:exported="false"/>
   <activity android:name=".AskActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
   <activity android:name=".AskSettingsActivity" android:exported="false"/>
+  <activity android:name=".ConnectActivity" android:exported="false"/>
   <!-- Chat capture: reads WhatsApp and Signal notifications only; the user grants access in Settings. -->
   <service android:name=".MessagesListenerService" android:label="GMind message capture" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true">
    <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>

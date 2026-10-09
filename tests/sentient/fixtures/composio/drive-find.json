@@ -1,0 +1,43 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "files": [
+   {
+    "id": "d1",
+    "name": "Plano do projeto",
+    "mimeType": "application/vnd.google-apps.document",
+    "modifiedTime": "2026-10-01T09:00:00.000Z",
+    "lastModifyingUser": {
+     "displayName": "Ana Souza",
+     "emailAddress": "ana@example.com",
+     "me": false
+    }
+   },
+   {
+    "id": "d2",
+    "name": "Contrato.pdf",
+    "mimeType": "application/pdf",
+    "modifiedTime": "2026-10-02T09:00:00.000Z",
+    "lastModifyingUser": {
+     "displayName": "Me",
+     "emailAddress": "me@example.com",
+     "me": true
+    }
+   },
+   {
+    "id": "d3",
+    "name": "Pasta",
+    "mimeType": "application/vnd.google-apps.folder",
+    "modifiedTime": "2026-10-03T09:00:00.000Z"
+   },
+   {
+    "id": "d4",
+    "name": "Notas",
+    "mimeType": "application/vnd.google-apps.document",
+    "modifiedTime": "2026-10-04T09:00:00.000Z"
+   }
+  ]
+ },
+ "log_id": "log_x"
+}

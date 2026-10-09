@@ -59,7 +59,8 @@ public final class SyncJobService extends JobService {
             try {
                 Db db = KnowledgeStore.get(this);
                 List<SyncRunner.Outcome> outcomes = SyncRunner.run(db, PluginRegistry.plugins(this),
-                        () -> cancelled, System::currentTimeMillis);
+                        () -> cancelled, System::currentTimeMillis,
+                        name -> PluginRegistry.secret(this, name), new UrlHttp());
                 int added = 0, updated = 0, failed = 0;
                 for (SyncRunner.Outcome outcome : outcomes) {
                     added += outcome.added;

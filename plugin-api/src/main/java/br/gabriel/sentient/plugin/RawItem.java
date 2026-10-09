@@ -1,12 +1,12 @@
 package br.gabriel.sentient.plugin;
 
 /**
- * The normalized unit every plugin produces: a message, email, transcript, event or doc.
+ * The normalized unit every plugin produces: a message, email, transcript, event, doc or task.
  * (source, externalId) is unique, so pulling the same item again updates it in place.
  */
 public final class RawItem {
     public static final String MESSAGE = "message", EMAIL = "email", TRANSCRIPT = "transcript",
-            EVENT = "event", DOC = "doc";
+            EVENT = "event", DOC = "doc", TASK = "task";
 
     public final String source, externalId, kind, text, rawJson;
     public final long timestamp;

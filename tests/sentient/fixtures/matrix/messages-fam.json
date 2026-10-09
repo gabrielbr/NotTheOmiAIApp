@@ -1,0 +1,36 @@
+{
+ "start": "p1",
+ "end": "p0",
+ "chunk": [
+  {
+   "type": "m.room.message",
+   "event_id": "$f0",
+   "sender": "@me:example.org",
+   "origin_server_ts": 1790683200000,
+   "content": {
+    "msgtype": "m.text",
+    "body": "Vou levar o bolo"
+   }
+  },
+  {
+   "type": "m.room.message",
+   "event_id": "$old",
+   "sender": "@tio:example.org",
+   "origin_server_ts": 1788091200000,
+   "content": {
+    "msgtype": "m.text",
+    "body": "Mensagem antiga"
+   }
+  }
+ ],
+ "state": [
+  {
+   "type": "m.room.member",
+   "state_key": "@tio:example.org",
+   "content": {
+    "membership": "join",
+    "displayname": "Tio"
+   }
+  }
+ ]
+}

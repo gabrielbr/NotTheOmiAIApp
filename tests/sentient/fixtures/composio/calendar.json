@@ -1,0 +1,61 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "kind": "calendar#events",
+  "items": [
+   {
+    "id": "e1",
+    "status": "confirmed",
+    "summary": "Dentista",
+    "location": "Rua A, 10",
+    "description": "<p>Levar <b>exames</b></p>",
+    "start": {
+     "dateTime": "2026-10-12T10:00:00-03:00"
+    },
+    "end": {
+     "dateTime": "2026-10-12T11:00:00-03:00"
+    },
+    "organizer": {
+     "email": "me@example.com",
+     "self": true
+    },
+    "attendees": [
+     {
+      "email": "me@example.com",
+      "self": true
+     },
+     {
+      "email": "bob@corp.com",
+      "displayName": "Bob"
+     },
+     {
+      "email": "room@resource",
+      "resource": true
+     }
+    ]
+   },
+   {
+    "id": "e2",
+    "status": "confirmed",
+    "summary": "Feriado",
+    "start": {
+     "date": "2026-10-12"
+    },
+    "end": {
+     "date": "2026-10-13"
+    },
+    "organizer": {
+     "email": "holidays@group.v.calendar.google.com",
+     "displayName": "Holidays"
+    }
+   },
+   {
+    "id": "e3",
+    "status": "cancelled"
+   }
+  ],
+  "nextSyncToken": "sync1"
+ },
+ "log_id": "log_x"
+}
