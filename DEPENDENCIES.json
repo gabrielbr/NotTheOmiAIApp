@@ -1,19 +1,19 @@
 {
   "model": {
-    "name": "Whisper small.en Q5_1",
-    "filename": "ggml-small.en-q5_1.bin",
+    "name": "Whisper small Q5_1 (multilingual)",
+    "filename": "ggml-small-q5_1.bin",
     "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
-    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.en-q5_1.bin",
-    "sha256": "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
-    "bytes": 190098681,
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q5_1.bin",
+    "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
+    "bytes": 190085487,
     "license": "MIT"
   },
   "preview_model": {
-    "name": "vosk-model-small-en-us-0.15",
+    "name": "vosk-model-small-pt-0.3",
     "filename": "model.zip",
-    "url": "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
-    "sha256": "30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498",
-    "bytes": 41205931,
+    "url": "https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip",
+    "sha256": "6e1ce909032e1afa7a88e68a3d628ecafff302bdf195befab308826c395e93b7",
+    "bytes": 32453112,
     "license": "Apache-2.0"
   },
   "runtime": [

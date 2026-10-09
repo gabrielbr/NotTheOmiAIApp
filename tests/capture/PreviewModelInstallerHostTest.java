@@ -29,12 +29,12 @@ public final class PreviewModelInstallerHostTest {
         }, () -> false);
         check(reused.equals(installed) && opens.get() == 0, "Verified install reused offline");
 
-        File mdl = new File(installed, "am/final.mdl");
+        File mdl = new File(installed, "final.mdl");
         try (RandomAccessFile file = new RandomAccessFile(mdl, "rw")) {
             int first = file.read(); file.seek(0); file.write(first ^ 1);
         }
         check(!PreviewModelInstaller.verify(installed, () -> false), "Same-size corruption detected");
-        check(new File(installed, "graph/Gr.fst").delete(), "Required graph removed for recovery fixture");
+        check(new File(installed, "Gr.fst").delete(), "Required graph removed for recovery fixture");
         check(!PreviewModelInstaller.verify(installed, () -> false), "Missing required graph rejected");
         PreviewModelInstaller.prepare(base, source, () -> false);
         check(PreviewModelInstaller.verify(installed, () -> false), "Corrupt/missing install repaired from asset");
@@ -43,7 +43,7 @@ public final class PreviewModelInstallerHostTest {
         check(!PreviewModelInstaller.verify(installed, () -> false), "Unexpected installed file rejected");
         Files.delete(extra.toPath());
 
-        File original = new File(installed, "conf/mfcc.conf");
+        File original = new File(installed, "mfcc.conf");
         File outside = new File(temporary, "external.conf");
         Files.copy(original.toPath(), outside.toPath());
         Files.delete(original.toPath());
@@ -66,10 +66,11 @@ public final class PreviewModelInstallerHostTest {
                         () -> new ByteArrayInputStream(new byte[] {1,2,3}), () -> false),
                 IOException.class, "Wrong archive hash rejected before installation");
 
-        for (String name : new String[] {"vosk-model-small-en-us-0.15/../escape",
-                "vosk-model-small-en-us-0.15/am/../../escape", "/absolute",
-                "vosk-model-small-en-us-0.15/am\\escape", "vosk-model-small-en-us-0.15//escape",
-                "vosk-model-small-en-us-0.15/unexpected"}) {
+        String root = PreviewModelInstaller.ROOT;
+        for (String name : new String[] {root + "/../escape",
+                root + "/ivector/../../escape", "/absolute",
+                root + "/ivector\\escape", root + "//escape",
+                root + "/unexpected"}) {
             File stage = Files.createTempDirectory(temporary.toPath(), "bad-entry-").toFile();
             reject(() -> PreviewModelInstaller.extractChecked(new ByteArrayInputStream(zip(name)), stage, () -> false),
                     IOException.class, "Unsafe/unexpected ZIP member rejected: " + name);
@@ -77,7 +78,7 @@ public final class PreviewModelInstallerHostTest {
         check(!new File(temporary, "escape").exists(), "Traversal wrote nothing outside staging");
         File truncatedStage = Files.createTempDirectory(temporary.toPath(), "incomplete-").toFile();
         reject(() -> PreviewModelInstaller.extractChecked(new ByteArrayInputStream(zip(
-                        "vosk-model-small-en-us-0.15/am/final.mdl")), truncatedStage, () -> false),
+                        PreviewModelInstaller.ROOT + "/final.mdl")), truncatedStage, () -> false),
                 IOException.class, "Truncated required member rejected");
         File emptyStage = Files.createTempDirectory(temporary.toPath(), "empty-").toFile();
         reject(() -> PreviewModelInstaller.extractChecked(new ByteArrayInputStream(emptyZip()), emptyStage, () -> false),
@@ -91,8 +92,8 @@ public final class PreviewModelInstallerHostTest {
             extractionOpens.incrementAndGet(); return new FileInputStream(archive);
         }, () -> extractionOpens.get() >= 2), InterruptedIOException.class,
                 "Cancellation during extraction");
-        check(!new File(cancelledBase, "vosk-model-small-en-us-0.15").exists(), "Cancelled install not published");
-        check(!new File(cancelledBase, "vosk-model-small-en-us-0.15.installing").exists(), "Cancelled staging removed");
+        check(!new File(cancelledBase, PreviewModelInstaller.ROOT).exists(), "Cancelled install not published");
+        check(!new File(cancelledBase, PreviewModelInstaller.ROOT + ".installing").exists(), "Cancelled staging removed");
         System.out.println("PreviewModelInstallerHostTest PASS: " + assertions + " assertions, real pinned model archive");
     }
 

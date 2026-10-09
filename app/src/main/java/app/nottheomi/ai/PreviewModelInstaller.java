@@ -21,29 +21,29 @@ import java.util.function.BooleanSupplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-/** Installs only the bundled, pinned English model. Never downloads anything. */
+/** Installs only the bundled, pinned Portuguese live-draft model. Never downloads anything. */
 public final class PreviewModelInstaller {
     public static final String ARCHIVE_SHA256 =
-            "30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498";
-    private static final String ROOT = "vosk-model-small-en-us-0.15";
+            "6e1ce909032e1afa7a88e68a3d628ecafff302bdf195befab308826c395e93b7";
+    static final String ROOT = "vosk-model-small-pt-0.3";
     private static final long INSTALL_SPACE = 100L * 1024L * 1024L;
     private static final Map<String, Expected> FILES = new LinkedHashMap<>();
 
     static {
-        expected("am/final.mdl", 15962575, "75370a0137f9daf8f469dedd7daa4513ae7a621f03240c6e512e2b50b656a7b6");
-        expected("graph/disambig_tid.int", 102, "9ad87cc166d0998f08f758f47a6223a120dfffcbee805c4849c3aa5e6bb3c0fc");
-        expected("graph/HCLr.fst", 22416994, "5caafba3081e1646545ac6bff0dd7a318e53dcbdc86f237909ce1d2ac1293d34");
-        expected("graph/Gr.fst", 24013795, "023c8b7e30704a9e37765c635c252e608a02f361235bf94abdcf2a5225d85b20");
-        expected("graph/phones/word_boundary.int", 1761, "da199d9c991e0e84681ddbb34627b915b26302d50a8fdaa23c51e2bc3a50b5c3");
-        expected("conf/model.conf", 290, "8f14cb1eeb07c762c371db648c6be688d347236155ca0f64fb13b6567a8ce81f");
-        expected("conf/mfcc.conf", 131, "1e2228006d01d805ad1c267fee9f79709ca87ac51bd82b0e3f5c69ba543f0fc4");
-        expected("ivector/splice.conf", 35, "9f0c5f7c82d18eaf25d8bce470efa9f7741f88411fe428774bc0a9bb69a24756");
-        expected("ivector/final.dubm", 168048, "8c5d7dd69d2122313baaf19f61f35dd3fa18b70c62ac0687e311e1c46e6daca7");
-        expected("ivector/global_cmvn.stats", 1080, "33be09afcc80059847a275c3d043b51f1ab954c7c2438ddbbf4745e8ba144ff9");
-        expected("ivector/final.ie", 8288887, "3f37faf90c375b9e4740b569398b5829ed9cc07d19be6d441f72c3b71d7efcc6");
+        expected("README", 29, "85353085fa2096ef12cac654fa9534b186bef9b56a61f544da3ebfbd006b78bb");
+        expected("final.mdl", 13549849, "3e10e43ec01cf8d968bcc24c626a2eae2bfa77863bee82f36a554854afa1f147");
+        expected("disambig_tid.int", 54, "ca8970bc50b8ae2452749f75f5a12049e511075f9fc3f63acc1526c280a33748");
+        expected("phones.txt", 1923, "dc207b906747b59e9e3da0af30e8f8d6712c9897ad7df06929d4b2cae7ee13f1");
+        expected("Gr.fst", 16007119, "d81023936f5557c06930802b1db4880f56d6ac51b16ed4e5060ceba06895442c");
+        expected("ivector/global_cmvn.stats", 547, "8848c2dcf9919fbb3db574cbce59f980c3b11107c29adfa1fc42a4faed27e1a8");
         expected("ivector/online_cmvn.conf", 95, "a2f3571754b64297cb7efb2e7ca3df61995c5a45fcbb97188f90613552bb2dfe");
-        expected("ivector/final.mat", 44975, "ddd83586dc5f928cda8738b922c85ffe38fc789cb5f9151a712ca12f37265382");
-        expected("README", 199, "c0cf286e4f7783306c5f6469b37db69228fb16803b03cae661edb2d7bba64ebb");
+        expected("ivector/splice.conf", 35, "9f0c5f7c82d18eaf25d8bce470efa9f7741f88411fe428774bc0a9bb69a24756");
+        expected("ivector/final.ie", 8288887, "9345786636c358c9539591da71fb685ae82d8a96ce5de533fb8ac5fdafa965f0");
+        expected("ivector/final.dubm", 168048, "28dcdc395b13a2085d20f7a2e850ef7e5216ba33ded76391b9690dd60f5143de");
+        expected("ivector/final.mat", 22575, "e310571390a3183718fce914bb022d297777c7ed860892a1812b576a698ec420");
+        expected("HCLr.fst", 15510922, "8b45be1fa72913d61e37ac0b411177803848f4cda7728f74139b39acd1c0cf36");
+        expected("mfcc.conf", 153, "d3d4c517da7e6d02ed85803eebf77bca3f7f48c9ab6dc035013250b36187f274");
+        expected("word_boundary.int", 2481, "b8f981d84d8765fb15003ac54ec0f9599efa65a00d6d4d60086e5969ad45ff01");
     }
 
     private PreviewModelInstaller() { }

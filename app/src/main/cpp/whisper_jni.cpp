@@ -101,7 +101,9 @@ jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads)
     if (count < 1600 || energy / count < 0.00000064 || cancelled(state.get())) return empty(env);
     auto p = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
     p.n_threads = std::clamp<int>(threads, 1, 4);
-    p.language = "en";
+    // Mixed Portuguese/English speech: multilingual weights detect the language per
+    // 30-second window. English-only (.en) weights keep the fixed English path.
+    p.language = whisper_is_multilingual(state->ctx) ? "auto" : "en";
     p.detect_language = false;
     p.translate = false;
     p.no_context = true;

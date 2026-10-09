@@ -14,7 +14,8 @@ Independent **offline Omi companion for Android 8+**. Public Android application
 ## What it does
 
 - Omi Bluetooth LE Opus audio → encrypted phone-local PCM and transcript history.
-- Bundled **Vosk** for streaming English drafts; CPU-only **Whisper small.en Q5_1** for post-save refinement.
+- Bundled **Vosk** (Portuguese) for streaming drafts; CPU-only multilingual **Whisper small Q5_1** for post-save refinement, auto-detecting Portuguese or English per 30-second window.
+- **Find tasks for Todoist** on any saved recording: offline Portuguese/English to-do finder, review/edit, then share each task to the Todoist app (Quick Add → Inbox). No network permission.
 - Playback, searchable library and explicit WAV/text export.
 - No Omi account, PC relay, cloud transcription, runtime model download or `INTERNET` permission.
 - Capability-gated battery, brightness and button controls. Long-press/power behavior stays firmware-owned.
@@ -44,7 +45,7 @@ BLE gaps trigger bounded retries and separate encrypted continuation entries: pl
 
 AES-GCM audio/text with an Android Keystore key. Backups disabled; screen captures protected. Uninstall/data clear loses the key. User-requested exports are plaintext. Device selection and controls remain on the phone; transcript text is not placed in notifications/logs.
 
-The **2 GiB aggregate retained PCM quota** includes existing recordings; 128 MiB free-space reserve. English only. Recognition may be wrong. Process death may lose an uncommitted tail. Record with participants' permission.
+The **2 GiB aggregate retained PCM quota** includes existing recordings; 128 MiB free-space reserve. Portuguese live drafts; Portuguese/English saved transcripts. Recognition may be wrong. Process death may lose an uncommitted tail. Record with participants' permission.
 
 ## Build from source
 
@@ -72,6 +73,7 @@ python3 tests/capture/run_host_checks.py
 python3 tests/hybrid/run_host_checks.py
 python3 tests/hybrid/run_job_checks.py
 python3 tests/whisper-java/run_host_checks.py
+python3 tests/tasks/run_host_checks.py
 ```
 
 Device/instrumentation tests require their explicitly selected Android target and prepared artifacts. For the optional `tests/whisper-device/run_probe.py` helper with Windows `adb.exe`, pass `--windows-temp` with an existing Windows-accessible WSL directory; no developer-specific user path is embedded.
