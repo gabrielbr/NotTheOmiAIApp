@@ -13,7 +13,8 @@ public final class Search {
 
     public static final class Hit {
         public final long itemId, ts;
-        public final String source, kind, conversation, snippet;
+        public final String source, kind, conversation, snippet, author;
+        public final boolean fromMe;
         Hit(Object[] row) {
             itemId = ((Number) row[0]).longValue();
             source = (String) row[1];
@@ -21,6 +22,8 @@ public final class Search {
             ts = ((Number) row[3]).longValue();
             conversation = (String) row[4];
             snippet = (String) row[5];
+            author = (String) row[6];
+            fromMe = ((Number) row[7]).intValue() != 0;
         }
     }
 
@@ -29,9 +32,10 @@ public final class Search {
         String match = matchExpression(query);
         if (match.isEmpty()) return hits;
         for (Object[] row : db.query("SELECT items.id, items.source, items.kind, items.ts, conversations.title,"
-                + " snippet(items_fts, 0, ?, ?, '…', 16) FROM items_fts"
+                + " snippet(items_fts, 0, ?, ?, '…', 16), identities.display_name, items.from_me FROM items_fts"
                 + " JOIN items ON items.id = items_fts.rowid"
                 + " LEFT JOIN conversations ON conversations.id = items.conversation_id"
+                + " LEFT JOIN identities ON identities.id = items.author_identity_id"
                 + " WHERE items_fts MATCH ? ORDER BY bm25(items_fts) LIMIT ?", START, END, match, limit))
             hits.add(new Hit(row));
         return hits;

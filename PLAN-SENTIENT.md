@@ -27,7 +27,13 @@ Decisions already made:
 | Device test `SqlCipherStoreTest` (real SQLCipher FTS5, no plaintext on disk, wrong key refused) | Compiles; **not run yet: no emulator here** |
 | Signing both apps (`scripts/sign_release.py --modules`), `tests/sentient/verify_apk.py` (permission allow-list, no computer-control surface, pinned native libs, same signer), release workflow publishes both APKs | Done; verified locally with a throwaway key |
 | UX/UI audit and the Omi Tarefas design system: search first, highlighted matches, item screen, sync states, About (`docs/SENTIENT-DESIGN.md`) | Done; screenshots rendered with Robolectric |
-| On-device: install both, record, "Sync now", search | **Pending; needs your phone** |
+| **Phase 1, WhatsApp:** `WhatsAppListenerService` (notification listener, WhatsApp and WhatsApp Business only), `WhatsAppMessages` parser (DM/group, own replies from the notification, title suffixes, WhatsApp notices skipped, content-hash dedupe of re-posted history), live ingest, notification-access flow on the WhatsApp row, author in results, message shown in its conversation (`Items.around`) | Done; 20 new host checks + 4 Robolectric tests on real `MessagingStyle` notifications. **WhatsApp's real notification format still needs checking on your phone** |
+| On-device: install both, record, "Sync now", search; allow WhatsApp access, receive and reply, search | **Pending; needs your phone** |
+
+Phase 1 decisions:
+- Messages are written straight into the store when their notification arrives, so they're searchable at once. The Phase 0 `inbox_buffer` table stays unused; dedupe comes from content-hash ids instead.
+- A person is keyed by WhatsApp display name (`name:<sender>`), because notifications don't carry phone numbers. The same name in a DM and in a group is the same person. Merging people across sources is Phase 4's job.
+- A message with no sender is yours (a reply sent from the notification).
 
 Phase 0 decisions that differ from the sketch below:
 - The sync job uses `NETWORK_TYPE_NONE` for now, because the only source is local. Network-bound plugins will add their own constraint.
@@ -147,6 +153,9 @@ daily_digests(date PRIMARY KEY, markdown, generated_at)
 2. **Entity and relation extraction** (LLM, batched per conversation per day): it sends new items with a strict JSON schema prompt that returns `entities[] / relations[] / facts[] / tasks[]` with item ids as evidence. Results are upserted by `canonical_key`. It uses the selected `LlmBackend`. With the local backend it runs while the phone is charging.
 3. **Tasks:** Todoist lives in Sentient only; Omi Tarefas no longer has it. `TaskExtractor` (pure Java, PT/EN cue phrases), its host test and the share-to-Todoist screen `TasksActivity` were removed from `:app`. Restore them from commit `d6165d4` (`git show d6165d4:app/src/main/java/app/nottheomi/ai/TaskExtractor.java`, `.../TasksActivity.java`, `tests/tasks/`), move the extractor to `:plugin-api` and run it on transcripts and WhatsApp/Matrix messages. The extracted tasks become `task` entities and can be shared to Todoist the same way.
 
+4. **Portrait of you** (Sentient OS's README): after enrichment, regenerate an "About me" page from the graph: who you are, work, the people you talk to most, active projects, places and recent themes, each line linked to its evidence. It's shown in GMind, and the AI reads it before every answer.
+5. **Markdown vault export** (Sentient OS's Obsidian vault): one note per person, project and place, with links between them and citations to messages, plus the portrait as `README.md`. You pick the folder with Android's file picker. The export is plaintext by your choice, and only refreshed when you ask or on a schedule you turn on.
+
 ## 7. AI query (`Ask` screen)
 
 ```java
@@ -173,11 +182,28 @@ interface LlmBackend { String id(); Reply chat(List<Msg> history, List<Tool> too
 | Phase | Scope | Est. |
 |---|---|---|
 | 0 | Modules, `TranscriptProvider`, `:sentient` skeleton, KnowledgeStore + schema + FTS, OmiTranscripts plugin, SyncJobService, release workflow for two APKs | 3–4 d |
-| 1 | WhatsApp notification plugin + inbox buffer/dedupe + Sources screen | 2–3 d |
+| 1 | WhatsApp notification plugin (live capture, dedupe), notification-access flow, message in context | 2–3 d |
 | 2 | ClaudeBackend + KnowledgeTools + Ask screen with citations | 3 d |
 | 3 | Composio plugin (generic + Gmail/Slack/Calendar mappers; check the Matrix toolkit) and native Matrix plugin | 3–4 d |
-| 4 | Enrichment: identity resolution + merge UI, LLM entity/relation extraction, daily digest | 3–4 d |
+| 4 | Enrichment: identity resolution + merge UI, LLM entity/relation extraction, daily digest, **portrait of you** and **Markdown vault export** | 4–5 d |
 | 5 | LocalBackend (llama.cpp JNI, model picker, grammar-constrained tools) | 4–5 d |
+| 6 | Access from Claude anywhere: the vault reachable outside the phone (synced export folder or a small MCP server with `get_structure`/`get_files`, as in Sentient OS). First time data leaves the phone, so the design is decided then. | 3–5 d |
+
+## Sentient OS parity
+
+GMind is the Android take on Sentient OS: collect what's new in your life every day, privately on the device, and distill it into a knowledge base you can ask about.
+
+| Sentient OS | GMind | Phase |
+|---|---|---|
+| Reads new messages, email, files and transcripts | Plugins: GVoice transcripts, WhatsApp, Composio (Gmail…), Matrix | 0 (done), 1, 3 |
+| Everything stays on the device | Encrypted SQLCipher store, Keystore-wrapped key | 0 (done) |
+| Distills into a knowledge base | People, identities, conversations, entities, relations, facts, all with evidence | 0 (schema), 4 |
+| Notes per person, project, place | People screen and merge suggestions; entity pages | 4 |
+| **README portrait of you** | "About me" page regenerated from the graph; the first thing the AI reads | 4 |
+| **Obsidian-style vault** | Markdown export: one note per person, project and place, plus `README.md`, to a folder you pick | 4 |
+| Ask an AI that knows you | Ask screen with read-only tools and citations (Claude or on-device) | 2, 5 |
+| **Readable by Claude in any conversation** | Vault reachable outside the phone | 6 |
+| Computer control (Mac) | **Excluded on purpose.** GMind is read-only and has no accessibility service; `verify_apk.py` enforces this | — |
 
 ## Verification
 

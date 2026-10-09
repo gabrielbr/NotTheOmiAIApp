@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.junit.Test;
@@ -35,21 +36,27 @@ public final class SentientScreenshotTest {
     @Test public void home() throws Exception {
         SentientActivity a = Robolectric.buildActivity(SentientActivity.class).setup().get();
         settle();
-        a.showSources(Collections.singletonList(state(OmiTranscripts.ID, null, null, 0)));
+        long now = System.currentTimeMillis();
+        a.showSources(Arrays.asList(state(OmiTranscripts.ID, null, null, 0, null),
+                state(WhatsAppMessages.ID, null, null, 0, null)));
         settle(); shot(a, "home-empty");
 
-        a.showSources(Collections.singletonList(
-                state(OmiTranscripts.ID, System.currentTimeMillis() - 2 * HOUR, "OK · 3 new, 1 updated", 142)));
+        grantWhatsApp(a, true);
+        a.showSources(Arrays.asList(
+                state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
+                state(WhatsAppMessages.ID, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L)));
         settle(); shot(a, "home");
 
-        a.showSources(Collections.singletonList(state(OmiTranscripts.ID, System.currentTimeMillis() - 26 * HOUR,
-                "Unavailable · Install GVoice to sync recordings", 142)));
+        grantWhatsApp(a, false);
+        a.showSources(Arrays.asList(
+                state(OmiTranscripts.ID, now - 26 * HOUR, "Unavailable · Install GVoice to sync recordings", 142, now - 30 * HOUR),
+                state(WhatsAppMessages.ID, now - 26 * HOUR, "OK · live", 318, now - 26 * HOUR)));
         settle(); shot(a, "home-attention");
 
         List<Search.Hit> hits = new ArrayList<>();
+        hits.add(hit(4, WhatsAppMessages.ID, "message", "Família", "Mãe", false, 1, "Jantar no domingo? Faço aquele \u0002contrato\u0003 de sobremesa que vocês gostam"));
         hits.add(hit(1, "Reunião com o João", 2, "…preciso ligar para o João sobre o \u0002contrato\u0003 amanhã. Ficou combinado de enviar a proposta dia 15…"));
-        hits.add(hit(2, "Ideias no carro", 20, "…revisar o \u0002contrato\u0003 do aluguel e ver hotéis perto do centro…"));
-        hits.add(hit(3, null, 50, "…the vendor \u0002contract\u0003 needs a follow-up about the delivery dates…"));
+        hits.add(hit(5, WhatsAppMessages.ID, "message", "Rui", null, true, 30, "Mandei o \u0002contrato\u0003 assinado por email"));
         a.showResults("contrat", hits);
         settle(); shot(a, "search");
 
@@ -68,22 +75,52 @@ public final class SentientScreenshotTest {
                 + "roadmap: I need to email Sarah the slides tomorrow, and we should follow up with the vendor about "
                 + "the delivery dates. O contrato novo fica para a semana que vem.";
         Items.Item item = c.newInstance((Object) new Object[]{1L, OmiTranscripts.ID, "transcript",
-                System.currentTimeMillis() - 2 * HOUR, text, "Reunião com o João"});
+                System.currentTimeMillis() - 2 * HOUR, text, "Reunião com o João", null, null, 0L});
         a.show(item, text.replace("contrato", "\u0002contrato\u0003"));
         settle(); shot(a, "item");
+
+        ItemActivity t = Robolectric.buildActivity(ItemActivity.class,
+                new Intent().putExtra(ItemActivity.EXTRA_ID, 4L).putExtra(ItemActivity.EXTRA_QUERY, "sobremesa")).setup().get();
+        settle();
+        Items.Item hit = message(4, "Mãe", false, 60, "Jantar no domingo? Faço aquele pudim de sobremesa que vocês gostam");
+        t.showThread(hit, "Jantar no domingo? Faço aquele pudim de \u0002sobremesa\u0003 que vocês gostam", Arrays.asList(
+                message(2, "Pai", false, 70, "Alguém sabe se a padaria abre domingo?"),
+                message(3, null, true, 65, "Abre sim, até o meio-dia"),
+                hit,
+                message(5, "Pai", false, 58, "Pudim! Levo o vinho"),
+                message(6, null, true, 55, "Fechado, chego às 19h")));
+        settle(); shot(t, "thread");
     }
 
-    static Sources.State state(String id, Long lastSync, String status, long count) throws Exception {
-        Constructor<Sources.State> c = Sources.State.class.getDeclaredConstructor(Object[].class);
-        c.setAccessible(true);
-        return c.newInstance((Object) new Object[]{id, 1L, null, lastSync, status, count});
+    static void grantWhatsApp(Activity a, boolean granted) {
+        org.robolectric.Shadows.shadowOf(a.getSystemService(android.app.NotificationManager.class))
+                .setNotificationListenerAccessGranted(new android.content.ComponentName(a, WhatsAppListenerService.class), granted);
     }
+
 
     static Search.Hit hit(long id, String conversation, long hoursAgo, String snippet) throws Exception {
+        return hit(id, OmiTranscripts.ID, "transcript", conversation, null, false, hoursAgo, snippet);
+    }
+
+    static Search.Hit hit(long id, String source, String kind, String conversation, String author, boolean me,
+                          long hoursAgo, String snippet) throws Exception {
         Constructor<Search.Hit> c = Search.Hit.class.getDeclaredConstructor(Object[].class);
         c.setAccessible(true);
-        return c.newInstance((Object) new Object[]{id, OmiTranscripts.ID, "transcript",
-                System.currentTimeMillis() - hoursAgo * HOUR, conversation, snippet});
+        return c.newInstance((Object) new Object[]{id, source, kind,
+                System.currentTimeMillis() - hoursAgo * HOUR, conversation, snippet, author, me ? 1L : 0L});
+    }
+
+    static Items.Item message(long id, String author, boolean me, long minutesAgo, String text) throws Exception {
+        Constructor<Items.Item> c = Items.Item.class.getDeclaredConstructor(Object[].class);
+        c.setAccessible(true);
+        return c.newInstance((Object) new Object[]{id, WhatsAppMessages.ID, "message",
+                System.currentTimeMillis() - minutesAgo * 60_000L, text, "Família", 7L, author, me ? 1L : 0L});
+    }
+
+    static Sources.State state(String id, Long lastSync, String status, long count, Long lastItem) throws Exception {
+        Constructor<Sources.State> c = Sources.State.class.getDeclaredConstructor(Object[].class);
+        c.setAccessible(true);
+        return c.newInstance((Object) new Object[]{id, 1L, null, lastSync, status, count, lastItem});
     }
 
     static void settle() throws InterruptedException {

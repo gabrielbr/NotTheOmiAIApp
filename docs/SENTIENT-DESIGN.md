@@ -27,6 +27,15 @@ GMind (built from the `sentient` module) uses the same design system as GVoice (
 | 10 | Old beige palette, default sans font, rounded white cards and pill buttons. | GVoice tokens, Ubuntu Mono, hairline-divided rows, `Ui.Style` buttons, line icons. |
 | 11 | The launcher icon used the old palette. | Ink background, mint centre node, white nodes. |
 
+## Phase 1: WhatsApp
+
+![WhatsApp](ui/gmind-whatsapp.png)
+*First launch with the WhatsApp access button, search across recordings and messages, a message in its conversation.*
+
+- The WhatsApp row is live: until notification access is granted it shows the coral chip, the reason and a dark **Allow notification access** button. Its limits (no older history, no muted chats) are explained only while setting up.
+- Message results show who wrote them (`WhatsApp · Mãe · …`, or `You`).
+- Opening a message shows the 10 messages before and after it as a chat log. The hit sits on a white panel with the search words highlighted, and your own messages are labelled *You*.
+
 ## Screenshots
 
 `sentient/src/test/java/br/gabriel/sentient/SentientScreenshotTest.java` renders the real screens with Robolectric native graphics and sample rows. No database or Keystore is needed:

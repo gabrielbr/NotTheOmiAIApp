@@ -10,7 +10,7 @@ public final class Sources {
     public static final class State {
         public final String pluginId, cursor, lastStatus;
         public final boolean enabled;
-        public final Long lastSyncAt;
+        public final Long lastSyncAt, lastItemAt;
         public final long itemCount;
         State(Object[] row) {
             pluginId = (String) row[0];
@@ -19,10 +19,12 @@ public final class Sources {
             lastSyncAt = row[3] == null ? null : ((Number) row[3]).longValue();
             lastStatus = (String) row[4];
             itemCount = ((Number) row[5]).longValue();
+            lastItemAt = row.length > 6 && row[6] != null ? ((Number) row[6]).longValue() : null;
         }
     }
 
-    private static final String COLUMNS = "plugin_id, enabled, cursor, last_sync_at, last_status, item_count";
+    private static final String COLUMNS = "plugin_id, enabled, cursor, last_sync_at, last_status, item_count,"
+            + " (SELECT MAX(ts) FROM items WHERE items.source = sources.plugin_id)";
 
     public static State ensure(Db db, String pluginId) throws Exception {
         db.exec("INSERT OR IGNORE INTO sources(plugin_id) VALUES(?)", pluginId);

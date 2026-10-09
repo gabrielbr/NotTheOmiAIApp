@@ -29,6 +29,8 @@ public final class SentientHostTest {
         omiTranscriptMapping();
         searchExpressions();
         rawItemValidation();
+        whatsAppParsing();
+        whatsAppIngest();
         System.out.println("PASS_SENTIENT_HOST_CHECKS " + checks);
     }
 
@@ -208,6 +210,79 @@ public final class SentientHostTest {
         catch (IllegalArgumentException expected) { check(true, "timestamp required"); }
         try { RawItem.builder("s", "").kind(RawItem.DOC).timestamp(1).build(); check(false, "externalId required"); }
         catch (IllegalArgumentException expected) { check(true, "externalId required"); }
+    }
+
+    private static WhatsAppMessages.Snapshot snap(String title, String shortcut, boolean group, boolean summary,
+                                                  String category, WhatsAppMessages.Message... messages) {
+        return new WhatsAppMessages.Snapshot("com.whatsapp", 50_000, title, shortcut, group, summary, "Gabriel",
+                category, Arrays.asList(messages));
+    }
+
+    private static WhatsAppMessages.Message msg(String sender, String text, long time) {
+        return new WhatsAppMessages.Message(sender, text, time);
+    }
+
+    private static void whatsAppParsing() {
+        List<RawItem> dm = WhatsAppMessages.parse(snap("Ana", "5511999@s.whatsapp.net", false, false, "msg",
+                msg("Ana", "Oi! Vamos almoçar amanhã?", 1000), msg(null, "Bora, 12h?", 2000)));
+        check(dm.size() == 2, "DM: both messages");
+        check(dm.get(0).conversationExternalId.equals("5511999@s.whatsapp.net") && "dm".equals(dm.get(0).conversationKind),
+                "DM keyed by shortcut id");
+        check(dm.get(0).authorHandle.equals("name:Ana") && !dm.get(0).fromMe, "incoming author");
+        check(dm.get(1).fromMe && "me".equals(dm.get(1).authorHandle), "reply from the notification is mine");
+        check(WhatsAppMessages.parse(snap("Ana", null, false, false, "msg", msg("Gabriel", "eu", 3000))).get(0).fromMe,
+                "self display name is mine");
+
+        List<RawItem> group = WhatsAppMessages.parse(snap("Família (3 mensagens)", null, true, false, "msg",
+                msg("Mãe", "Jantar domingo?", 1000), msg("Pai", "📷 Foto", 1100)));
+        check(group.size() == 2 && "Família".equals(group.get(0).conversationTitle), "group title cleaned");
+        check("title:Família".equals(group.get(0).conversationExternalId) && "group".equals(group.get(0).conversationKind),
+                "group keyed by title without shortcut");
+        check("📷 Foto".equals(group.get(1).text), "media placeholder kept as text");
+
+        check(WhatsAppMessages.parse(snap("WhatsApp", null, false, true, "msg", msg("Ana", "hi", 1))).isEmpty(),
+                "group summary skipped");
+        check(WhatsAppMessages.parse(snap("Ana", null, false, false, "call", msg("Ana", "Incoming voice call", 1))).isEmpty(),
+                "calls skipped");
+        check(WhatsAppMessages.parse(snap("WhatsApp", null, false, false, "msg",
+                msg(null, "5 messages from 3 chats", 1), msg("x", "3 novas mensagens", 2),
+                msg("x", "Checking for new messages", 3), msg("x", "  ", 4))).isEmpty(), "WhatsApp notices skipped");
+        check(WhatsAppMessages.parse(snap("Ana", null, false, false, "msg", msg("Ana", "hi", 0))).get(0).timestamp == 50_000,
+                "missing time falls back to post time");
+
+        String a = WhatsAppMessages.parse(snap("Ana", "j", false, false, "msg", msg("Ana", "hi", 7))).get(0).externalId;
+        String b = WhatsAppMessages.parse(snap("Ana (2 messages)", "j", false, false, "msg", msg("Ana", "hi", 7))).get(0).externalId;
+        String c = WhatsAppMessages.parse(snap("Ana", "j", false, false, "msg", msg("Ana", "hi", 8))).get(0).externalId;
+        check(a.equals(b) && !a.equals(c), "id stable across re-posts, distinct per message");
+    }
+
+    private static void whatsAppIngest() throws Exception {
+        Db db = fresh();
+        WhatsAppMessages.Snapshot first = snap("Família", "fam", true, false, "msg",
+                msg("Mãe", "Jantar domingo?", 1000), msg("Pai", "Pode ser", 2000));
+        WhatsAppMessages.Snapshot repost = snap("Família (3 messages)", "fam", true, false, "msg",
+                msg("Mãe", "Jantar domingo?", 1000), msg("Pai", "Pode ser", 2000), msg(null, "Levo a sobremesa", 3000));
+        Ingest.Stats one = db.transaction(() -> Ingest.upsert(db, WhatsAppMessages.parse(first), 1));
+        Ingest.Stats two = db.transaction(() -> Ingest.upsert(db, WhatsAppMessages.parse(repost), 2));
+        check(one.added == 2 && two.added == 1 && two.updated == 0 && two.unchanged == 2, "re-posted history adds only the new message");
+        check(db.query("SELECT COUNT(*) FROM people").get(0)[0].equals(3L), "Me plus Mãe and Pai");
+
+        db.transaction(() -> Ingest.upsert(db, java.util.Arrays.asList(
+                RawItem.builder(WhatsAppMessages.ID, "x4").kind(RawItem.MESSAGE).timestamp(4000).text("Ótimo")
+                        .conversation("fam", "Família", "group").author("name:Mãe", "Mãe", false).build(),
+                RawItem.builder(WhatsAppMessages.ID, "y1").kind(RawItem.MESSAGE).timestamp(2500).text("outro chat")
+                        .conversation("other", "Trabalho", "group").author("name:Rui", "Rui", false).build()), 3));
+        Search.Hit hit = Search.find(db, "sobremesa", 5).get(0);
+        check(hit.fromMe && hit.author == null && "Família".equals(hit.conversation), "search hit knows it's mine");
+        check("Mãe".equals(Search.find(db, "domingo", 5).get(0).author), "search hit has the author");
+        Items.Item item = Items.get(db, hit.itemId);
+        List<Items.Item> around = Items.around(db, item, 1);
+        check(around.size() == 3 && around.get(0).text.equals("Pode ser") && around.get(1).id == item.id
+                && around.get(2).text.equals("Ótimo"), "around: neighbours in order, same chat only");
+        check(Items.around(db, item, 10).size() == 4, "around: bounded by the conversation");
+        Sources.ensure(db, WhatsAppMessages.ID);
+        Sources.State state = Sources.ensure(db, WhatsAppMessages.ID);
+        check(state.lastItemAt == 4000, "source knows its newest message time");
     }
 
     private static void check(boolean ok, String what) {

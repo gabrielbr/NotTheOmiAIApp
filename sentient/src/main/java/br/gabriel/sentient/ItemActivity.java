@@ -9,12 +9,17 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import br.gabriel.sentient.plugin.RawItem;
+
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** One message or transcript in full, with the search words on the highlighter. */
+/** A transcript in full, or a message in its conversation, with the search words highlighted. */
 public final class ItemActivity extends Activity {
     static final String EXTRA_ID = "item_id", EXTRA_QUERY = "query";
+    static final int CONTEXT = 10;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -39,16 +44,21 @@ public final class ItemActivity extends Activity {
         io.execute(() -> {
             Items.Item item;
             String marked = null;
+            List<Items.Item> thread = Collections.emptyList();
             try {
                 Db db = KnowledgeStore.get(this);
                 item = Items.get(db, id);
-                if (item != null) marked = Items.highlighted(db, id, query);
+                if (item != null) {
+                    marked = Items.highlighted(db, id, query);
+                    if (RawItem.MESSAGE.equals(item.kind)) thread = Items.around(db, item, CONTEXT);
+                }
             } catch (Exception failure) {
                 item = null;
             }
             final Items.Item found = item;
             final String text = marked;
-            main.post(() -> { if (!destroyed) show(found, text); });
+            final List<Items.Item> context = thread;
+            main.post(() -> { if (!destroyed) { if (context.size() > 1) showThread(found, text, context); else show(found, text); } });
         });
     }
 
@@ -56,6 +66,32 @@ public final class ItemActivity extends Activity {
         destroyed = true;
         io.shutdownNow();
         super.onDestroy();
+    }
+
+    /** A message among its neighbours, as a simple chat log; the hit is marked and highlighted. */
+    void showThread(Items.Item hit, String marked, List<Items.Item> thread) {
+        content.removeAllViews();
+        content.addView(Ui.text(this, SentientActivity.titleOf(this, hit.conversation, hit.source), 26, Ui.INK, true));
+        TextView meta = Ui.text(this, SentientActivity.kindOf(this, hit.source) + " · "
+                + SentientActivity.date(this, hit.ts), 14, Ui.MUTED, false);
+        meta.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 16));
+        content.addView(meta);
+        for (Items.Item m : thread) {
+            boolean isHit = m.id == hit.id;
+            LinearLayout row = Ui.column(this);
+            int pad = Ui.dp(this, 12);
+            row.setPadding(pad, pad, pad, pad);
+            if (isHit) row.setBackground(Ui.shape(this, Ui.SURFACE, 4));
+            String who = m.fromMe ? "You" : (m.author == null ? "" : m.author);
+            String time = android.text.format.DateUtils.formatDateTime(this, m.ts, android.text.format.DateUtils.FORMAT_SHOW_TIME);
+            row.addView(Ui.text(this, who.isEmpty() ? time : who + " · " + time, 13, m.fromMe ? Ui.MINT_INK : Ui.MUTED, true));
+            TextView text = Ui.text(this, isHit && marked != null ? Ui.highlight(this, marked) : m.text, 16, Ui.INK, false);
+            text.setPadding(0, Ui.dp(this, 4), 0, 0);
+            text.setTextIsSelectable(true);
+            row.addView(text);
+            if (isHit) row.setContentDescription("Search result: " + who + ", " + m.text);
+            content.addView(row);
+        }
     }
 
     /** {@code marked} is the full text with match markers, or null to show it plain. */
