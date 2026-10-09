@@ -206,6 +206,24 @@ GMind is the Android take on Sentient OS: collect what's new in your life every 
 | **Readable by Claude in any conversation** | Vault reachable outside the phone | 6 |
 | Computer control (Mac) | **Excluded on purpose.** GMind is read-only and has no accessibility service; `verify_apk.py` enforces this | — |
 
+## Backlog
+
+Not scheduled into a phase yet.
+
+### Task monitoring of chosen chats
+
+The user picks, in GMind's UI, which groups or people in which apps (WhatsApp, Signal, later others) GMind keeps watching for tasks. Messages from those chats are checked as they arrive, and a task is added when a message asks the user to do something.
+
+- Example: the company's shared WhatsApp group says Gabriel needs to fill in his hours sheet. GMind adds the task "Gabriel: fill in hours sheet".
+- The text is interpreted for timelines and deadlines ("by Friday", "end of month", "before the 15th"), which become the task's due date. Relative dates resolve against the message's timestamp.
+- The selection UI lists the conversations and people GMind has already seen, per app, each with an on/off toggle. Nothing is monitored until the user turns it on.
+- Each task links back to the message it came from, shown in its conversation (`Items.around`).
+- Open question: where tasks live. They could be a GMind list, or be sent to Todoist like GVoice's task extraction (`PLAN-PT-TODOIST.md`). Sending them to Todoist is a write action, so it needs an exception to the read-only rule under *Out of scope*.
+
+### Ask for the user's name during onboarding
+
+Onboarding asks the user's name (and nicknames or other spellings, like "Gabriel" / "Gabi"). Task detection uses it to keep only tasks meant for the user. A request addressed to someone else in a group ("Ana, send the report") isn't added. A message with no name, sent in a direct chat, counts as addressed to the user.
+
 ## Verification
 
 - **Host tests (no phone)**, in the same style as `tests/sentient/run_host_checks.py`: plugin contract and `RawItem` mapping per plugin using recorded JSON fixtures (Composio responses, a Matrix `/sync` page, MessagingStyle bundles), dedupe of re-posted WhatsApp history, cursor-advances-only-after-commit, the schema migration ladder, the SQL whitelist rejecting non-SELECT queries, and that Composio write tools are refused.
