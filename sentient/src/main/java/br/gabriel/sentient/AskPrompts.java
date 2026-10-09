@@ -38,6 +38,10 @@ public final class AskPrompts {
             + "oldest first. Use it to read a whole exchange around a search hit.";
     public static final String PEOPLE_DESCRIPTION =
             "Finds people by name: which apps they appear in, how many items, when last, and their chats.";
+    public static final String ABOUT_DESCRIPTION =
+            "Looks up what GMind learned about a person, organization, project, place or topic: lasting facts, how it "
+            + "relates to others, and the latest items mentioning it. Use it for questions about who someone is or what "
+            + "a project is.";
     public static final String TIMELINE_DESCRIPTION =
             "Lists everything between two dates (YYYY-MM-DD, inclusive), oldest first, optionally from one source. "
             + "Use it for questions like \"what happened on Tuesday\".";

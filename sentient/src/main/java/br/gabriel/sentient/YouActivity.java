@@ -120,7 +120,34 @@ public final class YouActivity extends Activity {
             }
             content.addView(Ui.divider(this));
         }
+        enrichment();
         vault();
+    }
+
+    private void enrichment() {
+        section("AI enrichment");
+        content.addView(Ui.text(this, "After each sync, Claude Haiku 5.5 reads what came in and notes the people, projects, "
+                + "places and facts in it, so the portrait, the vault and Ask know more. This sends your new messages, emails "
+                + "and transcripts to Anthropic in batches, with your Claude key; usually a few US cents a day.", 14, Ui.MUTED, false));
+        if (!AskSettings.hasKey(this)) {
+            content.addView(Ui.button(this, "Add a Claude key first", Ui.Style.QUIET,
+                    v -> startActivity(new Intent(this, AskSettingsActivity.class))), buttonParams());
+            return;
+        }
+        CheckBox on = new CheckBox(this);
+        on.setText("Enrich with Claude after each sync");
+        on.setTypeface(Ui.font(this, false));
+        on.setTextColor(Ui.INK);
+        on.setButtonTintList(ColorStateList.valueOf(Ui.INK));
+        on.setChecked(AskSettings.enrich(this));
+        on.setOnCheckedChangeListener((b, checked) -> AskSettings.setEnrich(this, checked));
+        content.addView(on, buttonParams());
+        String status = AskSettings.enrichStatus(this);
+        if (status != null) {
+            TextView st = Ui.text(this, status, 13, status.startsWith("Last run") ? Ui.MUTED : Ui.CORAL_TEXT, false);
+            st.setPadding(0, dp(4), 0, 0);
+            content.addView(st);
+        }
     }
 
     private void vault() {

@@ -94,7 +94,8 @@ public final class ClaudeBackendTest {
         assertTrue(first.startsWith("/v1/messages sk-test-key "));
         assertTrue(first.contains("\"model\":\"claude-haiku-5-5\""));
         assertTrue("fixed prompt and tools are cached", first.contains("\"cache_control\":{\"type\":\"ephemeral\""));
-        assertTrue("four read-only tools", first.contains("\"name\":\"search\"") && first.contains("\"name\":\"timeline\""));
+        assertTrue("five read-only tools", first.contains("\"name\":\"search\"") && first.contains("\"name\":\"timeline\"")
+                && first.contains("\"name\":\"about\""));
         assertTrue("history and the date go along", first.contains("Olá!") && first.contains("\"role\":\"system\""));
         assertTrue("the tool result goes back with its id", second.contains("\"tool_use_id\":\"toolu_1\"")
                 && second.contains("[#41] 2026-10-09"));

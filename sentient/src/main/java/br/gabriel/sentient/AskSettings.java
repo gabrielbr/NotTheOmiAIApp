@@ -27,6 +27,12 @@ final class AskSettings {
     }
     static void setModel(Context c, String model) { prefs(c).edit().putString(MODEL, model).apply(); }
 
+    /** Enrichment with Claude Haiku after each sync: off until the person turns it on. */
+    static boolean enrich(Context c) { return prefs(c).getBoolean("enrich", false); }
+    static void setEnrich(Context c, boolean on) { prefs(c).edit().putBoolean("enrich", on).apply(); }
+    static String enrichStatus(Context c) { return prefs(c).getString("enrich_status", null); }
+    static void setEnrichStatus(Context c, String s) { prefs(c).edit().putString("enrich_status", s).apply(); }
+
     static String modelName(String model) {
         switch (model) {
             case OPUS: return "Claude Opus 5.5";

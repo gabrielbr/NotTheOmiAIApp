@@ -17,7 +17,7 @@ import java.util.Map;
  */
 public final class KnowledgeTools {
     public static final String SEARCH = "search", CONVERSATION = "conversation", PEOPLE = "people",
-            TIMELINE = "timeline";
+            TIMELINE = "timeline", ABOUT = "about";
     static final int MAX_LIMIT = 20, MAX_AROUND = 15, MAX_TIMELINE = 50, MAX_TEXT = 400;
     private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT);
 
@@ -44,6 +44,10 @@ public final class KnowledgeTools {
                 Long from = day(input, "from", false), to = day(input, "to", true);
                 if (from == null || to == null) throw new IllegalArgumentException("from and to are required (YYYY-MM-DD)");
                 return timeline(from, to, str(input, "source"), num(input, "limit", 30, 1, MAX_TIMELINE));
+            case ABOUT:
+                String what = str(input, "name");
+                if (what == null) throw new IllegalArgumentException("name is required");
+                return about(what);
             default:
                 throw new IllegalArgumentException("Unknown tool " + tool);
         }
@@ -143,6 +147,34 @@ public final class KnowledgeTools {
                 for (int i = 0; i < chats.size(); i++) out.append(i == 0 ? "" : ", ").append(chats.get(i)[0]);
             }
             out.append('\n');
+        }
+        return out.toString();
+    }
+
+    /** What enrichment learned about a person, project, place or topic: facts, links and mentions. */
+    public String about(String name) throws Exception {
+        String like = "%" + name + "%";
+        List<Object[]> found = db.query("SELECT DISTINCT entities.id, entities.name, entities.type FROM entities"
+                + " LEFT JOIN entity_aliases ON entity_aliases.entity_id = entities.id"
+                + " WHERE entities.name LIKE ? OR entity_aliases.alias LIKE ?"
+                + " ORDER BY (SELECT COUNT(*) FROM mentions WHERE mentions.entity_id = entities.id) DESC LIMIT 3", like, like);
+        if (found.isEmpty()) return "Nothing known about that yet (enrichment may be off, or it hasn't come up).";
+        StringBuilder out = new StringBuilder();
+        for (Object[] e : found) {
+            out.append(e[1]).append(" (").append(e[2]).append(")\n");
+            for (Object[] f : db.query("SELECT key, value, evidence_item_id FROM facts WHERE entity_id = ? ORDER BY key", e[0]))
+                out.append("  ").append(f[0]).append(": ").append(f[1]).append(f[2] == null ? "" : " [#" + f[2] + "]").append('\n');
+            for (Object[] r : db.query("SELECT relations.type, src.name, dst.name, relations.evidence_item_id FROM relations"
+                    + " JOIN entities src ON src.id = relations.src_entity JOIN entities dst ON dst.id = relations.dst_entity"
+                    + " WHERE relations.src_entity = ? OR relations.dst_entity = ? ORDER BY relations.last_seen DESC LIMIT 15", e[0], e[0]))
+                out.append("  ").append(r[1]).append(" ").append(r[0]).append(" ").append(r[2])
+                        .append(r[3] == null ? "" : " [#" + r[3] + "]").append('\n');
+            for (Object[] m : db.query("SELECT items.id, items.ts, items.source, conversations.title, identities.display_name,"
+                    + " items.from_me, substr(items.text, 1, " + MAX_TEXT + ") FROM mentions JOIN items ON items.id = mentions.item_id"
+                    + " LEFT JOIN conversations ON conversations.id = items.conversation_id"
+                    + " LEFT JOIN identities ON identities.id = items.author_identity_id"
+                    + " WHERE mentions.entity_id = ? ORDER BY items.ts DESC LIMIT 5", e[0]))
+                line(out, (Long) m[0], (Long) m[1], (String) m[2], (String) m[3], (String) m[4], flag(m[5]), (String) m[6]);
         }
         return out.toString();
     }

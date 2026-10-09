@@ -54,7 +54,9 @@ final class ClaudeBackend implements LlmBackend {
                     prop("from", "string", "First day, YYYY-MM-DD"),
                     prop("to", "string", "Last day, YYYY-MM-DD"),
                     prop("source", "string", "A source id, e.g. whatsapp, matrix or composio.gmail"),
-                    prop("limit", "integer", "How many lines, up to 50"))));
+                    prop("limit", "integer", "How many lines, up to 50")),
+            tool(KnowledgeTools.ABOUT, AskPrompts.ABOUT_DESCRIPTION, Collections.singletonList("name"),
+                    prop("name", "string", "A name or part of it"))));
 
     private final AnthropicClient client;
     private final String model;
@@ -172,6 +174,7 @@ final class ClaudeBackend implements LlmBackend {
             case KnowledgeTools.CONVERSATION: return "Reading a conversation…";
             case KnowledgeTools.PEOPLE: return "Looking up people…";
             case KnowledgeTools.TIMELINE: return "Going through a timeline…";
+            case KnowledgeTools.ABOUT: return "Checking what GMind knows about it…";
             default: return "Searching messages and recordings…";
         }
     }
