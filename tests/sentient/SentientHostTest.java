@@ -32,6 +32,8 @@ public final class SentientHostTest {
         whatsAppParsing();
         whatsAppIngest();
         signal();
+        knowledgeTools();
+        citations();
         System.out.println("PASS_SENTIENT_HOST_CHECKS " + checks);
     }
 
@@ -217,6 +219,61 @@ public final class SentientHostTest {
                                                   String category, ChatMessages.Message... messages) {
         return new ChatMessages.Snapshot("com.whatsapp", 50_000, title, shortcut, group, summary, "Gabriel",
                 category, Arrays.asList(messages));
+    }
+
+    private static void knowledgeTools() throws Exception {
+        Db db = fresh();
+        java.time.ZoneId utc = java.time.ZoneId.of("UTC");
+        long day = 86_400_000L, oct9 = 1_791_504_000_000L; // 2026-10-09T00:00Z
+        db.transaction(() -> Ingest.upsert(db, Arrays.asList(
+                RawItem.builder(ChatMessages.WHATSAPP, "m1").kind(RawItem.MESSAGE).timestamp(oct9 + 10 * 3_600_000L)
+                        .text("Vamos almoçar domingo no Lisboa?").conversation("ana", "Ana", "dm").author("name:Ana", "Ana", false).build(),
+                RawItem.builder(ChatMessages.WHATSAPP, "m2").kind(RawItem.MESSAGE).timestamp(oct9 + 11 * 3_600_000L)
+                        .text("Bora, meio-dia").conversation("ana", "Ana", "dm").author("me", null, true).build(),
+                RawItem.builder(ChatMessages.SIGNAL, "s1").kind(RawItem.MESSAGE).timestamp(oct9 - 2 * day)
+                        .text("Contrato assinado").conversation("rui", "Rui", "dm").author("name:Rui", "Rui", false).build(),
+                transcript("t1", oct9 + 15 * 3_600_000L, "Reunião sobre o almoço de domingo e o orçamento")), 1));
+        long before = (Long) db.query("SELECT COUNT(*) FROM items").get(0)[0];
+        KnowledgeTools tools = new KnowledgeTools(db, utc);
+
+        String hits = tools.run("search", java.util.Map.of("query", "almoc domingo"));
+        check(hits.contains("2026-10-09 10:00 · whatsapp · Ana · Ana: Vamos almoçar domingo") && hits.contains("omi.transcripts"),
+                "search: accent-insensitive, formatted lines");
+        check(hits.matches("(?s)\\[#\\d+\\] .*"), "search lines start with [#id]");
+        check(!tools.run("search", java.util.Map.of("query", "domingo", "source", "whatsapp")).contains("omi.transcripts"),
+                "search: source filter");
+        check(tools.run("search", java.util.Map.of("person", "Rui")).contains("Contrato assinado"), "search: person only");
+        check(tools.run("search", java.util.Map.of("query", "domingo", "from", "2026-10-10")).equals("No matches."),
+                "search: date filter");
+        check(tools.run("search", java.util.Map.of("query", "x", "limit", 999)).equals("No matches."), "search: limit clamped");
+        try { tools.run("search", java.util.Map.of()); check(false, "empty search refused"); }
+        catch (IllegalArgumentException expected) { check(true, "empty search refused"); }
+        try { tools.run("drop_table", java.util.Map.of()); check(false, "unknown tool refused"); }
+        catch (IllegalArgumentException expected) { check(true, "unknown tool refused"); }
+        try { tools.run("timeline", java.util.Map.of("from", "yesterday", "to", "2026-10-09")); check(false, "bad date refused"); }
+        catch (IllegalArgumentException expected) { check(expected.getMessage().contains("YYYY-MM-DD"), "bad date refused"); }
+
+        long m1 = (Long) db.query("SELECT id FROM items WHERE external_id = 'm1'").get(0)[0];
+        String convo = tools.run("conversation", java.util.Map.of("item_id", "#" + m1));
+        check(convo.indexOf("Vamos almoçar") < convo.indexOf("· me: Bora"), "conversation: in order, own reply as me");
+        check(tools.run("conversation", java.util.Map.of("item_id", 999_999)).startsWith("No item"), "conversation: missing item");
+
+        String ana = tools.run("people", java.util.Map.of("name", "an"));
+        check(ana.contains("Ana · in whatsapp · 1 items") && ana.contains("chats: Ana"), "people: where and how much");
+        String day9 = tools.run("timeline", java.util.Map.of("from", "2026-10-09", "to", "2026-10-09"));
+        check(day9.split("\n").length == 3 && !day9.contains("Contrato"), "timeline: one day, inclusive");
+        check((Long) db.query("SELECT COUNT(*) FROM items").get(0)[0] == before, "tools never write");
+    }
+
+    private static void citations() throws Exception {
+        String answer = "Ana chamou para almoçar [#7]. Você topou [#9][#7]. Há também [#404] .";
+        check(Citations.ids(answer).equals(Arrays.asList(7L, 9L, 404L)), "citations in first-use order");
+        Db db = fresh();
+        db.transaction(() -> Ingest.upsert(db, Arrays.asList(transcript("a", 1, "one"), transcript("b", 2, "two")), 1));
+        List<Long> real = Citations.existing(db, Arrays.asList(1L, 2L, 404L));
+        check(real.equals(Arrays.asList(1L, 2L)), "invented ids dropped");
+        check(Citations.numbered("A [#2]. B [#1][#2]. C [#404] .", real).equals("A [2]. B [1][2]. C."), "renumbered for display");
+        check(Citations.ids(null).isEmpty() && Citations.numbered(null, real).isEmpty(), "null answer");
     }
 
     private static ChatMessages.Snapshot signalSnap(String title, boolean group, ChatMessages.Message... messages) {

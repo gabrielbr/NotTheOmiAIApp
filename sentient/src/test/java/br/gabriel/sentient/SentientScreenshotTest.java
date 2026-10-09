@@ -131,6 +131,41 @@ public final class SentientScreenshotTest {
                 System.currentTimeMillis() - minutesAgo * 60_000L, text, "Família", 7L, author, me ? 1L : 0L});
     }
 
+    @Test public void ask() throws Exception {
+        AskActivity a = Robolectric.buildActivity(AskActivity.class).setup().get();
+        settle(); shot(a, "ask-setup");
+
+        AskSettingsActivity settings = Robolectric.buildActivity(AskSettingsActivity.class).setup().get();
+        settle(); shot(settings, "ask-settings");
+
+        // An answered question, as the worker would leave it (no key or network in tests).
+        android.widget.LinearLayout thread = (android.widget.LinearLayout) field(a, "thread");
+        ((android.widget.LinearLayout) field(a, "setup")).removeAllViews();
+        android.widget.TextView q = Ui.text(a, "O que a Ana e eu combinamos para domingo?", 17, Ui.INK, true);
+        q.setPadding(0, Ui.dp(a, 24), 0, Ui.dp(a, 8));
+        thread.addView(q);
+        android.widget.TextView answer = Ui.text(a, "", 16, Ui.INK, false);
+        thread.addView(answer);
+        long now = System.currentTimeMillis();
+        Items.Item m1 = message(41, "Ana", false, 26 * 60, "Vamos almoçar domingo no Lisboa?");
+        Items.Item m2 = message(42, null, true, 25 * 60, "Bora, meio-dia");
+        Constructor<Items.Item> c = Items.Item.class.getDeclaredConstructor(Object[].class);
+        c.setAccessible(true);
+        Items.Item rec = c.newInstance((Object) new Object[]{77L, OmiTranscripts.ID, "transcript", now - 20 * HOUR,
+                "…", "Reunião com o João", null, null, 0L});
+        a.showAnswer(answer, new LlmBackend.Answer("Vocês combinaram almoçar no domingo ao meio-dia, no Lisboa [#41][#42]. "
+                + "Você também comentou isso na reunião com o João [#77].", null),
+                Arrays.asList(41L, 42L, 77L), Arrays.asList(m1, m2, rec), "domingo");
+        ((android.widget.TextView) field(a, "footer")).setText("Answered by Claude Haiku 5.5. Your question and the messages it looks up are sent to Anthropic.");
+        settle(); shot(a, "ask-answer");
+    }
+
+    static Object field(Object o, String name) throws Exception {
+        java.lang.reflect.Field f = o.getClass().getDeclaredField(name);
+        f.setAccessible(true);
+        return f.get(o);
+    }
+
     static Sources.State state(String id, Long lastSync, String status, long count, Long lastItem) throws Exception {
         Constructor<Sources.State> c = Sources.State.class.getDeclaredConstructor(Object[].class);
         c.setAccessible(true);

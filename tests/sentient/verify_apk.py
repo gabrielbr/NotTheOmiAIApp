@@ -31,7 +31,8 @@ def pinned_native():
     expected = {}
     for dependency in json.loads((ROOT/'DEPENDENCIES.json').read_text())['sentient_runtime']:
         group, artifact, version = dependency['coordinate'].removesuffix('@aar').split(':')
-        matches = list((Path.home()/'.gradle/caches/modules-2/files-2.1'/group/artifact/version).rglob('*.aar'))
+        cached = Path.home()/'.gradle/caches/modules-2/files-2.1'/group/artifact/version
+        matches = list(cached.rglob(f'{artifact}-{version}.aar')) or list(cached.rglob(f'{artifact}-{version}.jar'))
         assert len(matches) == 1, 'Expected one exact cached runtime artifact for ' + dependency['coordinate']
         assert sha(matches[0].read_bytes()) == dependency['sha256'], 'Runtime AAR pin mismatch'
         with zipfile.ZipFile(matches[0]) as source:
@@ -85,10 +86,10 @@ def main():
         assert abis == ['arm64-v8a', 'x86_64'], 'Unintended ABI set'
         actual = {n: sha(archive.read(n)) for n in names if n.startswith('lib/') and n.endswith('.so')}
         assert actual == pinned_native(), 'APK native libraries differ from pinned AARs'
-        for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt', 'ubuntu-font-licence.txt']:
+        for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt', 'ubuntu-font-licence.txt', 'anthropic-sdk-java-MIT.txt', 'okhttp-jackson-kotlin-Apache-2.0.txt']:
             assert len(archive.read('assets/licenses/'+name)) > 100, 'Missing license ' + name
         dex = b'\n'.join(archive.read(n) for n in names if n.endswith('.dex'))
-        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;', 'Lbr/gabriel/sentient/MessagesListenerService;',
+        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;', 'Lbr/gabriel/sentient/MessagesListenerService;', 'Lbr/gabriel/sentient/AskActivity;', 'Lcom/anthropic/client/okhttp/AnthropicOkHttpClient;',
                            'Lnet/zetetic/database/sqlcipher/SQLiteDatabase;']:
             assert class_name.encode() in dex, 'Missing runtime class ' + class_name
     digest = hashlib.sha256(args.apk.read_bytes()).hexdigest()
