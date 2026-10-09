@@ -34,6 +34,7 @@ public final class EnrichmentHostTest {
         requests();
         watchedChats();
         todoistSync();
+        driveVault();
         System.out.println("PASS_ENRICHMENT_HOST_CHECKS " + checks);
     }
 
@@ -435,13 +436,84 @@ public final class EnrichmentHostTest {
         SourcesHostTest.FakeHttp none = new SourcesHostTest.FakeHttp();
         ComposioClient guarded = new ComposioClient(none, "ck", "https://composio.test");
         for (String w : new String[]{"TODOIST_CLOSE_TASK_V1", "TODOIST_UPDATE_TASK", "TODOIST_DELETE_TASK", "GMAIL_SEND_EMAIL",
-                "GOOGLEDRIVE_DELETE_FILE", "SLACK_SENDS_A_MESSAGE_TO_A_SLACK_CHANNEL", ComposioGmail.FETCH}) {
+                "GOOGLEDRIVE_EMPTY_TRASH", "SLACK_SENDS_A_MESSAGE_TO_A_SLACK_CHANNEL", ComposioGmail.FETCH}) {
             try { guarded.write(w, "u", "a", java.util.Collections.emptyMap()); check(false, "write refused: " + w); }
             catch (IllegalArgumentException expected) { check(true, "write refused: " + w); }
         }
         try { guarded.execute(TodoistSync.CREATE, "u", "a", java.util.Collections.emptyMap()); check(false, "create isn't a read"); }
         catch (IllegalArgumentException expected) { check(true, "create isn't runnable as a read"); }
-        check(none.requests.isEmpty() && ComposioClient.WRITE_TOOLS.size() == 1, "refusals never reach the network; one write allowed");
+        check(none.requests.isEmpty() && ComposioClient.WRITE_TOOLS.size() == 5, "refusals never reach the network; five writes allowed");
+    }
+
+    static final class FakeDrive implements DriveVault.Drive {
+        final List<String> calls = new ArrayList<>();
+        final List<Map<String, Object>> args = new ArrayList<>();
+        int next = 1;
+        @Override public Object write(String slug, Map<String, Object> a) {
+            calls.add(slug);
+            args.add(a);
+            return slug.equals(DriveVault.DELETE_FILE) || slug.equals(DriveVault.EDIT_FILE) ? java.util.Collections.emptyMap()
+                    : br.gabriel.sentient.plugin.Json.object("id", "f" + next++);
+        }
+        long count(String slug) { return calls.stream().filter(slug::equals).count(); }
+    }
+
+    private static void driveVault() throws Exception {
+        Db db = fixture();
+        Enrichment.run(db, NOW, ZONE);
+        FakeDrive drive = new FakeDrive();
+        int notes = Vault.export(db, new DriveVault(db, drive, 1000), NOW, ZONE);
+        check(drive.count(DriveVault.CREATE_FILE) == notes, "first export creates every note: " + notes);
+        check(drive.calls.get(0).equals(DriveVault.CREATE_FOLDER) && "GMind vault".equals(drive.args.get(0).get("name"))
+                && !drive.args.get(0).containsKey("parent_id"), "one GMind vault folder at the top of My Drive");
+        long folders = drive.count(DriveVault.CREATE_FOLDER);
+        check(folders >= 3 && folders <= 8, "a subfolder per kind of note: " + folders);
+        String readme = null;
+        for (int i = 0; i < drive.calls.size(); i++)
+            if ("README.md".equals(drive.args.get(i).get("file_name"))) readme = (String) drive.args.get(i).get("text_content");
+        check(readme != null && readme.startsWith("> **GMind vault**") && readme.contains("# About me"), "README opens with a guide for Claude");
+        for (int i = 0; i < drive.calls.size(); i++)
+            if (drive.calls.get(i).equals(DriveVault.CREATE_FILE))
+                check("text/markdown".equals(drive.args.get(i).get("mime_type")) && drive.args.get(i).get("parent_id") != null, "notes are Markdown inside the vault");
+
+        FakeDrive again = new FakeDrive();
+        Vault.export(db, new DriveVault(db, again, 1000), NOW, ZONE);
+        check(again.calls.isEmpty(), "nothing changed, nothing uploaded");
+
+        Ingest.upsert(db, Arrays.asList(msg("whatsapp", "w20", NOW + HOUR, "Novidade!").conversation("c:fam", "Família", "group")
+                .author("name:Mãe", "Mãe", false).build()), NOW + HOUR);
+        FakeDrive edits = new FakeDrive();
+        Vault.export(db, new DriveVault(db, edits, 1000), NOW + 2 * HOUR, ZONE);
+        check(edits.count(DriveVault.EDIT_FILE) >= 1 && edits.count(DriveVault.CREATE_FOLDER) == 0, "changed notes edited in place");
+        check(edits.count(DriveVault.CREATE_FILE) == 0 || edits.count(DriveVault.CREATE_FILE) <= 2, "no duplicate files");
+
+        db.transaction(() -> Sources.forget(db, "whatsapp"));
+        Enrichment.run(db, NOW + 3 * HOUR, ZONE);
+        FakeDrive deletes = new FakeDrive();
+        Vault.export(db, new DriveVault(db, deletes, 1000), NOW + 3 * HOUR, ZONE);
+        check(deletes.count(DriveVault.DELETE_FILE) >= 2, "notes that no longer exist are deleted");
+        boolean ownIds = true;
+        for (int i = 0; i < deletes.calls.size(); i++)
+            if (deletes.calls.get(i).equals(DriveVault.DELETE_FILE)) ownIds &= String.valueOf(deletes.args.get(i).get("fileId")).startsWith("f");
+        check(ownIds, "only files GMind created are deleted");
+
+        Db fresh = fixture();
+        Enrichment.run(fresh, NOW, ZONE);
+        FakeDrive capped = new FakeDrive();
+        DriveVault small = new DriveVault(fresh, capped, 5);
+        Vault.export(fresh, small, NOW, ZONE);
+        check(capped.calls.size() <= 6 && small.deferred > 0, "write cap respected; the rest waits: " + capped.calls.size() + "/" + small.deferred);
+        FakeDrive rest = new FakeDrive();
+        DriveVault more = new DriveVault(fresh, rest, 1000);
+        Vault.export(fresh, more, NOW, ZONE);
+        boolean rootAgain = false;
+        for (int i = 0; i < rest.calls.size(); i++)
+            rootAgain |= rest.calls.get(i).equals(DriveVault.CREATE_FOLDER) && "GMind vault".equals(rest.args.get(i).get("name"));
+        check(more.deferred == 0 && !rootAgain && rest.count(DriveVault.CREATE_FILE) > 0,
+                "next export finishes, reusing the vault folder");
+        check(new DriveVault(fresh, rest, 1).read("README.md") == null, "nothing is downloaded from Drive");
+        DriveVault.forget(fresh);
+        check(Meta.get(fresh, DriveVault.STATE) == null, "stopping forgets the upload list");
     }
 
     static void check(boolean ok, String what) {

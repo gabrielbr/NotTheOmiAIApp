@@ -263,9 +263,10 @@ Onboarding asks the user's name (and nicknames or other spellings, like "Gabriel
 - Decided: an opt-in sync through Composio (`composio.todoist`). Tasks you approve are created in Todoist (content, due date, where they came from); completing one in Todoist marks it done in GMind. Only `TODOIST_CREATE_TASK` is allow-listed as a write, only for this sync; GMind never edits, closes or deletes in Todoist. Everything else stays read-only. See *Out of scope*.
 - Done: `ComposioClient.write` with `WRITE_TOOLS = {TODOIST_CREATE_TASK}` (everything else refused before any request), `TodoistSync` (send approved tasks with due date and source; reconcile completions after each sync), and a "Create in Todoist directly" switch on the To-dos screen, shown once Todoist is connected; without it, the share sheet is used.
 
-### Phase 6: Claude anywhere · *decided*
+### Phase 6: Claude anywhere · *done*
 
 GMind writes the Markdown vault into a "GMind vault" folder in your Google Drive through the connected `composio.googledrive` account (create folder, create file, edit file, and delete only files GMind created), uploading only changed notes. Claude reads it with the Google Drive connector. Off until chosen; the notes are plain Markdown in Drive.
+- Done: `DriveVault` (a `Vault.Writer`; create folder/file, edit and delete only its own files, a manifest of uploaded paths and content hashes in the encrypted store, at most 300 writes per export), the four Drive tools added to `ComposioClient.WRITE_TOOLS`, a guide at the top of README.md for Claude, and "Export to Google Drive" in About you › Markdown vault, refreshed after each sync.
 
 ## Verification
 

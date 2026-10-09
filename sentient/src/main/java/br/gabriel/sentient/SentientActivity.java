@@ -481,7 +481,7 @@ public final class SentientActivity extends Activity {
                         + "• Syncs once a day while the battery isn't low, or when you tap Sync now.\n"
                         + "• It reads your GVoice transcripts, and WhatsApp, Signal and Telegram messages from their notifications once you allow access.\n"
                         + "• Sources you connect are read from their servers: Matrix directly from your homeserver; Gmail, Calendar, Drive, Slack, Todoist and TickTick through Composio, whose servers fetch that data with your Composio key.\n"
-                        + "• Nothing you collected is uploaded anywhere, except when you ask Claude a question (your question and the items Claude looks up are sent to Anthropic) or turn on AI enrichment in About you (new items are sent to Anthropic in batches after each sync). Ask can also answer on the phone, offline, with a downloaded model.\n"
+                        + "• Nothing you collected is uploaded anywhere, except when you ask Claude a question (your question and the items Claude looks up are sent to Anthropic) or turn on AI enrichment in About you (new items are sent to Anthropic in batches after each sync). The vault goes to Google Drive only if you choose that; Todoist gets only the tasks you send. Ask can also answer on the phone, offline, with a downloaded model.\n"
                         + "• Read-only: GMind never sends messages or acts for you.")
                 .setNeutralButton("Updates", (d, w) -> startActivity(new Intent(this, UpdatesActivity.class)))
                 .setNegativeButton("Close", null)

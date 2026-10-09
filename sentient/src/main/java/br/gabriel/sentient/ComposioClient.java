@@ -29,10 +29,12 @@ public final class ComposioClient {
     }
 
     /**
-     * The only writes GMind ever makes, each opt-in: creating Todoist tasks you approve. Kept apart
-     * from READ_TOOLS and run only through {@link #write}.
+     * The only writes GMind ever makes, each opt-in: creating Todoist tasks you approve, and writing
+     * the vault into its own Google Drive folder (DriveVault edits and deletes only files it created).
+     * Kept apart from READ_TOOLS and run only through {@link #write}.
      */
-    static final Set<String> WRITE_TOOLS = Collections.singleton(TodoistSync.CREATE);
+    static final Set<String> WRITE_TOOLS = Collections.unmodifiableSet(new HashSet<>(java.util.Arrays.asList(
+            TodoistSync.CREATE, DriveVault.CREATE_FOLDER, DriveVault.CREATE_FILE, DriveVault.EDIT_FILE, DriveVault.DELETE_FILE)));
 
     private final Http http;
     private final String apiKey, base;
