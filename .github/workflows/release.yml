@@ -61,7 +61,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .cache
-          key: pinned-${{ hashFiles('DEPENDENCIES.json', 'scripts/prepare_whisper.py', 'scripts/prepare_preview.py') }}
+          key: pinned-${{ hashFiles('DEPENDENCIES.json', 'scripts/prepare_whisper.py', 'scripts/prepare_preview.py', 'scripts/prepare_llama.py') }}
 
       - name: Prepare pinned models (hash-verified)
         run: python3 scripts/prepare_model.py
@@ -69,9 +69,16 @@ jobs:
       - name: Build native Whisper library
         run: python3 scripts/build_whisper.py --ndk "$ANDROID_HOME/ndk/$NDK_VERSION"
 
+      - name: Prepare pinned llama.cpp (GMind on-device answers)
+        run: python3 scripts/prepare_llama.py
+
+      - name: Build native llama.cpp library
+        run: python3 scripts/build_llama.py --ndk "$ANDROID_HOME/ndk/$NDK_VERSION"
+
       - name: Host checks
         run: |
           python3 tests/sentient/run_host_checks.py
+          python3 tests/llama-native/run_host_checks.py
           python3 tests/capture/run_host_checks.py --sdk "$ANDROID_HOME"
           python3 tests/hybrid/run_host_checks.py
           python3 tests/hybrid/run_job_checks.py

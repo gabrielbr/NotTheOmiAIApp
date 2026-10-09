@@ -47,6 +47,15 @@ GMind (built from the `sentient` module) uses the same design system as GVoice (
 - The input stays pinned at the bottom, with a one-line footer saying who answers and what is sent. While Claude works, the button becomes **Stop** and a status line says what it's doing ("Searching messages and recordings…").
 - Settings: the API key is shown only as "…abcd" once saved; the model choice lists rough cost per question.
 
+## Phase 5: Ask on the phone
+
+![On this phone](ui/gmind-local.png)
+*Ask settings with "On this phone": before the download, downloading, ready.*
+
+- **Answer with** is the first choice in Ask settings, and each option says in one line what it means for privacy and quality.
+- The on-device section explains the trade-off once, then shows exactly one action for the state: **Download model · 1.1 GB** (Wi-Fi only by default), a mint progress bar with **Cancel download**, or **Model ready** with **Delete model** in coral.
+- On the Ask screen the footer says "Answered on this phone by Qwen2.5 1.5B. Nothing leaves the phone.", and the answer streams in as it's written.
+
 ## Screenshots
 
 `sentient/src/test/java/br/gabriel/sentient/SentientScreenshotTest.java` renders the real screens with Robolectric native graphics and sample rows. No database or Keystore is needed:

@@ -84,6 +84,32 @@ public final class KnowledgeTools {
         return out.toString();
     }
 
+    /**
+     * Search where any of the words may match (best matches first): for a small on-device model,
+     * which can't refine a search itself, recall matters more than precision.
+     */
+    public String searchAny(List<String> words, int limit) throws Exception {
+        StringBuilder any = new StringBuilder();
+        for (String w : words) {
+            String term = Search.matchExpression(w);
+            if (term.isEmpty()) continue;
+            if (any.length() > 0) any.append(" OR ");
+            any.append(term);
+        }
+        if (any.length() == 0) return "No matches.";
+        List<Object[]> rows = db.query("SELECT items.id, items.ts, items.source, conversations.title,"
+                + " identities.display_name, items.from_me, snippet(items_fts, 0, '', '', '…', 24) FROM items_fts"
+                + " JOIN items ON items.id = items_fts.rowid"
+                + " LEFT JOIN conversations ON conversations.id = items.conversation_id"
+                + " LEFT JOIN identities ON identities.id = items.author_identity_id"
+                + " WHERE items_fts MATCH ? ORDER BY bm25(items_fts) LIMIT ?", any.toString(), Math.min(limit, MAX_LIMIT));
+        if (rows.isEmpty()) return "No matches.";
+        StringBuilder out = new StringBuilder();
+        for (Object[] r : rows)
+            line(out, (Long) r[0], (Long) r[1], (String) r[2], (String) r[3], (String) r[4], flag(r[5]), (String) r[6]);
+        return out.toString();
+    }
+
     /** The item plus its neighbours in the same conversation, oldest first. */
     public String conversation(long itemId, int around) throws Exception {
         Items.Item item = Items.get(db, itemId);

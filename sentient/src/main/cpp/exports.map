@@ -1,0 +1,7 @@
+{
+  global:
+    Java_br_gabriel_sentient_LlamaNative_load;
+    Java_br_gabriel_sentient_LlamaNative_generate;
+    Java_br_gabriel_sentient_LlamaNative_close;
+  local: *;
+};

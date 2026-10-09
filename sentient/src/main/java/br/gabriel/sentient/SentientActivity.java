@@ -387,7 +387,7 @@ public final class SentientActivity extends Activity {
                         + "• Encrypted on this phone. Uninstalling or clearing the app's data deletes it.\n"
                         + "• Syncs once a day while the battery isn't low, or when you tap Sync now.\n"
                         + "• It reads your GVoice transcripts, and WhatsApp and Signal messages from their notifications once you allow access.\n"
-                        + "• Nothing leaves the phone, except when you ask Claude a question: then your question and the messages Claude looks up are sent to Anthropic.\n"
+                        + "• Nothing leaves the phone, except when you ask Claude a question: then your question and the messages Claude looks up are sent to Anthropic. Ask can also answer on the phone, offline, with a downloaded model.\n"
                         + "• Read-only: GMind never sends messages or acts for you.")
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Licenses", (d, w) -> licenses())
