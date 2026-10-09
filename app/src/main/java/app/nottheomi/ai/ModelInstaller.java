@@ -16,10 +16,12 @@ import java.util.function.BooleanSupplier;
 
 /** Copies only the pinned bundled Whisper model; never downloads or touches recordings. */
 public final class ModelInstaller {
-    public static final String MODEL_FILE = "ggml-small-q5_1.bin";
+    public static final String MODEL_FILE = "ggml-medium-q5_0.bin";
     public static final String MODEL_SHA256 =
-            "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb";
-    public static final long MODEL_BYTES = 190085487L;
+            "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f";
+    public static final long MODEL_BYTES = 539212467L;
+    /** Earlier pinned Whisper weights. Superseded copies only waste private storage. */
+    static final String[] SUPERSEDED = {"ggml-small.en-q5_1.bin", "ggml-small-q5_1.bin"};
     private ModelInstaller() { }
 
     public static File prepare(Context context) throws Exception {
@@ -43,6 +45,12 @@ public final class ModelInstaller {
         // Fully hash existing content on every preparation, rather than trusting a marker.
         if (verify(installed, cancelled)) return installed;
         Files.deleteIfExists(staging.toPath()); // Unlinks symlinks, never follows them.
+        // Free the old model's space before checking for room. Only these exact model
+        // files (and their staging copies) are removed; recordings live elsewhere.
+        for (String old : SUPERSEDED) {
+            Files.deleteIfExists(new File(base, old).toPath());
+            Files.deleteIfExists(new File(base, old + ".installing").toPath());
+        }
         if (base.getUsableSpace() < MODEL_BYTES + 8L * 1024 * 1024)
             throw new IOException("Insufficient space for offline model");
         boolean published = false;

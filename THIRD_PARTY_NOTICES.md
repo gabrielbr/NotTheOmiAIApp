@@ -3,7 +3,7 @@
 Current source (0.4.4):
 
 - `whisper.cpp`, ggml-org, commit `6e4ab854f67f743900934a703d5603419384c961`: https://github.com/ggml-org/whisper.cpp — MIT. CPU-only saved-audio inference, including upstream ggml. Pinned source archive hash in `DEPENDENCIES.json`; complete upstream notice in `app/src/main/assets/licenses/whisper.cpp-MIT.txt`.
-- OpenAI Whisper multilingual model, quantized `ggml-small-q5_1.bin`, distributed by `ggerganov/whisper.cpp` at revision `5359861c739e955e79d9a303bcbc70fb988958b1`: https://huggingface.co/ggerganov/whisper.cpp — MIT. Bundled, hash-verified offline model. Original model notice in `app/src/main/assets/licenses/whisper-model-MIT.txt`.
+- OpenAI Whisper multilingual model, quantized `ggml-medium-q5_0.bin`, distributed by `ggerganov/whisper.cpp` at revision `5359861c739e955e79d9a303bcbc70fb988958b1`: https://huggingface.co/ggerganov/whisper.cpp — MIT. Bundled, hash-verified offline model. Original model notice in `app/src/main/assets/licenses/whisper-model-MIT.txt`.
 - Vosk Android 0.3.75 and `vosk-model-small-pt-0.3` (Portuguese): https://github.com/alphacep/vosk-api and https://alphacephei.com/vosk/models — Apache-2.0. Streaming live preview; pinned model/AAR hashes in `DEPENDENCIES.json`. Notice in `app/src/main/assets/licenses/vosk-license.txt`.
 - Ubuntu Mono (regular, bold, bold italic) from `google/fonts` `ufl/ubuntumono`: Ubuntu Font Licence 1.0. Bundled in `app/src/main/res/font`; licence text in `app/src/main/assets/licenses/ubuntu-font-licence.txt`.
 - JNA 5.18.1: https://github.com/java-native-access/jna — Apache-2.0 option. Vosk native binding; pinned AAR hash in `DEPENDENCIES.json`. Notice in `app/src/main/assets/licenses/jna-license.txt`.

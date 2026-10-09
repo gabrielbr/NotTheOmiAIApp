@@ -78,18 +78,6 @@ public final class UiScreenshotTest {
         settle(); shot(a, "detail");
     }
 
-    @Test public void tasks() throws Exception {
-        ActivityController<TasksActivity> c = Robolectric.buildActivity(TasksActivity.class,
-                new Intent().putExtra(TasksActivity.EXTRA_SESSION_ID, "x")).setup();
-        settle();
-        Method row = TasksActivity.class.getDeclaredMethod("row", String.class, boolean.class);
-        row.setAccessible(true);
-        row.invoke(c.get(), "Ligar para o João sobre o contrato amanhã", true);
-        row.invoke(c.get(), "Pagar o boleto da luz até sexta", true);
-        row.invoke(c.get(), "Email Sarah the slides tomorrow", false);
-        settle(); shot(c.get(), "tasks");
-    }
-
     @Test public void omi() throws Exception {
         ActivityController<OmiSettingsActivity> c = Robolectric.buildActivity(OmiSettingsActivity.class).setup();
         settle(); shot(c.get(), "omi");

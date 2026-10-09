@@ -1,5 +1,7 @@
 # Plan: Portuguese transcription + task extraction to Todoist Inbox
 
+> **Update:** task extraction and Todoist moved to the Sentient companion app (see [PLAN-SENTIENT.md](PLAN-SENTIENT.md)). Omi Tarefas keeps the Portuguese/English transcription. The code below was removed from `:app` after commit `d6165d4`.
+
 ## Decisions (2026-10-09)
 
 - **Todoist: Option A**, share each task to the Todoist app. The app stays without INTERNET permission.

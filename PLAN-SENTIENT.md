@@ -60,7 +60,7 @@ Both APKs are signed with the same key, so the `signature` permission on the pro
 | Module | Type | Purpose |
 |---|---|---|
 | `:app` | existing | Gets just one new piece: `TranscriptProvider` |
-| `:plugin-api` | plain Java library | Plugin contracts and `RawItem`. Host-testable with no Android dependency, like `tests/tasks` |
+| `:plugin-api` | plain Java library | Plugin contracts and `RawItem`. Host-testable with no Android dependency, like the other `tests/*/run_host_checks.py` suites |
 | `:sentient` | Android app | Plugins, store, sync, enrichment, AI, UI |
 
 `settings.gradle` adds `include ':sentient', ':plugin-api'`. Java 17, minSdk 26, targetSdk 34, the same conventions as `app/build.gradle` (no androidx; plain Activities like `TasksActivity`).
@@ -145,7 +145,7 @@ daily_digests(date PRIMARY KEY, markdown, generated_at)
 
 1. **Identity resolution** (deterministic, offline): normalize phone numbers, emails and Matrix IDs, and match exact display names across sources. Fuzzy matches become *suggestions* in a "Merge people?" screen. They're never merged automatically.
 2. **Entity and relation extraction** (LLM, batched per conversation per day): it sends new items with a strict JSON schema prompt that returns `entities[] / relations[] / facts[] / tasks[]` with item ids as evidence. Results are upserted by `canonical_key`. It uses the selected `LlmBackend`. With the local backend it runs while the phone is charging.
-3. **Tasks:** the existing `TaskExtractor.extract()` (`app/.../TaskExtractor.java`) is already pure Java, so we move it to `:plugin-api` (or copy it) and run it on WhatsApp/Matrix messages too. The extracted tasks become `task` entities and can be shared to Todoist the same way `TasksActivity` does.
+3. **Tasks:** Todoist lives in Sentient only; Omi Tarefas no longer has it. `TaskExtractor` (pure Java, PT/EN cue phrases), its host test and the share-to-Todoist screen `TasksActivity` were removed from `:app`. Restore them from commit `d6165d4` (`git show d6165d4:app/src/main/java/app/nottheomi/ai/TaskExtractor.java`, `.../TasksActivity.java`, `tests/tasks/`), move the extractor to `:plugin-api` and run it on transcripts and WhatsApp/Matrix messages. The extracted tasks become `task` entities and can be shared to Todoist the same way.
 
 ## 7. AI query (`Ask` screen)
 
@@ -181,7 +181,7 @@ interface LlmBackend { String id(); Reply chat(List<Msg> history, List<Tool> too
 
 ## Verification
 
-- **Host tests (no phone)**, in the same style as `tests/tasks/run_host_checks.py`: plugin contract and `RawItem` mapping per plugin using recorded JSON fixtures (Composio responses, a Matrix `/sync` page, MessagingStyle bundles), dedupe of re-posted WhatsApp history, cursor-advances-only-after-commit, the schema migration ladder, the SQL whitelist rejecting non-SELECT queries, and that Composio write tools are refused.
+- **Host tests (no phone)**, in the same style as `tests/sentient/run_host_checks.py`: plugin contract and `RawItem` mapping per plugin using recorded JSON fixtures (Composio responses, a Matrix `/sync` page, MessagingStyle bundles), dedupe of re-posted WhatsApp history, cursor-advances-only-after-commit, the schema migration ladder, the SQL whitelist rejecting non-SELECT queries, and that Composio write tools are refused.
 - **Instrumentation** (`:sentient` androidTest): KnowledgeStore with real SQLCipher + FTS5 (PT diacritics search), TranscriptProvider refusing a caller without the signature permission, and SyncJobService idempotency.
 - **Gradle:** `./gradlew assembleDebug assembleRelease lintDebug` for both apps; `verify_apk.py` for both (`:app` has no INTERNET; `:sentient` matches the allow-list exactly).
 - **On device:** install both APKs, grant notification access, receive WhatsApp messages, then "Sync now". Check that they appear under the right person and conversation. Record with Omi and confirm the transcript is ingested. Connect Gmail through Composio. Ask "what did Ana and I talk about this week?" and confirm the answer cites the right items. Switch to the local backend and repeat.

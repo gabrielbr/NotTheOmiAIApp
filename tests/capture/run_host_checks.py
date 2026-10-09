@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Targeted host checks: real installer + mocked Android/native capture lifecycle.
 Not a replacement for APK/emulator/physical microphone acceptance.
-Run: python3 tests/capture/run_host_checks.py [--sdk /path/to/android-sdk] [--model /path/to/ggml-small-q5_1.bin]
+Run: python3 tests/capture/run_host_checks.py [--sdk /path/to/android-sdk] [--model /path/to/ggml-medium-q5_0.bin]
 """
 import argparse
 import pathlib
@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--sdk', type=pathlib.Path)
 parser.add_argument('--service-only', action='store_true', help='run service fixtures without the installer or Android SDK')
 parser.add_argument('--model', type=pathlib.Path,
-                    default=ROOT / 'app/src/main/assets/ggml-small-q5_1.bin',
+                    default=ROOT / 'app/src/main/assets/ggml-medium-q5_0.bin',
                     help='real Whisper model file (defaults to the packaged asset)')
 parser.add_argument('--preview-model', type=pathlib.Path,
                     default=ROOT / 'app/src/main/assets/model.zip', help='pinned Vosk model ZIP')

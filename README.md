@@ -1,31 +1,33 @@
-# NotTheOmiAIApp 0.4.4
+# Omi Tarefas
 
-Independent **offline Omi companion for Android 8+**. Public Android application source, tests and build tooling. Not affiliated with Omi or Based Hardware.
+Offline **Omi companion for Android 8+** that transcribes Portuguese and English, and keeps everything encrypted on your phone. A fork of [NotTheOmiAIApp](https://github.com/five0nit/NotTheOmiAIApp), installed as `br.gabriel.omitarefas` so it sits beside the original. It comes with **GMind**, an optional companion app that builds a searchable personal knowledge base and is where task extraction and Todoist live.
 
-**Source version: 0.4.4 / versionCode 11.** This source publication supersedes the repository's earlier APK-only policy. Application license: [MIT](LICENSE); third-party components retain their [own notices](THIRD_PARTY_NOTICES.md).
+Not affiliated with Omi or Based Hardware. Application license: [MIT](LICENSE); third-party components keep their [own notices](THIRD_PARTY_NOTICES.md).
 
-## Source and APK downloads
+![Omi Tarefas: Home, Library and Omi device](docs/ui/after.png)
 
-- This branch contains the **0.4.4 source**.
-- [Published APK releases](https://github.com/five0nit/NotTheOmiAIApp/releases) remain separate. The existing [v0.3.1 download](https://github.com/five0nit/NotTheOmiAIApp/releases/tag/v0.3.1), root `SHA256SUMS.txt`, `release-manifest.json` and `RELEASE-NOTES-0.3.1.md` describe the **older 0.3.1 binaries**, not the 0.4.4 source.
-- This source push does not publish a new 0.4.4 binary release. Do not confuse a GitHub source ZIP with an installable APK.
-- **This fork installs as `br.gabriel.omitarefas` ("Omi Tarefas")**, beside the original `app.nottheomi.ai`. Every merge to `main` publishes a signed APK under [Releases](https://github.com/gabrielbr/NotTheOmiAIApp/releases); see [RELEASING.md](RELEASING.md). Upstream note for the original package `app.nottheomi.ai`: Install an update over the existing app only with the same signer; **do not uninstall or clear data** to preserve the local encryption key and recordings. Your own signing key cannot update an existing differently signed installation.
+## Install and update
 
-## Updates
+Every merge to `main` publishes a signed release under [Releases](https://github.com/gabrielbr/NotTheOmiAIApp/releases) (`v0.5.<n>`):
 
-Omi Tarefas has no internet access, so it can't check for updates itself. Use [Obtainium](https://github.com/ImranR98/Obtainium) to get notified and update from GitHub Releases:
+| File | App |
+|---|---|
+| `OmiTarefas-<version>-arm64-v8a.apk` | Omi Tarefas. Install this one. |
+| `GMind-<version>.apk` | Optional GMind companion |
 
-1. Install Obtainium on the phone.
-2. Tap **Add App**, paste `https://github.com/gabrielbr/NotTheOmiAIApp` and tap **Add**.
-3. If it asks which file to install, pick `OmiTarefas-<version>-arm64-v8a.apk`.
+Both apps are signed with the same key and every release has a higher version code, so a new APK installs over the old one and keeps your data. Release details are in [RELEASING.md](RELEASING.md).
 
-Obtainium then checks in the background, notifies you when a new release is out, and opens Android's install prompt. Each release is signed with the same key and has a higher version code, so it updates in place and keeps your recordings.
+Omi Tarefas has no internet access, so it can't check for updates itself. Use [Obtainium](https://github.com/ImranR98/Obtainium) instead:
 
-## What it does
+1. **Omi Tarefas:** **Add App** → `https://github.com/gabrielbr/NotTheOmiAIApp`, and set the APK filter to `^OmiTarefas-.*-arm64-v8a\.apk$`.
+2. **GMind (optional):** download `GMind-<version>.apk` from the latest release and install it by hand. Obtainium won't track a second app from the same repository.
+
+Obtainium checks in the background, notifies you of new releases and opens Android's install prompt.
+
+## What Omi Tarefas does
 
 - Omi Bluetooth LE Opus audio → encrypted phone-local PCM and transcript history.
-- Bundled **Vosk** (Portuguese) for streaming drafts; CPU-only multilingual **Whisper small Q5_1** for post-save refinement, auto-detecting Portuguese or English per 30-second window.
-- **Find tasks for Todoist** on any saved recording: offline Portuguese/English to-do finder, review/edit, then share each task to the Todoist app (Quick Add → Inbox). No network permission.
+- Bundled **Vosk** (Portuguese) for streaming drafts; CPU-only multilingual **Whisper medium Q5_0** for post-save refinement, auto-detecting Portuguese or English per 30-second window.
 - Playback, searchable library and explicit WAV/text export.
 - No Omi account, PC relay, cloud transcription, runtime model download or `INTERNET` permission.
 - Capability-gated battery, brightness and button controls. Long-press/power behavior stays firmware-owned.
@@ -33,7 +35,26 @@ Obtainium then checks in the background, notifies you when a new release is out,
 
 ## GMind companion (optional, in development)
 
-**GMind** (package `br.gabriel.sentient`; the code still calls it Sentient) is a separate companion app: a personal knowledge base that collects content daily through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5). Omi Tarefas itself stays offline. It only exposes a read-only transcript provider, guarded by a signature permission, so only an app signed with the same key can read it. GMind is the only one of the two apps with INTERNET, which later phases need for Composio, Matrix and Claude. Phase 0 syncs Omi Tarefas transcripts once a day and offers full-text search. See [PLAN-SENTIENT.md](PLAN-SENTIENT.md).
+**GMind** (package `br.gabriel.sentient`; the code still calls it Sentient) is a separate app: a personal knowledge base that collects content through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5).
+
+- **Phase 0 (now):** syncs Omi Tarefas transcripts once a day (or with **Sync now**) and offers full-text search.
+- **Later phases:** task extraction to Todoist, WhatsApp notifications, Composio and Matrix sources, and asking questions with Claude or an on-device model. Read-only: it never acts on other services.
+- **Privacy split:** Omi Tarefas stays offline. It only exposes a read-only transcript provider behind a signature permission, so only an app signed with the same key can read it. GMind is the only one of the two apps with internet access.
+- Not yet tested on a phone. It uses the same design system as Omi Tarefas ([GMind audit](docs/SENTIENT-DESIGN.md)).
+
+The full plan and status are in [PLAN-SENTIENT.md](PLAN-SENTIENT.md).
+
+## Design system
+
+Omi Tarefas follows the look and feel of [gabriellopes.com](https://gabriellopes.com):
+
+- **Page:** light grey `#F2F2F2` inside a 4dp mint `#43F3B7` frame, near-black ink `#17161A`.
+- **Type:** Ubuntu Mono throughout (bundled, Ubuntu Font Licence 1.0).
+- **Highlighter:** one word per screen title on mint, set in bold italic.
+- **Colour roles:** mint for primary actions, ink for secondary ones, coral `#E9554D` only for recording and destructive actions.
+- **Shape:** 4dp buttons, 10dp panels, line icons, hairline rows instead of cards. Status chips appear only for real states such as Recording or Refining.
+
+Tokens and components live in [`Ui.java`](app/src/main/java/app/nottheomi/ai/Ui.java). The UI audit, the token table and before/after screenshots are in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Connect and record
 
@@ -44,17 +65,6 @@ Obtainium then checks in the background, notifies you when a new release is out,
 
 Stop cancels retries; app launch/reboot never auto-records. Brightness zero requests minimum, not guaranteed darkness. Optional controls remain unavailable when characteristic/readback validation fails.
 
-## 0.4.4 stability changes
-
-- Bounded authenticated archive quota cache removes repeated whole-history scanning from the audio append hot path while preserving integrity, corruption checks and whole-request quota admission.
-- Wake-lock renewal anchored to actual acquisition, including slow preparation.
-- Deduplicated identical foreground notifications.
-- Startup/recovery deadline regressions, archive hot-path and sustained synthetic throughput tests.
-
-BLE gaps trigger bounded retries and separate encrypted continuation entries: playback/export do not splice audio across a known gap. Decoded PCM—not connection callbacks, battery traffic or malformed packets—proves recovery. Startup and uninterrupted no-PCM periods retain the intentional **120-second terminal policy**. Explicit Stop, storage failures and bounded-ingress safeguards remain effective.
-
-**Physical wearable reconnection, screen-off and workday endurance are not certified.** See [public verification scope](verification/PUBLIC-SOURCE-0.4.4.md). Missing audio is not reconstructed. A permanently blocked native recognizer can delay final save/teardown.
-
 ## Privacy and storage
 
 AES-GCM audio/text with an Android Keystore key. Backups disabled; screen captures protected. Uninstall/data clear loses the key. User-requested exports are plaintext. Device selection and controls remain on the phone; transcript text is not placed in notifications/logs.
@@ -62,6 +72,8 @@ AES-GCM audio/text with an Android Keystore key. Backups disabled; screen captur
 The **2 GiB aggregate retained PCM quota** includes existing recordings; 128 MiB free-space reserve. Portuguese live drafts; Portuguese/English saved transcripts. Recognition may be wrong. Process death may lose an uncommitted tail. Record with participants' permission.
 
 ## Build from source
+
+Modules: `:app` (Omi Tarefas), `:sentient` (GMind) and `:plugin-api` (plain-Java plugin contracts). The Gradle command below builds both apps.
 
 Prerequisites: Java 17, Python 3, Android SDK/platform 34, Android build-tools 34.0.0, Android NDK **27.2.12479018**, and CMake. Native build scripts target Linux/WSL. Set `ANDROID_SDK_ROOT` to your SDK location and configure `sdk.dir` in your local, untracked `local.properties` if needed.
 
@@ -87,10 +99,26 @@ python3 tests/capture/run_host_checks.py
 python3 tests/hybrid/run_host_checks.py
 python3 tests/hybrid/run_job_checks.py
 python3 tests/whisper-java/run_host_checks.py
-python3 tests/tasks/run_host_checks.py
 python3 tests/sentient/run_host_checks.py
 ```
+
+UI screenshots (Robolectric, no device): `./gradlew testDebugUnitTest --tests '*UiScreenshotTest*'` writes PNGs of every Omi Tarefas screen to `app/build/ui-screenshots/`.
 
 Device/instrumentation tests require their explicitly selected Android target and prepared artifacts. For the optional `tests/whisper-device/run_probe.py` helper with Windows `adb.exe`, pass `--windows-temp` with an existing Windows-accessible WSL directory; no developer-specific user path is embedded.
 
 Public `jfk.wav` and `test.wav` are upstream test fixtures, not private recordings. The source publication contains no production-phone diagnostics, private transcripts, signing material or private Git history. Retained verification claims and freshly executed publication checks are distinguished in [verification evidence](verification/PUBLIC-SOURCE-0.4.4.md).
+
+## Upstream
+
+This fork is based on the NotTheOmiAIApp **0.4.4** source (versionCode 11). Upstream's [APK releases](https://github.com/five0nit/NotTheOmiAIApp/releases), the root `SHA256SUMS.txt`, `release-manifest.json` and `RELEASE-NOTES-0.3.1.md` describe upstream's older 0.3.1 binaries, not this fork. The original `app.nottheomi.ai` can only be updated with upstream's signing key; don't uninstall or clear it if you want to keep its recordings.
+
+### 0.4.4 stability changes
+
+- Bounded authenticated archive quota cache removes repeated whole-history scanning from the audio append hot path while preserving integrity, corruption checks and whole-request quota admission.
+- Wake-lock renewal anchored to actual acquisition, including slow preparation.
+- Deduplicated identical foreground notifications.
+- Startup/recovery deadline regressions, archive hot-path and sustained synthetic throughput tests.
+
+BLE gaps trigger bounded retries and separate encrypted continuation entries: playback/export do not splice audio across a known gap. Decoded PCM—not connection callbacks, battery traffic or malformed packets—proves recovery. Startup and uninterrupted no-PCM periods retain the intentional **120-second terminal policy**. Explicit Stop, storage failures and bounded-ingress safeguards remain effective.
+
+**Physical wearable reconnection, screen-off and workday endurance are not certified.** See [public verification scope](verification/PUBLIC-SOURCE-0.4.4.md). Missing audio is not reconstructed. A permanently blocked native recognizer can delay final save/teardown.

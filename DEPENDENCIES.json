@@ -1,11 +1,11 @@
 {
   "model": {
-    "name": "Whisper small Q5_1 (multilingual)",
-    "filename": "ggml-small-q5_1.bin",
+    "name": "Whisper medium Q5_0 (multilingual)",
+    "filename": "ggml-medium-q5_0.bin",
     "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
-    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q5_1.bin",
-    "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
-    "bytes": 190085487,
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-medium-q5_0.bin",
+    "sha256": "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f",
+    "bytes": 539212467,
     "license": "MIT"
   },
   "preview_model": {
