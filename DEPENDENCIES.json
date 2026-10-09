@@ -46,5 +46,26 @@
     "commit": "d1fdcb4cc4fbd021eac799630e476f144e6bc18a",
     "license": "third_party/omi-license.txt",
     "evidence": "verification/OMI-PROTOCOL.md"
-  }
+  },
+  "sentient_runtime": [
+    {
+      "coordinate": "net.zetetic:sqlcipher-android:4.12.0@aar",
+      "sha256": "ea42d3a4b0018da795e637b869d06d0b91f1a9151ba74a192903517c4f443dac",
+      "license": "BSD-3-Clause (Zetetic); bundles SQLite, public domain",
+      "note": "Encrypted knowledge store with FTS5. Newest release whose androidx.sqlite dependency builds with compileSdk 34."
+    },
+    {
+      "coordinate": "androidx.sqlite:sqlite:2.2.0",
+      "sha256": "6156d5d2c17bd8c5460f199142e4283053b1da750994f6b396c62c50fcc7270c",
+      "license": "Apache-2.0"
+    }
+  ],
+  "sentient_test_only": [
+    {
+      "url": "https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.50.3.0/sqlite-jdbc-3.50.3.0.jar",
+      "sha256": "a3f53a2aa15ae9425a9e793bbe9c8e5288febeb4b65ef5c1a4e80d4c2045cf08",
+      "license": "Apache-2.0",
+      "note": "Host tests only (tests/sentient); never packaged."
+    }
+  ]
 }

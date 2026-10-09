@@ -1,0 +1,29 @@
+plugins { id 'com.android.application' }
+// Sentient: personal knowledge companion for Omi Tarefas. Unlike :app it has INTERNET
+// (for Composio, Matrix and cloud AI in later phases). It reads transcripts from
+// Omi Tarefas only through the signature-protected TranscriptProvider.
+android {
+ namespace 'br.gabriel.sentient'
+ compileSdk 34
+ useLibrary 'android.test.runner'
+ useLibrary 'android.test.base'
+ defaultConfig {
+  applicationId 'br.gabriel.sentient'
+  minSdk 26
+  targetSdk 34
+  versionCode((project.findProperty('appVersionCode') ?: '1') as Integer)
+  versionName((project.findProperty('appVersionName') ?: '0.1.0') as String)
+  testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+  ndk { abiFilters 'arm64-v8a', 'x86_64' }
+ }
+ buildTypes { release { minifyEnabled false } }
+ compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+ lint { abortOnError true }
+}
+dependencies {
+ implementation project(':plugin-api')
+ // Encrypted SQLite with FTS5. 4.12.0 is the newest release whose androidx.sqlite
+ // dependency (2.2.0) still builds with compileSdk 34.
+ implementation 'net.zetetic:sqlcipher-android:4.12.0@aar'
+ implementation 'androidx.sqlite:sqlite:2.2.0'
+}
