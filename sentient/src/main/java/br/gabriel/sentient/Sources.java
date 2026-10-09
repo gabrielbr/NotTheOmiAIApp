@@ -75,6 +75,7 @@ public final class Sources {
         db.exec("DELETE FROM items WHERE source = ?", pluginId);
         db.exec("DELETE FROM conversation_members WHERE conversation_id IN"
                 + " (SELECT id FROM conversations WHERE source = ?)", pluginId);
+        db.exec("DELETE FROM watched_chats WHERE conversation_id IN (SELECT id FROM conversations WHERE source = ?)", pluginId);
         db.exec("DELETE FROM conversations WHERE source = ?", pluginId);
         db.exec("DELETE FROM conversation_members WHERE identity_id IN"
                 + " (SELECT id FROM identities WHERE source = ?)", pluginId);

@@ -47,6 +47,8 @@ public final class SentientActivity extends Activity {
     private int searchGeneration;
     private long shownRevision = -1;
     private boolean visible, destroyed, accessButtonShown, limitsExplained;
+    /** Set off the main thread: you haven't told GMind your name yet. */
+    volatile boolean askName;
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -166,6 +168,7 @@ public final class SentientActivity extends Activity {
                 // A disconnected source keeps its items (searchable) but leaves the list.
                 states = new java.util.ArrayList<>();
                 for (Sources.State state : Sources.all(db)) if (registered.contains(state.pluginId)) states.add(state);
+                askName = FoundTasks.names(db).isEmpty() && !nameSkipped();
             } catch (Exception failure) {
                 main.post(() -> { if (!destroyed && query.isEmpty()) showStoreError(failure); });
                 return;
@@ -185,6 +188,7 @@ public final class SentientActivity extends Activity {
 
         boolean empty = lastSync == 0 && !busy;
         Ui.gap(body, 28);
+        if (askName) nameCard();
         List<String> updates = UpdateInstaller.available(this);
         if (!updates.isEmpty()) {
             String apps = updates.size() == 2 ? "GMind and GVoice" : Updates.GMIND.equals(updates.get(0)) ? "GMind" : "GVoice";
@@ -297,6 +301,55 @@ public final class SentientActivity extends Activity {
         // Android capitalises "Yesterday"; it reads mid-sentence here ("Synced yesterday").
         boolean english = "en".equals(java.util.Locale.getDefault().getLanguage());
         return english && !value.isEmpty() ? Character.toLowerCase(value.charAt(0)) + value.substring(1) : value;
+    }
+
+    private boolean nameSkipped() { return getSharedPreferences("home", MODE_PRIVATE).getBoolean("name_skipped", false); }
+
+    /** First run: your name and nicknames, so to-dos in groups can tell what's meant for you. */
+    private void nameCard() {
+        LinearLayout card = Ui.column(this);
+        GradientDrawable bg = Ui.shape(this, Ui.SURFACE, 8);
+        bg.setStroke(Math.max(1, dp(1)), Ui.LINE);
+        card.setBackground(bg);
+        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+        card.addView(Ui.text(this, "What should GMind call you?", 17, Ui.INK, true));
+        TextView why = Ui.text(this, "Your name and nicknames, like \"Gabriel, Gabi\". GMind uses them to spot what people ask of "
+                + "you in group chats, and to name you in your portrait. Kept on this phone.", 13, Ui.MUTED, false);
+        why.setPadding(0, dp(4), 0, dp(10));
+        card.addView(why);
+        EditText field = new EditText(this);
+        field.setSingleLine(true);
+        field.setHint("Name, nickname");
+        field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        field.setTypeface(Ui.font(this, false));
+        field.setTextColor(Ui.INK);
+        GradientDrawable f = Ui.shape(this, Color.WHITE, 4);
+        f.setStroke(Math.max(1, dp(1)), Ui.LINE);
+        field.setBackground(f);
+        field.setPadding(dp(12), 0, dp(12), 0);
+        field.setContentDescription("Your name and nicknames");
+        card.addView(field, new LinearLayout.LayoutParams(-1, dp(48)));
+        LinearLayout actions = Ui.row(this);
+        actions.addView(Ui.button(this, "Save", Ui.Style.PRIMARY, v -> {
+            java.util.List<String> names = Requests.splitNames(field.getText().toString());
+            if (names.isEmpty()) return;
+            io.execute(() -> {
+                try { FoundTasks.setNames(KnowledgeStore.get(this), names); } catch (Exception failure) { return; }
+                main.post(() -> { askName = false; shownRevision = -1; loadSources(); });
+            });
+        }), new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
+        lp.leftMargin = dp(10);
+        actions.addView(Ui.button(this, "Not now", Ui.Style.QUIET, v -> {
+            getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("name_skipped", true).apply();
+            askName = false;
+            loadSources();
+        }), lp);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, -2);
+        ap.topMargin = dp(10);
+        card.addView(actions, ap);
+        body.addView(card, new LinearLayout.LayoutParams(-1, -2));
+        Ui.gap(body, 20);
     }
 
     /** What a source's items are called in its row. */
