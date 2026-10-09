@@ -9,8 +9,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -28,7 +26,6 @@ import java.util.Set;
 public final class OmiSettingsActivity extends Activity {
     public static final String CONNECT_AFTER_SELECTION="connect_after_selection";
     private boolean connectAfterSelection, initialScan;
-    private static final int INK=0xff191c18, MUTED=0xff646a61, PAPER=0xfff5f2eb;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final Set<String> seen=new HashSet<>();
     private LinearLayout page, devices;
@@ -55,26 +52,27 @@ public final class OmiSettingsActivity extends Activity {
         connectAfterSelection=getIntent().getBooleanExtra(CONNECT_AFTER_SELECTION,false);
         initialScan=connectAfterSelection&&state==null;
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
-        ScrollView scroll=new ScrollView(this);page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(22),dp(18),dp(22),dp(24));page.setBackgroundColor(PAPER);scroll.addView(page);setContentView(scroll);
-        addButton("‹  Back to home",()->finish());label(connectAfterSelection?"Connect your Omi":"Omi device & controls",26,INK);
-        label("Audio goes from your Omi to this phone. No Omi account, PC or cloud. Close other Omi apps before connecting.",14,MUTED);
-        selected=label("",15,INK);
-        scanButton=addButton("Find nearby Omi",this::scan);
-        forgetButton=addButton("Forget selected device",()->{
+        LinearLayout root=Ui.page(this);setContentView(root);root.addView(Ui.backBar(this,null));root.addView(Ui.divider(this));
+        ScrollView scroll=new ScrollView(this);page=Ui.column(this);page.setPadding(dp(20),dp(20),dp(20),dp(28));scroll.addView(page);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        page.addView(Ui.title(this,connectAfterSelection?"Connect your Omi":"Your Omi","Omi"));
+        label("Close other Omi apps before connecting.",15,Ui.MUTED);
+        selected=label("",17,Ui.INK);selected.setTypeface(Ui.font(this,true));
+        scanButton=addButton("Find nearby Omi",this::scan);Ui.style(this,scanButton,Ui.Style.DARK);
+        forgetButton=addButton("Forget this Omi",()->{
             if(OmiCaptureService.active)return;
             preferences(this).edit().remove("address").remove("name").apply();refresh();
         });
-        scanStatus=label(connectAfterSelection?"Choose your Omi to connect and start recording automatically. Scanning alone does not record.":"Select a device, then tap Connect Omi on Home. Scanning does not record audio.",13,MUTED);
+        Ui.style(this,forgetButton,Ui.Style.DANGER);
+        scanStatus=label(connectAfterSelection?"Pick your Omi. Recording starts once it connects.":"Pick your Omi, then tap Connect Omi on Home.",14,Ui.MUTED);
         devices=new LinearLayout(this);devices.setOrientation(LinearLayout.VERTICAL);page.addView(devices);
-        label("LIVE CONNECTION",12,MUTED);live=label("Disconnected",14,INK);
-        label("Light brightness",22,INK);
-        label("Available only while recording, if your firmware supports it. First read the current value. Changing the wearable light does not stop audio capture.",13,MUTED);
-        led=label("",14,INK);readButton=addButton("Read current brightness",OmiCaptureService::readLedBrightness);
+        live=label("Disconnected",14,Ui.MUTED);
+        section("Light");
+        label("While recording, if your Omi supports it.",14,Ui.MUTED);
+        led=label("",15,Ui.INK);readButton=addButton("Read current brightness",OmiCaptureService::readLedBrightness);
         brightness=new SeekBar(this);brightness.setMax(100);brightness.setProgress(50);brightness.setContentDescription("Desired Omi light brightness");page.addView(brightness);
-        desired=label("Desired brightness: 50%",14,INK);
+        desired=label("Brightness: 50%",15,Ui.INK);
         brightness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar bar,int value,boolean user){desired.setText("Desired brightness: "+value+"%");}
+            public void onProgressChanged(SeekBar bar,int value,boolean user){desired.setText("Brightness: "+value+"%");}
             public void onStartTrackingTouch(SeekBar bar){}
             public void onStopTrackingTouch(SeekBar bar){}
         });
@@ -84,35 +82,35 @@ public final class OmiSettingsActivity extends Activity {
                 .setMessage((value==0?"This requests minimum brightness; firmware-owned indicators may remain. ":"")+"Audio recording continues, with a visible phone notification. Readback confirms the current value, not persistence after power-off.")
                 .setNegativeButton("Cancel",null).setPositiveButton("Apply",(d,w)->OmiCaptureService.setLedBrightness(value)).show();
         });
-        label("Button presses",22,INK);
-        label("Local actions while recording. Choose them before starting. These do not rewrite firmware. Long press / power actions stay with the device; buttons cannot start a stopped connection.",13,MUTED);
+        section("Button");
+        label("What a press does while recording. Set it before you start.",14,Ui.MUTED);
         singleButton=addButton("",()->chooseAction("single_action","Single press","bookmark"));
         doubleButton=addButton("",()->chooseAction("double_action","Double press","stop"));
-        presses=label("",14,INK);
-        label("Compatibility: stock Omi BLE with 16 kHz Opus audio. Unsupported codecs and missing controls are reported, never guessed. Gaps stop and save rather than silently joining missing audio.",13,MUTED);
+        presses=label("",14,Ui.MUTED);
         refresh();
     }
     @Override protected void onResume(){super.onResume();resumed=true;main.post(ticker);if(initialScan){initialScan=false;main.post(this::scan);}}
     @Override protected void onPause(){resumed=false;main.removeCallbacks(ticker);stopScan();super.onPause();}
     @Override protected void onDestroy(){main.removeCallbacksAndMessages(null);super.onDestroy();}
     private int dp(int x){return Math.round(x*getResources().getDisplayMetrics().density);}
-    private TextView label(String text,int size,int color){TextView t=new TextView(this);t.setText(text);t.setTextSize(size);t.setTextColor(color);t.setPadding(0,dp(10),0,dp(6));if(size>=22)t.setTypeface(null,Typeface.BOLD);page.addView(t);return t;}
-    private Button button(String title,Runnable action){Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setTextColor(INK);GradientDrawable bg=new GradientDrawable();bg.setColor(0xffe5e8df);bg.setCornerRadius(dp(12));b.setBackground(bg);b.setPadding(dp(12),dp(8),dp(12),dp(8));b.setMinHeight(dp(50));b.setOnClickListener(v->action.run());return b;}
+    private TextView label(String text,int size,int color){TextView t=Ui.text(this,text,size,color,false);t.setPadding(0,dp(8),0,dp(4));page.addView(t);return t;}
+    private void section(String title){Ui.gap(page,28);page.addView(Ui.divider(this));Ui.gap(page,20);page.addView(Ui.text(this,title,22,Ui.INK,true));}
+    private Button button(String title,Runnable action){Button b=Ui.button(this,title,Ui.Style.QUIET,v->action.run());b.setPadding(0,0,dp(8),0);return b;}
     private Button addButton(String title,Runnable action){Button b=button(title,action);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.topMargin=dp(8);page.addView(b,p);return b;}
     private void refresh(){
         SharedPreferences p=preferences(this);String address=p.getString("address","");
-        selected.setText(address.isEmpty()?"No Omi selected":p.getString("name","Omi")+"\n"+address);
+        selected.setText(address.isEmpty()?"No Omi selected yet":p.getString("name","Omi"));
         boolean active=OmiCaptureService.active;
         scanButton.setEnabled(!active);scanButton.setText(scanning?"Stop scanning":"Find nearby Omi");
         forgetButton.setEnabled(!active&&!address.isEmpty());
-        live.setText(OmiCaptureService.transport+(OmiCaptureService.battery>=0?" · Battery "+OmiCaptureService.battery+"%":" · Battery unknown"));
+        live.setText(OmiCaptureService.transport+(OmiCaptureService.battery>=0?" · Battery "+OmiCaptureService.battery+"%":""));
         OmiBle.LedState value=OmiCaptureService.ledState;
-        led.setText(value==null?"Not connected":value.message+(value.brightness>=0?"\nReported brightness: "+value.brightness+"%":""));
+        led.setText(value==null?"Connect to adjust.":value.message+(value.brightness>=0?" · now "+value.brightness+"%":""));
         readButton.setEnabled(active&&value!=null&&!value.busy);
         boolean writable=active&&value!=null&&value.supported&&!value.busy&&value.brightness>=0;
         applyButton.setEnabled(writable);brightness.setEnabled(writable);
-        singleButton.setText("Single press: "+actionLabel(p.getString("single_action","bookmark")));
-        doubleButton.setText("Double press: "+actionLabel(p.getString("double_action","stop")));
+        singleButton.setText("Single press · "+actionLabel(p.getString("single_action","bookmark")));
+        doubleButton.setText("Double press · "+actionLabel(p.getString("double_action","stop")));
         singleButton.setEnabled(!active);doubleButton.setEnabled(!active);
         presses.setText(OmiCaptureService.lastButton);
     }
@@ -139,20 +137,20 @@ public final class OmiSettingsActivity extends Activity {
             scanner=new OmiBle(this,new OmiBle.Listener(){
                 public void onDevice(String address,String name){main.post(()->{
                     if(!resumed||!scanning||generation!=scanGeneration||!seen.add(address))return;
-                    Button choose=button(name+"\n"+address,()->{
+                    Button choose=button(name,()->{
                         if(OmiCaptureService.active)return;
                         preferences(OmiSettingsActivity.this).edit().putString("address",address).putString("name",name).apply();stopScan();
                         if(connectAfterSelection){setResult(RESULT_OK);finish();}
-                        else{scanStatus.setText("Device selected. Tap Connect Omi on Home to begin.");refresh();}
-                    });devices.addView(choose,new LinearLayout.LayoutParams(-1,-2));
+                        else{scanStatus.setText("Saved. Tap Connect Omi on Home to start.");refresh();}
+                    });choose.setContentDescription("Choose "+name+" "+address);Ui.icon(OmiSettingsActivity.this,choose,R.drawable.ic_plus,Ui.INK);devices.addView(choose,new LinearLayout.LayoutParams(-1,-2));
                 });}
                 public void onPcm(short[] samples){}
                 public void onStatus(String status){main.post(()->{if(resumed&&generation==scanGeneration)scanStatus.setText(status);});}
                 public void onGap(){}
                 public void onButton(int event){}
             });
-            scanner.scan();scanStatus.setText("Scanning nearby Omi devices for 15 seconds…");refresh();
-            main.postDelayed(()->{if(scanning&&generation==scanGeneration){stopScan();scanStatus.setText(seen.isEmpty()?"No Omi found. Wake the device, keep it nearby, and close other Omi apps. Then try again.":"Scan finished. Select your Omi above.");}},15000);
+            scanner.scan();scanStatus.setText("Looking for your Omi…");refresh();
+            main.postDelayed(()->{if(scanning&&generation==scanGeneration){stopScan();scanStatus.setText(seen.isEmpty()?"No Omi found. Wake it, keep it close and try again.":"Pick your Omi above.");}},15000);
         }catch(SecurityException denied){stopScan();scanStatus.setText("Bluetooth permission was removed. Allow Nearby devices in app settings, then try again.");}
         catch(RuntimeException failure){stopScan();scanStatus.setText("Bluetooth discovery could not start. Check Nearby devices permission and Bluetooth.");}
     }

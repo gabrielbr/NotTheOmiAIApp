@@ -10,6 +10,8 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -22,6 +24,8 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -36,12 +40,14 @@ import java.util.concurrent.Executors;
 
 /** One local-first UI, no accounts, servers, trackers or hidden destinations. */
 public final class MainActivity extends Activity {
-    private static final int PAPER=0xfff5f2eb, INK=0xff191c18, MUTED=0xff646a61, LINE=0xffdadcd2, ACCENT=0xffbd432b;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private LinearLayout page, content, libraryRows, historyRows;
-    private TextView stateLabel,timer,preview,storageLabel,connectionLabel,liveHint,finalText,finalHint,historyHint;
-    private Button recordButton, sourceButton, deviceButton;
+    private TextView stateLabel,timer,preview,storageLabel,finalText,historyHint,liveTitle;
+    private Button recordButton, sourceButton;
+    private ImageButton deviceButton;
+    private LinearLayout liveSection;
+    private int recordStyle=-1;
     private boolean resumeStart, wasActive;
     private int historyGeneration;
     private long displayRevision=-1;
@@ -73,33 +79,35 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy(){destroyed=true;viewGeneration++;playback.stop();io.shutdown();main.removeCallbacks(ticker);super.onDestroy();}
     @Override protected void onSaveInstanceState(Bundle out){out.putBoolean("library",library);out.putString("query",query);out.putString("exportId",exportId);out.putString("exportKind",exportKind);super.onSaveInstanceState(out);}
 
-    private int dp(float value){return (int)(getResources().getDisplayMetrics().density*value+.5f);}
-    private GradientDrawable box(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
-    private TextView text(String value,int size,int color,boolean bold){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(color);v.setFontFeatureSettings("kern");if(bold)v.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));v.setPadding(0,dp(4),0,dp(4));return v;}
-    private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
-    private void gap(LinearLayout target,int height){View v=new View(this);target.addView(v,new LinearLayout.LayoutParams(1,dp(height)));}
-    private Button button(String label, boolean primary, View.OnClickListener click){Button b=new Button(this);b.setText(label);b.setTextSize(15);b.setAllCaps(false);b.setTextColor(primary?Color.WHITE:INK);b.setBackground(box(primary?INK:0xffe5e8df,14));b.setMinHeight(dp(52));b.setPadding(dp(16),dp(8),dp(16),dp(8));b.setOnClickListener(click);return b;}
-    private void addButton(LinearLayout target,Button b){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(54));p.topMargin=dp(10);target.addView(b,p);}
-    private LinearLayout card(int color){LinearLayout c=column();c.setBackground(box(color,20));c.setPadding(dp(20),dp(20),dp(20),dp(20));return c;}
+    private int dp(float value){return Ui.dp(this,value);}
+    private TextView text(String value,int size,int color,boolean bold){return Ui.text(this,value,size,color,bold);}
+    private LinearLayout column(){return Ui.column(this);}
+    private void gap(LinearLayout target,int height){Ui.gap(target,height);}
+    private Button button(String label,Ui.Style style,View.OnClickListener click){return Ui.button(this,label,style,click);}
+    private void addButton(LinearLayout target,Button b){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(52));p.topMargin=dp(12);target.addView(b,p);}
 
     private void draw(){
-        viewGeneration++;selectedId=null;playback.stop();
-        page=column();page.setBackgroundColor(PAPER);page.setPadding(dp(22),dp(14),dp(22),dp(12));setContentView(page);
-        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView brand=text("Omi Tarefas",23,INK,true);top.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-        Button info=button("?",false,v -> about());info.setContentDescription("Privacy and help");top.addView(info,new LinearLayout.LayoutParams(dp(48),dp(48)));page.addView(top);
-        page.addView(text("OMI + PHONE  /  PRIVATE BY DESIGN",10,MUTED,true));gap(page,12);
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);content=column();scroll.addView(content);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        viewGeneration++;selectedId=null;playback.stop();recordStyle=-1;
+        page=Ui.page(this);setContentView(page);
+        page.addView(Ui.header(this,Ui.iconButton(this,R.drawable.ic_info,"About and privacy",Ui.INK,v -> about())));
+        page.addView(Ui.divider(this));
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);content=column();content.setPadding(dp(20),dp(20),dp(20),dp(28));scroll.addView(content);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         if(library)drawLibrary();else drawCapture();
-        gap(page,10);LinearLayout tabs=new LinearLayout(this);
-        Button record=button("●  Home",!library,v -> {library=false;draw();});Button saved=button("≡  Library",library,v -> {library=true;draw();});
-        LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,dp(52),1);left.rightMargin=dp(6);tabs.addView(record,left);tabs.addView(saved,new LinearLayout.LayoutParams(0,dp(52),1));page.addView(tabs);
+        page.addView(Ui.divider(this));
+        LinearLayout tabs=Ui.row(this);tabs.setBackgroundColor(Ui.SURFACE);tabs.setPadding(dp(8),dp(4),dp(8),dp(4));
+        tabs.addView(tab("Home",R.drawable.ic_home,!library,v -> {library=false;draw();}),new LinearLayout.LayoutParams(0,dp(60),1));
+        tabs.addView(tab("Library",R.drawable.ic_library,library,v -> {library=true;draw();}),new LinearLayout.LayoutParams(0,dp(60),1));
+        page.addView(tabs);
+    }
+    private View tab(String label,int icon,boolean active,View.OnClickListener click){
+        LinearLayout t=column();t.setGravity(Gravity.CENTER);t.setOnClickListener(click);t.setContentDescription(label);
+        t.setBackground(new RippleDrawable(ColorStateList.valueOf(0x3343F3B7),null,Ui.shape(this,Color.WHITE,4)));
+        ImageView i=new ImageView(this);i.setImageResource(icon);i.setImageTintList(ColorStateList.valueOf(active?Ui.INK:Ui.MUTED));t.addView(i,new LinearLayout.LayoutParams(dp(22),dp(22)));
+        TextView l=text(label,13,active?Ui.INK:Ui.MUTED,active);l.setPadding(dp(6),dp(2),dp(6),dp(2));if(active)l.setBackgroundColor(Ui.MINT);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,-2);lp.topMargin=dp(4);t.addView(l,lp);return t;
     }
     private static boolean captureActive(){return CaptureService.active||OmiCaptureService.active;}
     private boolean omiSource(){return OmiCaptureService.active||(!CaptureService.active&&!"phone".equals(OmiSettingsActivity.preferences(this).getString("source","omi")));}
-    private String readyText(){
-        return omiSource()?"Connect your Omi. Live words appear here as you speak.":"Start the phone microphone to see live words here.";
-    }
     private void chooseSource(){
         if(captureActive()||startPending)return;
         new AlertDialog.Builder(this).setTitle("Recording source")
@@ -109,33 +117,29 @@ public final class MainActivity extends Activity {
     }
     private void drawCapture(){
         displayRevision=-1;wasActive=captureActive();
-        content.addView(text(omiSource()?"Your Omi. On your phone.":"Your phone. Your words.",24,INK,true));
-        content.addView(text("Live words, saved audio. No PC or cloud.",14,MUTED,false));gap(content,10);
-        LinearLayout capture=card(INK);
-        LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);
-        connectionLabel=text("OMI WEARABLE",12,0xffd2dcc7,true);
-        heading.addView(connectionLabel,new LinearLayout.LayoutParams(0,-2,1));
-        timer=text("00:00",26,PAPER,true);heading.addView(timer);capture.addView(heading);
-        stateLabel=text("Opening private library…",14,0xffd2dcc7,false);capture.addView(stateLabel);
-        meter=new Meter();capture.addView(meter,new LinearLayout.LayoutParams(-1,dp(20)));
-        recordButton=button("Connect Omi",true,v->toggleRecording());recordButton.setBackground(box(ACCENT,14));addButton(capture,recordButton);
-        capture.addView(text(omiSource()?"Connecting starts recording automatically. Stop saves locally.":"Phone microphone fallback. Stop saves locally.",12,0xffc3cbb8,false));content.addView(capture);
-        deviceButton=button("Omi device & controls",false,v->startActivity(new Intent(this,OmiSettingsActivity.class)));
-        addButton(content,deviceButton);gap(content,14);
-        content.addView(text("LIVE TRANSCRIPTION",11,MUTED,true));
-        LinearLayout live=card(Color.WHITE);
-        preview=text(readyText(),21,INK,false);preview.setMinHeight(dp(62));preview.setTextIsSelectable(true);live.addView(preview);
-        liveHint=text("Fast offline draft · Whisper refines after saving",11,MUTED,false);live.addView(liveHint);content.addView(live);gap(content,14);
-        content.addView(text("TRANSCRIPTION LOG",11,MUTED,true));
-        finalHint=text("This session · finished phrases are saved as you speak",12,MUTED,false);content.addView(finalHint);
-        finalText=text("Finished phrases will appear here. Your complete transcript stays in the library.",16,INK,false);
-        finalText.setTextIsSelectable(true);finalText.setLineSpacing(dp(3),1.06f);content.addView(finalText);gap(content,14);
-        content.addView(text("SAVED ON THIS PHONE",11,MUTED,true));
-        historyHint=text("Opening local history…",12,MUTED,false);content.addView(historyHint);
+        LinearLayout panel=column();panel.setBackground(Ui.shape(this,Ui.INK,10));panel.setPadding(dp(20),dp(8),dp(8),dp(20));
+        LinearLayout top=Ui.row(this);
+        sourceButton=button("",Ui.Style.QUIET,v -> chooseSource());sourceButton.setTextSize(14);sourceButton.setTextColor(new ColorStateList(new int[][]{{-android.R.attr.state_enabled},{}},new int[]{Ui.ON_DARK_MUTED,Ui.ON_DARK_MUTED}));sourceButton.setPadding(0,0,dp(8),0);sourceButton.setMinHeight(dp(44));sourceButton.setContentDescription("Recording source");
+        android.graphics.drawable.Drawable chevron=getDrawable(R.drawable.ic_chevron_down);if(chevron!=null){chevron=chevron.mutate();chevron.setTint(Ui.ON_DARK_MUTED);chevron.setBounds(0,0,dp(18),dp(18));sourceButton.setCompoundDrawablesRelative(null,null,chevron,null);sourceButton.setCompoundDrawablePadding(dp(4));}
+        top.addView(sourceButton,new LinearLayout.LayoutParams(-2,dp(44)));top.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
+        deviceButton=Ui.iconButton(this,R.drawable.ic_settings,"Omi device settings",Ui.ON_DARK_MUTED,v -> startActivity(new Intent(this,OmiSettingsActivity.class)));
+        top.addView(deviceButton,new LinearLayout.LayoutParams(dp(48),dp(48)));panel.addView(top);
+        timer=text("00:00",56,Ui.ON_DARK,true);timer.setLetterSpacing(-0.03f);gap(panel,4);panel.addView(timer);
+        stateLabel=text("Opening library…",15,Ui.ON_DARK_MUTED,false);gap(panel,6);panel.addView(stateLabel);
+        meter=new Meter();gap(panel,14);LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(-1,dp(36));mp.rightMargin=dp(12);panel.addView(meter,mp);
+        recordButton=button("Connect Omi",Ui.Style.PRIMARY,v -> toggleRecording());
+        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(56));rp.topMargin=dp(18);rp.rightMargin=dp(12);panel.addView(recordButton,rp);
+        content.addView(panel);
+        liveSection=column();gap(liveSection,32);liveTitle=text("Live",22,Ui.INK,true);liveSection.addView(liveTitle);gap(liveSection,12);
+        finalText=text("",18,Ui.INK,false);finalText.setTextIsSelectable(true);finalText.setLineSpacing(dp(4),1f);liveSection.addView(finalText);
+        preview=text("",18,Ui.MUTED,false);preview.setTextIsSelectable(true);preview.setLineSpacing(dp(4),1f);liveSection.addView(preview);
+        content.addView(liveSection);
+        gap(content,32);LinearLayout recentHead=Ui.row(this);
+        recentHead.addView(text("Recent",22,Ui.INK,true),new LinearLayout.LayoutParams(0,-2,1));
+        Button all=button("See all",Ui.Style.QUIET,v -> {library=true;draw();});all.setTextSize(14);all.setMinHeight(dp(40));recentHead.addView(all,new LinearLayout.LayoutParams(-2,dp(40)));
+        content.addView(recentHead);
+        historyHint=text("",15,Ui.MUTED,false);historyHint.setPadding(0,dp(12),0,0);content.addView(historyHint);
         historyRows=column();content.addView(historyRows);
-        addButton(content,button("View all recordings & transcripts",false,v->{library=true;draw();}));gap(content,14);
-        sourceButton=button(omiSource()?"Source: Omi wearable ▾":"Source: Phone microphone ▾",false,v->chooseSource());addButton(content,sourceButton);
-        gap(content,10);content.addView(text("Record with everyone’s permission. Audio and transcripts stay encrypted here until you delete them.",12,MUTED,false));
         refreshCapture();if(ready)loadHomeHistory();
     }
     private static void setText(TextView view,String value){if(!value.contentEquals(view.getText()))view.setText(value);}
@@ -149,19 +153,23 @@ public final class MainActivity extends Activity {
         sourceButton.setEnabled(!active&&!startPending);
         deviceButton.setVisibility(omi?View.VISIBLE:View.GONE);deviceButton.setEnabled(!startPending);
         String name=OmiSettingsActivity.preferences(this).getString("name","Omi wearable");
-        setText(connectionLabel,omi?(name.isEmpty()?"OMI WEARABLE":name)+(active&&OmiCaptureService.battery>=0?" · "+OmiCaptureService.battery+"%":""):"PHONE MICROPHONE");
-        setText(stateLabel,!ready?"Opening private library…":startPending?(omi?"Connecting…":"Starting…"):state==null||state.isEmpty()||"Stopped".equals(state)?(omi?"Ready to connect · auto-record on connection":"Phone microphone is off"):state);
+        setText(sourceButton,omi?(name.isEmpty()?"Omi wearable":name)+(active&&OmiCaptureService.battery>=0?" · "+OmiCaptureService.battery+"%":""):"Phone microphone");
+        setText(stateLabel,!ready?"Opening library…":startPending?(omi?"Connecting…":"Starting…"):state==null||state.isEmpty()||"Stopped".equals(state)?(omi?"Ready to connect.":"Ready to record."):state);
         recordButton.setEnabled(ready&&!startPending);
-        setText(recordButton,active?(omi?(started>0?"Disconnect & save":"Cancel connection"):"■  Stop & save"):(omi?"Connect Omi":"●  Start recording"));
+        setText(recordButton,active?(omi?(started>0?"Stop & save":"Cancel"):"Stop & save"):(omi?"Connect Omi":"Start recording"));
+        int style=active?1:0;
+        if(style!=recordStyle){recordStyle=style;Ui.style(this,recordButton,active?Ui.Style.RECORDING:Ui.Style.PRIMARY);Ui.icon(this,recordButton,active?R.drawable.ic_stop:R.drawable.ic_mic,active?Color.WHITE:Ui.MINT_INK);}
         LiveTranscript.Snapshot display=(omi?OmiCaptureService.display:CaptureService.display).snapshot();
         if(display.revision!=displayRevision||omi!=displayWasOmi){
             displayRevision=display.revision;displayWasOmi=omi;
-            setText(finalText,display.finalized.isEmpty()?"Finished phrases will appear here. Your complete transcript stays in the library.":display.finalized);
+            setText(finalText,display.finalized);
         }
-        setText(finalHint,display.finalized.isEmpty()?"This session · finished phrases are saved as you speak":(active?"This session":"Last session")+" · recent phrases · full transcript in Library");
-        setText(preview,active?(display.partial.isEmpty()?(started>0?"Listening…":omi?"Waiting for Omi audio…":"Preparing offline speech…"):display.partial):readyText());
-        setText(liveHint,active?"LIVE DRAFT · Vosk · Português · offline":"Fast offline draft · Whisper refines after saving");
-        meter.level=active?(omi?OmiCaptureService.level:CaptureService.level):0;meter.invalidate();
+        finalText.setVisibility(display.finalized.isEmpty()?View.GONE:View.VISIBLE);
+        setText(liveTitle,active?"Live":"Last session");
+        setText(preview,active?(display.partial.isEmpty()?(started>0?"Listening…":omi?"Waiting for Omi audio…":"Preparing speech…"):display.partial):"");
+        preview.setVisibility(active?View.VISIBLE:View.GONE);
+        liveSection.setVisibility(active||!display.finalized.isEmpty()?View.VISIBLE:View.GONE);
+        meter.level=active?(omi?OmiCaptureService.level:CaptureService.level):0;meter.active=active;meter.setVisibility(active?View.VISIBLE:View.GONE);meter.invalidate();
         if(wasActive&&!active&&ready)loadHomeHistory();
         wasActive=active;
     }
@@ -170,21 +178,39 @@ public final class MainActivity extends Activity {
         final int generation=viewGeneration, request=++historyGeneration;
         io.execute(()->{
             try{
-                List<Recordings.Session> rows=Recordings.get(this).recent(6);
+                List<Recordings.Session> rows=Recordings.get(this).recent(3);
                 main.post(()->{
                     if(destroyed||library||selectedId!=null||generation!=viewGeneration||request!=historyGeneration)return;
                     historyRows.removeAllViews();
-                    setText(historyHint,rows.isEmpty()?"No saved sessions yet. Connect Omi to begin.":"Recent sessions · tap to read or play · all history in Library");
-                    for(Recordings.Session s:rows){
-                        LinearLayout c=card(Color.WHITE);c.addView(text(s.title,17,INK,true));
-                        c.addView(text(date(s.createdAt)+"  ·  "+duration(s.durationMs)+"  ·  "+s.status,11,MUTED,false));
-                        TextView excerpt=text(s.text.isEmpty()?"No speech transcribed — open for saved audio":s.text,14,INK,false);excerpt.setMaxLines(4);excerpt.setEllipsize(android.text.TextUtils.TruncateAt.END);c.addView(excerpt);
-                        c.setContentDescription("Open saved transcript "+s.title);c.setOnClickListener(v->detail(s.id));historyRows.addView(c);gap(historyRows,8);
-                    }
+                    setText(historyHint,rows.isEmpty()?"Nothing saved yet.":"");
+                    historyHint.setVisibility(rows.isEmpty()?View.VISIBLE:View.GONE);
+                    for(Recordings.Session s:rows){gap(historyRows,8);historyRows.addView(Ui.divider(this));historyRows.addView(sessionRow(s,2));}
                 });
-            }catch(Exception e){main.post(()->{if(!destroyed&&!library&&selectedId==null&&generation==viewGeneration&&request==historyGeneration)setText(historyHint,"Local history could not be read. Your files were not changed.");});}
+            }catch(Exception e){main.post(()->{if(!destroyed&&!library&&selectedId==null&&generation==viewGeneration&&request==historyGeneration){setText(historyHint,"History could not be read. Your files were not changed.");historyHint.setVisibility(View.VISIBLE);}});}
         });
     }
+    /** One saved recording: title, one meta line, transcript excerpt. Rows, not cards. */
+    private View sessionRow(Recordings.Session s,int excerptLines){
+        LinearLayout r=column();r.setPadding(0,dp(14),0,dp(14));
+        r.setBackground(new RippleDrawable(ColorStateList.valueOf(0x3343F3B7),null,Ui.shape(this,Color.WHITE,0)));
+        LinearLayout top=Ui.row(this);top.addView(text(s.title,17,Ui.INK,true),new LinearLayout.LayoutParams(0,-2,1));
+        String chip=statusChip(s);if(chip!=null){LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-2,-2);cp.leftMargin=dp(10);top.addView(Ui.chip(this,chip,alertChip(chip)),cp);}
+        r.addView(top);
+        TextView meta=text(date(s.createdAt)+" · "+duration(s.durationMs),13,Ui.MUTED,false);meta.setPadding(0,dp(6),0,0);r.addView(meta);
+        if(!s.text.isEmpty()){TextView ex=text(s.text,15,Ui.INK,false);ex.setMaxLines(excerptLines);ex.setEllipsize(android.text.TextUtils.TruncateAt.END);ex.setPadding(0,dp(8),0,0);r.addView(ex);}
+        r.setContentDescription("Open "+s.title);r.setOnClickListener(v->detail(s.id));return r;
+    }
+    private static String statusChip(Recordings.Session s){
+        switch(s.status){
+            case "recording": return "Recording";
+            case "audio_only": return "Audio only";
+            case "cancelled": return "Cancelled";
+            case "error": return "Error";
+            case "interrupted": return "Interrupted";
+            default: return "pending".equals(s.transcriptState)?"Refining":null;
+        }
+    }
+    private static boolean alertChip(String chip){return "Recording".equals(chip)||"Error".equals(chip)||"Interrupted".equals(chip);}
     private void continueStart(){resumeStart=true;if(resumed)main.post(this::resumeStart);}
     private void resumeStart(){if(!resumeStart||!resumed||!ready||destroyed)return;resumeStart=false;if(!captureActive())toggleRecording();}
     private void toggleRecording(){
@@ -231,11 +257,14 @@ public final class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] grants){super.onRequestPermissionsResult(code,permissions,grants);if(code==10){if(grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED)continueStart();else error("Microphone permission is required to record. You can still browse your library.");}else if(code==11)continueStart();else if(code==12){if(OmiSettingsActivity.permitted(this))continueStart();else error("Nearby devices permission is required for Omi. Your phone microphone will not be used instead.");}}
 
     private void drawLibrary(){
-        content.addView(text("Your library",32,INK,true));
-        storageLabel=text("Kept until you delete. No sync queue.",13,MUTED,false);content.addView(storageLabel);gap(content,10);
-        EditText search=new EditText(this);search.setSingleLine(true);search.setHint("Search titles or transcripts");search.setTextSize(15);search.setTextColor(INK);search.setPadding(dp(14),dp(10),dp(14),dp(10));search.setBackground(box(0xffe5e8df,12));search.setText(query);search.setContentDescription("Search recordings");content.addView(search,new LinearLayout.LayoutParams(-1,dp(52)));
+        content.addView(Ui.title(this,"Your library","library"));
+        storageLabel=text("",14,Ui.MUTED,false);storageLabel.setPadding(0,dp(10),0,0);content.addView(storageLabel);gap(content,20);
+        EditText search=new EditText(this);search.setSingleLine(true);search.setHint("Search transcripts");search.setTextSize(16);search.setTypeface(Ui.font(this,false));search.setTextColor(Ui.INK);search.setHintTextColor(Ui.MUTED);
+        GradientDrawable field=Ui.shape(this,Ui.SURFACE,4);field.setStroke(Math.max(1,dp(1)),Ui.LINE);search.setBackground(field);search.setPadding(dp(14),0,dp(14),0);
+        android.graphics.drawable.Drawable lens=getDrawable(R.drawable.ic_search);if(lens!=null){lens=lens.mutate();lens.setTint(Ui.MUTED);lens.setBounds(0,0,dp(20),dp(20));search.setCompoundDrawablesRelative(lens,null,null,null);search.setCompoundDrawablePadding(dp(10));}
+        search.setText(query);search.setContentDescription("Search recordings");content.addView(search,new LinearLayout.LayoutParams(-1,dp(52)));
         search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int count,int after){} public void onTextChanged(CharSequence s,int st,int before,int count){query=s.toString();final int g=++searchGeneration;main.postDelayed(()->{if(g==searchGeneration&&library)loadLibrary();},250);}public void afterTextChanged(Editable s){}});
-        gap(content,12);libraryRows=column();content.addView(libraryRows);if(ready)loadLibrary();else libraryRows.addView(text("Opening private library…",15,MUTED,false));
+        gap(content,8);libraryRows=column();content.addView(libraryRows);if(ready)loadLibrary();else{gap(libraryRows,12);libraryRows.addView(text("Opening library…",15,Ui.MUTED,false));}
     }
     private void loadLibrary(){
         if(!library||selectedId!=null||destroyed)return;
@@ -243,10 +272,10 @@ public final class MainActivity extends Activity {
         io.execute(()->{
             try {Recordings db=Recordings.get(this);List<Recordings.Session> rows=db.list(term);long bytes=db.totalBytes();
                 main.post(()->{if(destroyed||!library||generation!=viewGeneration||search!=searchGeneration||selectedId!=null)return;
-                    storageLabel.setText(size(bytes)+" stored · 2 GB audio limit\nKept until you delete. Export important recordings.");
+                    storageLabel.setText(size(bytes)+" of 2 GB used");
                     libraryRows.removeAllViews();
-                    if(rows.isEmpty()){LinearLayout empty=card(0xffe9eadd);empty.addView(text(term.isEmpty()?"A little space for your thoughts.":"No matches",21,INK,true));empty.addView(text(term.isEmpty()?"Your recordings and transcripts will appear here. Start with a short voice note.":"Try a different word from the title or transcript.",15,MUTED,false));libraryRows.addView(empty);}
-                    for(Recordings.Session s:rows){LinearLayout c=card(Color.WHITE);c.addView(text(s.title,19,INK,true));c.addView(text(date(s.createdAt)+"  ·  "+duration(s.durationMs),12,MUTED,false));TextView excerpt=text(s.text.isEmpty()?"No speech transcribed":s.text,14,MUTED,false);excerpt.setMaxLines(2);c.addView(excerpt);c.addView(text(s.status.toUpperCase(Locale.ROOT),10,ACCENT,true));c.setContentDescription("Open recording "+s.title);c.setOnClickListener(v->detail(s.id));libraryRows.addView(c);gap(libraryRows,10);}
+                    if(rows.isEmpty()){gap(libraryRows,28);libraryRows.addView(text(term.isEmpty()?"Nothing here yet.":"No matches.",20,Ui.INK,true));TextView hint=text(term.isEmpty()?"Recordings you save will show up here.":"Try another word.",15,Ui.MUTED,false);hint.setPadding(0,dp(8),0,0);libraryRows.addView(hint);}
+                    for(Recordings.Session s:rows){gap(libraryRows,8);libraryRows.addView(Ui.divider(this));libraryRows.addView(sessionRow(s,2));}
                 });
             }catch(Exception e){main.post(()->error("Could not read the encrypted library. Your files have not been changed."));}
         });
@@ -257,31 +286,45 @@ public final class MainActivity extends Activity {
     }
     private void showDetail(Recordings.Session s){
         if(s==null){selectedId=null;draw();return;}
-        content.removeAllViews();addButton(content,button(library?"‹  Back to library":"‹  Back to home",false,v->{selectedId=null;draw();}));gap(content,12);
-        content.addView(text(s.title,28,INK,true));content.addView(text(date(s.createdAt)+"  ·  "+duration(s.durationMs)+"  ·  "+s.status,12,MUTED,false));
-        if((s.id.equals(CaptureService.sessionId)&&CaptureService.active)||(s.id.equals(OmiCaptureService.sessionId)&&OmiCaptureService.active)){content.addView(text("Recording in progress. Stop & save before playback, rename, export or delete.",15,ACCENT,true));addButton(content,button("Go to recorder",true,v->{library=false;draw();}));}
+        boolean recording=(s.id.equals(CaptureService.sessionId)&&CaptureService.active)||(s.id.equals(OmiCaptureService.sessionId)&&OmiCaptureService.active);
+        ImageButton more=Ui.iconButton(this,R.drawable.ic_more,"More actions",Ui.INK,v->moreActions(s));more.setVisibility(recording?View.INVISIBLE:View.VISIBLE);
+        page.removeViewAt(0);page.addView(Ui.backBar(this,more),0);
+        content.removeAllViews();
+        TextView title=text(s.title,28,Ui.INK,true);title.setLetterSpacing(-0.02f);content.addView(title);
+        LinearLayout meta=Ui.row(this);meta.setPadding(0,dp(10),0,0);meta.addView(text(date(s.createdAt)+" · "+duration(s.durationMs),14,Ui.MUTED,false));
+        String chip=statusChip(s);if(chip!=null){LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-2,-2);cp.leftMargin=dp(10);meta.addView(Ui.chip(this,chip,alertChip(chip)),cp);}
+        content.addView(meta);
+        if(recording){TextView note=text("Still recording. Stop it to play or edit.",16,Ui.INK,false);note.setPadding(0,dp(20),0,0);content.addView(note);addButton(content,button("Go to recorder",Ui.Style.DARK,v->{library=false;draw();}));}
         else {
-            Button play=button("▶  Play recording",true,null);play.setOnClickListener(v->{if(playback.playing){playback.stop();play.setText("▶  Play recording");}else {if(captureActive()){error("Stop recording before playback to prevent feedback.");return;}play.setText("■  Stop playback");playback.play(s.id,()->{if(!destroyed)play.setText("▶  Play recording");},this::error);}});addButton(content,play);
-            LinearLayout actions=new LinearLayout(this);Button txt=button("Export text",false,v->confirmExport(s.id,"text"));Button wav=button("Export audio",false,v->confirmExport(s.id,"wav"));LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,dp(52),1);half.rightMargin=dp(6);actions.addView(txt,half);actions.addView(wav,new LinearLayout.LayoutParams(0,dp(52),1));gap(content,10);content.addView(actions);
-            addButton(content,button("Find tasks for Todoist",false,v->startActivity(new Intent(this,TasksActivity.class).putExtra(TasksActivity.EXTRA_SESSION_ID,s.id))));addButton(content,button("Rename",false,v->rename(s)));addButton(content,button("Delete recording",false,v->delete(s)));
+            LinearLayout actions=Ui.row(this);actions.setPadding(0,dp(22),0,0);
+            Button play=button("Play",Ui.Style.PRIMARY,null);Ui.icon(this,play,R.drawable.ic_play,Ui.MINT_INK);
+            play.setOnClickListener(v->{if(playback.playing){playback.stop();play.setText("Play");Ui.icon(this,play,R.drawable.ic_play,Ui.MINT_INK);}else {if(captureActive()){error("Stop recording before playback to prevent feedback.");return;}play.setText("Stop");Ui.icon(this,play,R.drawable.ic_stop,Ui.MINT_INK);playback.play(s.id,()->{if(!destroyed){play.setText("Play");Ui.icon(this,play,R.drawable.ic_play,Ui.MINT_INK);}},this::error);}});
+            Button tasks=button("Find tasks",Ui.Style.DARK,v->startActivity(new Intent(this,TasksActivity.class).putExtra(TasksActivity.EXTRA_SESSION_ID,s.id)));Ui.icon(this,tasks,R.drawable.ic_tasks,Color.WHITE);
+            LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,dp(52),1);half.rightMargin=dp(10);actions.addView(play,half);actions.addView(tasks,new LinearLayout.LayoutParams(0,dp(52),1));content.addView(actions);
         }
-        gap(content,20);content.addView(text("TRANSCRIPT",11,MUTED,true));
-        detailRefinement=text(refinementLabel(s),12,ACCENT,true);content.addView(detailRefinement);
-        detailRetry=button("Refine / retry with Whisper",false,v->retryRefinement(s.id));
-        detailRetry.setVisibility(canRetry(s)?View.VISIBLE:View.GONE);addButton(content,detailRetry);
-        addButton(content,button("View original live draft",false,v->new AlertDialog.Builder(this).setTitle("Original live draft").setMessage(s.liveText.isEmpty()?"No live draft was saved.":s.liveText).setPositiveButton("Close",null).show()));
-        detailTranscript=text(transcriptText(s),18,INK,false);detailTranscript.setTextIsSelectable(true);detailTranscript.setLineSpacing(dp(3),1.08f);content.addView(detailTranscript);gap(content,20);
+        gap(content,28);content.addView(Ui.divider(this));gap(content,20);
+        detailRefinement=text(refinementLabel(s),14,Ui.MUTED,false);detailRefinement.setVisibility(refinementLabel(s).isEmpty()?View.GONE:View.VISIBLE);content.addView(detailRefinement);
+        detailRetry=button("Refine again",Ui.Style.QUIET,v->retryRefinement(s.id));detailRetry.setTextSize(14);detailRetry.setPadding(0,0,dp(8),0);detailRetry.setMinHeight(dp(40));
+        detailRetry.setVisibility(canRetry(s)?View.VISIBLE:View.GONE);content.addView(detailRetry,new LinearLayout.LayoutParams(-2,dp(40)));
+        detailTranscript=text(transcriptText(s),18,Ui.INK,false);detailTranscript.setTextIsSelectable(true);detailTranscript.setLineSpacing(dp(5),1f);detailTranscript.setPadding(0,dp(8),0,0);content.addView(detailTranscript);
         final int generation=viewGeneration;ScrollView scroll=(ScrollView)content.getParent();
         scroll.post(()->{if(!destroyed&&generation==viewGeneration&&s.id.equals(selectedId))scroll.scrollTo(0,0);});
+    }
+    private void moreActions(Recordings.Session s){
+        new AlertDialog.Builder(this).setItems(new String[]{"Export text","Export audio","Original live draft","Rename","Delete"},(d,w)->{
+            if(w==0)confirmExport(s.id,"text");else if(w==1)confirmExport(s.id,"wav");
+            else if(w==2)new AlertDialog.Builder(this).setTitle("Original live draft").setMessage(s.liveText.isEmpty()?"No live draft was saved.":s.liveText).setPositiveButton("Close",null).show();
+            else if(w==3)rename(s);else delete(s);
+        }).show();
     }
     private void rename(Recordings.Session s){EditText name=new EditText(this);name.setText(s.title);name.setSingleLine();name.setSelectAllOnFocus(true);name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(120)});new AlertDialog.Builder(this).setTitle("Rename recording").setView(name).setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->{String title=name.getText().toString().trim();if(title.isEmpty()){error("Enter a title.");return;}io.execute(()->{try{Recordings.get(this).rename(s.id,title);main.post(()->{if(!destroyed)detail(s.id);});}catch(Exception e){main.post(()->error("Rename was not saved."));}});}).show();}
     private static String transcriptText(Recordings.Session s){return s.text.isEmpty()?"No speech was recognised. Your saved audio is still available.":s.text;}
     private static boolean canRetry(Recordings.Session s){return !"recording".equals(s.status)&&("failed".equals(s.transcriptState)||"none".equals(s.transcriptState));}
     private static String refinementLabel(Recordings.Session s){
-        if("complete".equals(s.transcriptState))return "WHISPER · refined offline · original draft retained";
-        if("pending".equals(s.transcriptState))return "LIVE DRAFT · Whisper queued / refining\n"+RefinementJobService.state;
-        if("failed".equals(s.transcriptState))return "LIVE DRAFT · Whisper failed · audio retained; retry available";
-        return "SAVED TRANSCRIPT · not refined with this workflow";
+        if("complete".equals(s.transcriptState))return "";
+        if("pending".equals(s.transcriptState))return "Refining. Showing the live draft for now.";
+        if("failed".equals(s.transcriptState))return "Refinement failed. Showing the live draft.";
+        return "Live draft. Not refined yet.";
     }
     private void retryRefinement(String id){
         io.execute(()->{try{Recordings.get(this).retryRefinement(id);RefinementJobService.schedule(this);main.post(()->{if(!destroyed&&id.equals(selectedId))detail(id);});}
@@ -293,15 +336,15 @@ public final class MainActivity extends Activity {
         final String id=selectedId;final int generation=viewGeneration;
         io.execute(()->{try{Recordings.Session s=Recordings.get(this).find(id);main.post(()->{
             if(destroyed||s==null||generation!=viewGeneration||!id.equals(selectedId)||detailTranscript==null)return;
-            setText(detailTranscript,transcriptText(s));setText(detailRefinement,refinementLabel(s));detailRetry.setVisibility(canRetry(s)?View.VISIBLE:View.GONE);
+            setText(detailTranscript,transcriptText(s));setText(detailRefinement,refinementLabel(s));detailRefinement.setVisibility(refinementLabel(s).isEmpty()?View.GONE:View.VISIBLE);detailRetry.setVisibility(canRetry(s)?View.VISIBLE:View.GONE);
         });}catch(Exception ignored){/* Do not replace retained UI with a failed read. */}});
     }
     private void delete(Recordings.Session s){new AlertDialog.Builder(this).setTitle("Delete this recording?").setMessage("Permanently removes its audio and transcript from this app. Files you previously exported are not removed.").setNegativeButton("Keep",null).setPositiveButton("Delete",(d,w)->playback.stop(()->{if(destroyed)return;io.execute(()->{try{Recordings.get(this).delete(s.id);if(s.id.equals(OmiCaptureService.display.snapshot().sessionId))OmiCaptureService.display.reset(null);if(s.id.equals(CaptureService.display.snapshot().sessionId))CaptureService.display.reset(null);main.post(()->{if(!destroyed){selectedId=null;draw();}});}catch(Exception e){main.post(()->error("Deletion could not be completed. Reopen the library to check its state."));}});})).show();}
-    private void confirmExport(String id,String kind){new AlertDialog.Builder(this).setTitle("Export an unencrypted copy?").setMessage("Only your chosen file will leave the private library. The destination you select may sync to a cloud service. Keep this copy somewhere you trust.").setNegativeButton("Cancel",null).setPositiveButton("Choose destination",(d,w)->{exportId=id;exportKind=kind;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(kind.equals("wav")?"audio/wav":"text/plain").putExtra(Intent.EXTRA_TITLE,"NotTheOmiAIApp-"+id+(kind.equals("wav")?".wav":".txt"));try{startActivityForResult(intent,20);}catch(RuntimeException e){exportId=null;exportKind=null;error("No document picker is available on this phone.");}}).show();}
+    private void confirmExport(String id,String kind){new AlertDialog.Builder(this).setTitle("Export an unencrypted copy?").setMessage("Only your chosen file will leave the private library. The destination you select may sync to a cloud service. Keep this copy somewhere you trust.").setNegativeButton("Cancel",null).setPositiveButton("Choose destination",(d,w)->{exportId=id;exportKind=kind;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(kind.equals("wav")?"audio/wav":"text/plain").putExtra(Intent.EXTRA_TITLE,"OmiTarefas-"+id+(kind.equals("wav")?".wav":".txt"));try{startActivityForResult(intent,20);}catch(RuntimeException e){exportId=null;exportKind=null;error("No document picker is available on this phone.");}}).show();}
     @Override protected void onActivityResult(int code,int result,Intent data){super.onActivityResult(code,result,data);if(code==30){if(result==RESULT_OK)continueStart();return;}if(code!=20)return;final String id=exportId,kind=exportKind;exportId=null;exportKind=null;if(result!=RESULT_OK||data==null||data.getData()==null||id==null||kind==null)return;Uri uri=data.getData();io.execute(()->{try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IllegalStateException();if(kind.equals("wav"))Recordings.get(this).exportWav(id,out);else Recordings.get(this).exportText(id,out);out.flush();main.post(()->toast("Export saved to your chosen destination."));}catch(Exception e){main.post(()->error("Export failed. The destination may contain a partial file; remove it before retrying."));}});}
     private String versionName(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "";}}
-    private void about(){new AlertDialog.Builder(this).setTitle("Omi Tarefas "+versionName()).setMessage("Omi Tarefas, a fork of NotTheOmiAIApp: an independent offline Omi companion, with optional phone-microphone recording. Not affiliated with Omi or Based Hardware.\n\n• No internet permission, accounts or analytics.\n• Omi BLE Opus audio and speech recognition run on this phone (Concentus + Vosk Portuguese live preview; multilingual Whisper small Q5_1 after saving, Portuguese or English). Live drafts update as you speak. Saved audio is refined locally while capture is idle; Android may defer background work. Reopen the app after a reboot or force-stop to resume queued work. \n• Find tasks for Todoist: an offline to-do finder you review before sharing each task to the Todoist app. The app itself has no internet access.\n• Device settings: brightness read/write where supported, local single/double press actions while recording. No firmware update or device-storage download.\n• Audio and transcripts encrypted using this phone’s Android Keystore. Device backups and transfer are disabled.\n• Uninstalling or clearing app data destroys access. Export anything important first.\n• Storage: 2 GB audio limit, no automatic deletion. The app stops safely when storage is low.\n• Recording can continue with the screen off. Stop in the app, or in its notification when enabled. Android or Samsung battery controls can interrupt it.\n• Exports are unencrypted copies.\n\nWhisper.cpp / Whisper model: MIT. Vosk model: Apache-2.0. Concentus: BSD-style. Omi protocol: MIT. Licenses included.").setNegativeButton("Close",null).setPositiveButton("Licenses",(d,w)->licenses()).show();}
-    private void licenses(){try{String value;try(java.io.InputStream in=getAssets().open("licenses/whisper.cpp-MIT.txt")){value=readUtf8(in);}try(java.io.InputStream in=getAssets().open("licenses/whisper-model-MIT.txt")){value+="\n\nWhisper model\n"+readUtf8(in);}for(String name:new String[]{"vosk","jna","concentus","omi"})try(java.io.InputStream in=getAssets().open("licenses/"+name+"-license.txt")){value+="\n\n"+name+"\n"+readUtf8(in);}TextView t=text(value,12,INK,false);t.setPadding(dp(20),dp(10),dp(20),dp(10));ScrollView scroll=new ScrollView(this);scroll.addView(t);new AlertDialog.Builder(this).setTitle("Open-source licenses").setView(scroll).setPositiveButton("Close",null).show();}catch(Exception e){error("License files could not be opened.");}}
+    private void about(){new AlertDialog.Builder(this).setTitle("Omi Tarefas "+versionName()).setMessage("Records your Omi or phone microphone and transcribes Portuguese and English on this phone.\n\n• No internet access, accounts or analytics.\n• Audio and transcripts are encrypted on this phone. Uninstalling deletes them, so export what matters.\n• Up to 2 GB of audio. Nothing is deleted automatically.\n• Find tasks shares only the tasks you pick, through the Todoist app.\n• Record with everyone's permission.\n\nA fork of NotTheOmiAIApp. Not affiliated with Omi or Based Hardware.").setNegativeButton("Close",null).setPositiveButton("Licenses",(d,w)->licenses()).show();}
+    private void licenses(){try{String value;try(java.io.InputStream in=getAssets().open("licenses/whisper.cpp-MIT.txt")){value=readUtf8(in);}try(java.io.InputStream in=getAssets().open("licenses/whisper-model-MIT.txt")){value+="\n\nWhisper model\n"+readUtf8(in);}for(String name:new String[]{"vosk","jna","concentus","omi"})try(java.io.InputStream in=getAssets().open("licenses/"+name+"-license.txt")){value+="\n\n"+name+"\n"+readUtf8(in);}try(java.io.InputStream in=getAssets().open("licenses/ubuntu-font-licence.txt")){value+="\n\nUbuntu Mono font\n"+readUtf8(in);}TextView t=text(value,12,Ui.INK,false);t.setPadding(dp(20),dp(10),dp(20),dp(10));ScrollView scroll=new ScrollView(this);scroll.addView(t);new AlertDialog.Builder(this).setTitle("Open-source licenses").setView(scroll).setPositiveButton("Close",null).show();}catch(Exception e){error("License files could not be opened.");}}
     private static String readUtf8(java.io.InputStream in) throws java.io.IOException { java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);return new String(out.toByteArray(),java.nio.charset.StandardCharsets.UTF_8); }
     private void error(String message){if(!destroyed&&!isFinishing())new AlertDialog.Builder(this).setTitle("Please check").setMessage(message).setPositiveButton("OK",null).show();}
     private void toast(String s){if(!destroyed)Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
@@ -310,9 +353,9 @@ public final class MainActivity extends Activity {
     private static String date(long time){return DateFormat.getDateTimeInstance(DateFormat.MEDIUM,DateFormat.SHORT).format(new java.util.Date(time));}
     @Override public void onBackPressed(){if(selectedId!=null){selectedId=null;draw();}else if(library){library=false;draw();}else super.onBackPressed();}
     private final class Meter extends View {
-        float level;private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+        float level;boolean active;private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
         Meter(){super(MainActivity.this);setContentDescription("Live recording audio level");}
-        @Override protected void onDraw(Canvas c){super.onDraw(c);paint.setColor(0xffd6dfbe);float center=getHeight()/2f;int bars=35;float spacing=getWidth()/(float)bars;
-            for(int i=0;i<bars;i++){float envelope=(float)Math.sin((i+1)*Math.PI/(bars+1));float height=dp(3)+Math.min(1,level)*dp(36)*envelope;c.drawRoundRect(i*spacing,center-height/2,i*spacing+Math.max(dp(2),spacing-dp(4)),center+height/2,dp(2),dp(2),paint);}}
+        @Override protected void onDraw(Canvas c){super.onDraw(c);paint.setColor(active?Ui.MINT:0x33FFFFFF);float center=getHeight()/2f;int bars=32;float spacing=getWidth()/(float)bars;
+            for(int i=0;i<bars;i++){float envelope=(float)Math.sin((i+1)*Math.PI/(bars+1));float height=dp(3)+Math.min(1,level)*(getHeight()-dp(3))*envelope;c.drawRect(i*spacing,center-height/2,i*spacing+Math.max(dp(2),spacing-dp(4)),center+height/2,paint);}}
     }
 }
