@@ -235,7 +235,7 @@ GMind is the Android take on Sentient OS: collect what's new in your life every 
 
 Brought in from branch `ccr-26809ef8-2v9adv`, with status as of 2026-10-09. Order agreed: updates → watched chats → Todoist sync → Phase 6. GVoice stays untouched throughout.
 
-### Update checker and in-app update for both APKs · *in progress*
+### Update checker and in-app update for both APKs · *done (#25)*
 
 Both apps (GVoice and GMind) update from inside GMind instead of by hand or through Obtainium (`RELEASING.md`).
 
@@ -246,16 +246,16 @@ Both apps (GVoice and GMind) update from inside GMind instead of by hand or thro
 - `:sentient` gains `REQUEST_INSTALL_PACKAGES`, so the `tests/sentient/verify_apk.py` allow-list changes with it.
 - An update never uninstalls or changes the signing key, so recordings and the GMind store are kept (same rule as in `RELEASING.md`).
 
-### Task monitoring of chosen chats · *partly done (4A), rest in progress*
+### Task monitoring of chosen chats · *done*
 
 The user picks, in GMind's UI, which groups or people in which apps GMind keeps watching for tasks. Messages from those chats are checked as they arrive, and a task is added when a message asks the user to do something.
 
 - Done in 4A: to-dos are found in recordings, your own messages and direct chats, each linking back to its message, on a To-dos screen.
-- Still to do: the per-chat on/off picker (groups off by default), requests addressed to you in watched groups (e.g. the company group says Gabriel needs to fill in his hours sheet), and due dates from the text ("by Friday", "end of month", "before the 15th"), resolved against the message's timestamp.
+- Done next: "Chats for to-dos" (per chat on/off; direct chats on, groups off until chosen; switching one on re-reads its last 30 days), requests addressed to you in watched groups (`Requests`: your name must appear, and the message must ask something or set a deadline; "Gabriel, você precisa preencher a planilha de horas até sexta" becomes "Preencher a planilha de horas até sexta"), and due dates (`DueDates`, PT/EN, resolved against the message's timestamp). Schema v3: `watched_chats`, `found_tasks.due`, `found_tasks.todoist_id`.
 
-### Ask for the user's name during onboarding · *in progress*
+### Ask for the user's name during onboarding · *done*
 
-Onboarding asks the user's name (and nicknames or other spellings, like "Gabriel" / "Gabi"). Task detection uses it to keep only tasks meant for the user: a request addressed to someone else in a group ("Ana, send the report") isn't added; a message with no name, sent in a direct chat, counts as addressed to the user.
+Onboarding asks the user's name (and nicknames or other spellings, like "Gabriel" / "Gabi"). Task detection uses it to keep only tasks meant for the user: a request addressed to someone else in a group ("Ana, send the report") isn't added; a message with no name, sent in a direct chat, counts as addressed to the user. Done: a "What should GMind call you?" card on first launch (or "Not now"), editable in About you; stored as `me.names` and used for the Me person's name.
 
 ### Tasks live in GMind; opt-in Todoist sync through Composio · *partly done (4A), sync decided*
 

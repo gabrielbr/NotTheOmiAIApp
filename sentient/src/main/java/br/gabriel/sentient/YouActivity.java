@@ -35,6 +35,7 @@ public final class YouActivity extends Activity {
     static final class State {
         String portrait;
         int suggestions, openTasks;
+        List<String> names = new ArrayList<>();
         final List<String> days = new ArrayList<>();
     }
 
@@ -64,6 +65,7 @@ public final class YouActivity extends Activity {
                 if (day != null) s.portrait = Digest.read(db, LocalDate.parse(day));
                 else {
                     s.portrait = Portrait.read(db);
+                    s.names = FoundTasks.names(db);
                     s.suggestions = People.suggestions(db, 50).size();
                     s.openTasks = FoundTasks.list(db, FoundTasks.OPEN, System.currentTimeMillis() - TasksActivity.WINDOW_MS, 500).size();
                     for (Object[] d : Digest.days(db, 14)) s.days.add((String) d[0]);
@@ -99,6 +101,14 @@ public final class YouActivity extends Activity {
         LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-1, -2);
         np.topMargin = dp(16);
         content.addView(nav, np);
+
+        LinearLayout nameRow = Ui.row(this);
+        nameRow.addView(Ui.text(this, s.names.isEmpty() ? "GMind doesn't know your name yet." : "Your names: " + String.join(", ", s.names),
+                14, Ui.INK, false), new LinearLayout.LayoutParams(0, -2, 1));
+        nameRow.addView(Ui.button(this, s.names.isEmpty() ? "Add" : "Change", Ui.Style.QUIET, v -> editNames(s.names)));
+        LinearLayout.LayoutParams nrp = new LinearLayout.LayoutParams(-1, -2);
+        nrp.topMargin = dp(12);
+        content.addView(nameRow, nrp);
 
         if (s.portrait == null) {
             TextView empty = Ui.text(this, "Your portrait appears after the first sync.", 15, Ui.MUTED, false);
@@ -148,6 +158,31 @@ public final class YouActivity extends Activity {
             st.setPadding(0, dp(4), 0, 0);
             content.addView(st);
         }
+    }
+
+    private void editNames(List<String> current) {
+        android.widget.EditText field = new android.widget.EditText(this);
+        field.setText(String.join(", ", current));
+        field.setHint("Name, nickname");
+        field.setSingleLine(true);
+        field.setTypeface(Ui.font(this, false));
+        LinearLayout box = Ui.column(this);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        box.addView(field);
+        new android.app.AlertDialog.Builder(this).setTitle("Your name and nicknames").setView(box)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", (d, w) -> {
+                    List<String> names = Requests.splitNames(field.getText().toString());
+                    io.execute(() -> {
+                        try {
+                            Db db = KnowledgeStore.get(this);
+                            FoundTasks.setNames(db, names);
+                            Portrait.write(db, System.currentTimeMillis(), java.time.ZoneId.systemDefault());
+                        } catch (Exception failure) { /* unchanged */ }
+                        main.post(() -> { if (!destroyed) load(); });
+                    });
+                })
+                .show();
     }
 
     private void vault() {

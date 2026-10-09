@@ -21,7 +21,7 @@ public final class EnrichmentHostTest {
     public static void main(String[] args) throws Exception {
         TaskExtractorChecks.run();
         Db db = fixture();
-        check(Schema.latest() == 2, "schema has the enrichment step");
+        check(Schema.latest() == 3, "schema has the enrichment and watched-chats steps");
         enrichment(db);
         people(db);
         foundTasks(db);
@@ -30,6 +30,9 @@ public final class EnrichmentHostTest {
         vault(db);
         forget(db);
         extraction();
+        dueDates();
+        requests();
+        watchedChats();
         System.out.println("PASS_ENRICHMENT_HOST_CHECKS " + checks);
     }
 
@@ -147,7 +150,7 @@ public final class EnrichmentHostTest {
         Ingest.upsert(db, Arrays.asList(RawItem.builder("omi.transcripts", "r1").kind(RawItem.TRANSCRIPT).timestamp(NOW - 11 * HOUR)
                 .text("Bom dia. Tenho que mandar o relatório na segunda. Preciso renovar o passaporte.")
                 .conversation("r1", "Reunião", "meeting").build()), NOW + HOUR);
-        check(FoundTasks.scan(db, NOW + HOUR) == 1, "refined transcript: only the new to-do added");
+        check(FoundTasks.scan(db, NOW + HOUR, ZONE) == 1, "refined transcript: only the new to-do added");
         long id = open.get(0).id;
         FoundTasks.setStatus(db, id, FoundTasks.DISMISSED);
         boolean gone = true;
@@ -311,6 +314,83 @@ public final class EnrichmentHostTest {
                 && br.gabriel.sentient.plugin.Json.list(br.gabriel.sentient.plugin.Json.at(schema, "required")).size() == 3
                 && Boolean.FALSE.equals(br.gabriel.sentient.plugin.Json.at(schema, "properties", "facts", "items", "additionalProperties")),
                 "strict schema");
+    }
+
+    static void due(String text, String expected) {
+        java.time.LocalDate d = DueDates.parse(text, NOW, ZONE); // NOW is Friday 9 Oct 2026, 09:00 in São Paulo
+        check(expected == null ? d == null : d != null && d.toString().equals(expected), "due: " + text + " -> " + d);
+    }
+
+    private static void dueDates() {
+        due("até amanhã", "2026-10-10");
+        due("Can you send it tomorrow?", "2026-10-10");
+        due("hoje ainda", "2026-10-09");
+        due("depois de amanhã", "2026-10-11");
+        due("preenche a planilha até sexta", "2026-10-16");
+        due("by Monday please", "2026-10-12");
+        due("na terça-feira", "2026-10-13");
+        due("até o fim do mês", "2026-10-31");
+        due("end of the month", "2026-10-31");
+        due("semana que vem", "2026-10-12");
+        due("dia 15", "2026-10-15");
+        due("before the 5th", "2026-11-05");
+        due("entregar 20/10", "2026-10-20");
+        due("deadline 10/25", "2026-10-25");
+        due("pagar 05/01", "2027-01-05");
+        due("15/10/2026", "2026-10-15");
+        due("31/02", null);
+        due("bom dia pessoal", null);
+        due("the monster", null);
+    }
+
+    private static void requests() {
+        List<String> me = Arrays.asList("Gabriel", "Gabi");
+        List<String> r = Requests.find("Gabriel, você precisa preencher a planilha de horas até sexta.", me, true);
+        check(r.equals(Arrays.asList("Preencher a planilha de horas até sexta")), "named request in a group: " + r);
+        check(Requests.find("Gabi pode revisar o PR hoje?", me, true).equals(Arrays.asList("Revisar o PR hoje?")) ||
+                Requests.find("Gabi pode revisar o PR hoje?", me, true).equals(Arrays.asList("Revisar o PR hoje")),
+                "nickname works: " + Requests.find("Gabi pode revisar o PR hoje?", me, true));
+        check(Requests.find("Ana, manda o relatório até sexta", me, true).isEmpty(), "someone else's request in a group skipped");
+        check(Requests.find("Precisa preencher a planilha", me, true).isEmpty(), "group message without your name skipped");
+        check(Requests.find("Bom dia Gabriel!", me, true).isEmpty(), "greeting isn't a task");
+        check(Requests.find("Gabrielle, pode ver isso?", me, true).isEmpty(), "whole names only");
+        check(Requests.find("Pode mandar o contrato amanhã?", me, false).size() == 1, "direct chat: addressed to you by default");
+        check(Requests.find("Ana, manda o contrato amanhã", me, false).isEmpty(), "direct chat opening with another name skipped");
+        check(Requests.find("Gabriel precisa preencher X", java.util.Collections.emptyList(), true).isEmpty(), "no names, no group tasks");
+        check(Requests.splitNames(" Gabriel , Gabi;Gabriel ").equals(Arrays.asList("Gabriel", "Gabi")), "names split");
+    }
+
+    private static void watchedChats() throws Exception {
+        Db db = fixture();
+        FoundTasks.setNames(db, Arrays.asList("Gabriel", "Gabi"));
+        check("Gabriel".equals(db.query("SELECT display_name FROM people WHERE is_me = 1").get(0)[0]), "your name renames you");
+        check(FoundTasks.names(db).equals(Arrays.asList("Gabriel", "Gabi")), "names saved");
+        Ingest.upsert(db, Arrays.asList(
+                msg("whatsapp", "g10", NOW, "Gabriel, você precisa preencher a planilha de horas até sexta.")
+                        .conversation("c:work", "Empresa", "group").author("name:Chefe", "Chefe", false).build(),
+                msg("whatsapp", "g11", NOW, "Ana, manda o relatório até sexta").conversation("c:work", "Empresa", "group")
+                        .author("name:Chefe", "Chefe", false).build()), NOW);
+        long work = ((Number) db.query("SELECT id FROM conversations WHERE external_id = 'c:work'").get(0)[0]).longValue();
+        check(!FoundTasks.watched(db, work), "groups are off by default");
+        FoundTasks.scan(db, NOW, ZONE);
+        check(count(db, "SELECT COUNT(*) FROM found_tasks WHERE item_id = ?", item(db, "g10")) == 0, "unwatched group ignored");
+        boolean listed = false;
+        for (Object[] c : FoundTasks.chats(db, 0, 100)) listed |= ((Number) c[0]).longValue() == work && ((Number) c[4]).intValue() == 0;
+        check(listed, "group listed as off");
+
+        FoundTasks.setWatched(db, work, true);
+        check(FoundTasks.scanChat(db, work, NOW + 1, ZONE, 30) == 1, "switching a group on reads it again");
+        List<Object[]> t = db.query("SELECT text, due FROM found_tasks WHERE item_id = ?", item(db, "g10"));
+        check(t.size() == 1 && "Preencher a planilha de horas até sexta".equals(t.get(0)[0]) && "2026-10-16".equals(t.get(0)[1]),
+                "watched group: your task with its due date");
+        check(count(db, "SELECT COUNT(*) FROM found_tasks WHERE item_id = ?", item(db, "g11")) == 0, "someone else's task not added");
+        check(count(db, "SELECT COUNT(*) FROM found_tasks WHERE text = 'Comprar pão amanhã' AND due = '2026-10-09'") == 1,
+                "direct chat task dated from its message (sent the day before)");
+        boolean carried = false;
+        for (FoundTasks.Task x : FoundTasks.list(db, FoundTasks.OPEN, 0, 50)) carried |= "2026-10-16".equals(x.due);
+        check(carried, "listed tasks carry their due date");
+        db.transaction(() -> Sources.forget(db, "whatsapp"));
+        check(count(db, "SELECT COUNT(*) FROM watched_chats") == 0, "forgetting a source forgets its watched chats");
     }
 
     static void check(boolean ok, String what) {

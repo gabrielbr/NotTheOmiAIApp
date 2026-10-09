@@ -64,6 +64,7 @@ public final class TasksActivity extends Activity {
         load();
     }
 
+    @Override protected void onRestart() { super.onRestart(); load(); }
     @Override protected void onDestroy() { destroyed = true; io.shutdownNow(); super.onDestroy(); }
 
     private void load() {
@@ -85,9 +86,13 @@ public final class TasksActivity extends Activity {
         selected.retainAll(ids(open));
         content.addView(Ui.title(this, "To-dos", "To-dos"));
         Ui.gap(content, 6);
-        content.addView(Ui.text(this, "Things you said you'd do, or were asked to in a direct chat, from the last 30 days. "
-                + "Found on this phone by phrases like \"preciso\", \"não esquece de\", \"I need to\".", 14, Ui.MUTED, false));
-        Ui.gap(content, 10);
+        content.addView(Ui.text(this, "Things you said you'd do, or were asked to in the chats GMind watches, from the last "
+                + "30 days. Found on this phone by phrases like \"preciso\", \"não esquece de\", \"I need to\".", 14, Ui.MUTED, false));
+        LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-1, -2);
+        wp.topMargin = dp(8);
+        content.addView(Ui.button(this, "Choose chats to watch", Ui.Style.QUIET,
+                v -> startActivity(new Intent(this, WatchedChatsActivity.class))), wp);
+        Ui.gap(content, 4);
         if (open.isEmpty()) {
             TextView none = Ui.text(this, "Nothing open.", 17, Ui.INK, true);
             none.setPadding(0, dp(14), 0, 0);
@@ -122,7 +127,7 @@ public final class TasksActivity extends Activity {
         r.addView(box);
         LinearLayout text = Ui.column(this);
         text.addView(Ui.text(this, t.text, 16, Ui.INK, false));
-        String where = "From " + People.sourceName(t.source) + (t.conversation != null ? " · " + t.conversation : "")
+        String where = (t.due == null ? "" : "Due " + dueLabel(t.due) + " · ") + "From " + People.sourceName(t.source) + (t.conversation != null ? " · " + t.conversation : "")
                 + (t.fromMe || t.author == null || t.author.equals(t.conversation) ? "" : " · " + t.author) + " · " + SentientActivity.date(this, t.ts);
         TextView meta = Ui.text(this, where, 13, Ui.MUTED, false);
         meta.setPadding(0, dp(3), 0, 0);
@@ -132,6 +137,15 @@ public final class TasksActivity extends Activity {
         tp.leftMargin = dp(6);
         r.addView(text, tp);
         return r;
+    }
+
+    /** "Fri 16 Oct". */
+    static String dueLabel(String due) {
+        try {
+            return java.time.LocalDate.parse(due).format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH));
+        } catch (java.time.format.DateTimeParseException bad) {
+            return due;
+        }
     }
 
     private void updateBar() {

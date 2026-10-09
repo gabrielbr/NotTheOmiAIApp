@@ -119,6 +119,7 @@ public final class SentientScreenshotTest {
 
         SentientActivity home = Robolectric.buildActivity(SentientActivity.class).setup().get();
         settle();
+        home.askName = true;
         grantWhatsApp(home, true);
         long now = System.currentTimeMillis();
         home.showSources(Arrays.asList(
@@ -166,11 +167,21 @@ public final class SentientScreenshotTest {
         Constructor<FoundTasks.Task> tc = FoundTasks.Task.class.getDeclaredConstructor(Object[].class);
         tc.setAccessible(true);
         t.show(Arrays.asList(
-                tc.newInstance((Object) new Object[]{1L, 41L, "Comprar pão amanhã", "open", now - 3 * HOUR, "whatsapp", "Ana", "Ana", 0L}),
+                tc.newInstance((Object) new Object[]{1L, 41L, "Comprar pão amanhã", "open", now - 3 * HOUR, "whatsapp", "Ana", "Ana", 0L, "2026-10-10", null}),
+                tc.newInstance((Object) new Object[]{5L, 45L, "Preencher a planilha de horas até sexta", "open", now - 2 * HOUR, "whatsapp", "Empresa", "Chefe", 0L, "2026-10-16", null}),
                 tc.newInstance((Object) new Object[]{2L, 42L, "Mandar o relatório na segunda", "open", now - 5 * HOUR, "omi.transcripts", "Reunião com o João", null, 0L}),
                 tc.newInstance((Object) new Object[]{3L, 43L, "Ligar pro banco", "open", now - 26 * HOUR, "whatsapp", "Ana", null, 1L})),
                 Arrays.asList(tc.newInstance((Object) new Object[]{4L, 44L, "Renovar o passaporte", "shared", now - 50 * HOUR, "omi.transcripts", null, null, 0L})));
         settle(); shot(t, "tasks");
+
+        WatchedChatsActivity w = Robolectric.buildActivity(WatchedChatsActivity.class).setup().get();
+        settle();
+        w.show(Arrays.asList(
+                new Object[]{1L, "Ana", "whatsapp", "dm", 1L, now - HOUR},
+                new Object[]{2L, "Empresa", "whatsapp", "group", 1L, now - 2 * HOUR},
+                new Object[]{3L, "Família", "whatsapp", "group", 0L, now - 3 * HOUR},
+                new Object[]{4L, "#geral", "composio.slack", "group", 0L, now - 30 * HOUR}), Arrays.asList("Gabriel", "Gabi"));
+        settle(); shot(w, "watched-chats");
     }
 
     @Test public void updates() throws Exception {

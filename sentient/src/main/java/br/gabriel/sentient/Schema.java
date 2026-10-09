@@ -70,6 +70,11 @@ public final class Schema {
             "CREATE TABLE not_same_person(a INTEGER NOT NULL, b INTEGER NOT NULL, PRIMARY KEY(a, b))",
             "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT)",
         },
+        { // 3: chats watched for to-dos (overrides: direct chats on, groups off by default), due dates, Todoist ids
+            "CREATE TABLE watched_chats(conversation_id INTEGER PRIMARY KEY REFERENCES conversations(id), watched INTEGER NOT NULL)",
+            "ALTER TABLE found_tasks ADD COLUMN due TEXT",
+            "ALTER TABLE found_tasks ADD COLUMN todoist_id TEXT",
+        },
     };
 
     public static int latest() { return MIGRATIONS.length; }
