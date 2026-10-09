@@ -14,6 +14,7 @@ final class PluginRegistry {
     static List<SourcePlugin> plugins(Context context) {
         List<SourcePlugin> plugins = new ArrayList<>();
         plugins.add(new OmiTranscriptsPlugin(context));
+        plugins.add(new WhatsAppPlugin(context));
         return plugins;
     }
 

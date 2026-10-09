@@ -167,18 +167,16 @@ public final class SentientActivity extends Activity {
         for (Sources.State s : states) if (s.lastSyncAt != null) lastSync = Math.max(lastSync, s.lastSyncAt);
         boolean busy = SyncJobService.busy();
 
-        if (lastSync == 0 && !busy) {
-            Ui.gap(body, 28);
-            body.addView(Ui.text(this, "Nothing synced yet.", 20, Ui.INK, true));
-            TextView hint = Ui.text(this, "GMind copies your GVoice transcripts once a day. Start the first sync now.",
-                    15, Ui.MUTED, false);
-            hint.setPadding(0, dp(8), 0, dp(16));
-            body.addView(hint);
-            body.addView(syncButton(false), new LinearLayout.LayoutParams(-1, -2));
-            return;
-        }
-
+        boolean empty = lastSync == 0 && !busy;
         Ui.gap(body, 28);
+        if (empty) {
+            // First launch: one explanation, then the sources so WhatsApp can be set up right away.
+            body.addView(Ui.text(this, "Nothing synced yet.", 20, Ui.INK, true));
+            TextView hint = Ui.text(this, "GMind copies your GVoice transcripts once a day and saves WhatsApp "
+                    + "messages as they arrive. Start the first sync now.", 15, Ui.MUTED, false);
+            hint.setPadding(0, dp(8), 0, dp(20));
+            body.addView(hint);
+        }
         body.addView(Ui.text(this, "Sources", 22, Ui.INK, true));
         Ui.gap(body, 6);
         for (Sources.State s : states) {
@@ -187,10 +185,12 @@ public final class SentientActivity extends Activity {
         }
         body.addView(Ui.divider(this));
         Ui.gap(body, 20);
-        String line = busy ? "Getting new messages and recordings…"
-                : "Last synced " + ago(lastSync) + ". Syncs again once a day.";
-        body.addView(Ui.text(this, line, 14, Ui.MUTED, false));
-        Ui.gap(body, 12);
+        if (!empty) {
+            String line = busy ? "Getting new messages and recordings…"
+                    : "Last synced " + ago(lastSync) + ". Syncs again once a day.";
+            body.addView(Ui.text(this, line, 14, Ui.MUTED, false));
+            Ui.gap(body, 12);
+        }
         body.addView(syncButton(busy), new LinearLayout.LayoutParams(-1, -2));
     }
 
@@ -200,22 +200,42 @@ public final class SentientActivity extends Activity {
         LinearLayout top = Ui.row(this);
         top.addView(Ui.text(this, PluginRegistry.displayName(this, s.pluginId), 17, Ui.INK, true),
                 new LinearLayout.LayoutParams(0, -2, 1));
-        boolean problem = s.lastStatus != null && !s.lastStatus.startsWith(OK);
+        boolean whatsapp = WhatsAppMessages.ID.equals(s.pluginId);
+        // WhatsApp's state is live: access can be granted or revoked between syncs.
+        boolean needsAccess = whatsapp && !WhatsAppPlugin.accessGranted(this);
+        boolean problem = needsAccess || (!whatsapp && s.lastStatus != null && !s.lastStatus.startsWith(OK));
         if (problem) {
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, -2);
             cp.leftMargin = dp(10);
             top.addView(Ui.chip(this, "Needs attention", true), cp);
         }
         r.addView(top);
-        String when = s.lastSyncAt == null ? "Not synced yet"
-                : "Synced " + ago(s.lastSyncAt);
-        TextView meta = Ui.text(this, items(s.itemCount) + " · " + when, 13, Ui.MUTED, false);
+        String metaText;
+        if (whatsapp) metaText = s.lastItemAt == null ? "No messages yet"
+                : count(s.itemCount, "message") + " · last one " + ago(s.lastItemAt);
+        else metaText = count(s.itemCount, OmiTranscripts.ID.equals(s.pluginId) ? "recording" : "item") + " · "
+                + (s.lastSyncAt == null ? "Not synced yet" : "Synced " + ago(s.lastSyncAt));
+        TextView meta = Ui.text(this, metaText, 13, Ui.MUTED, false);
         meta.setPadding(0, dp(6), 0, 0);
         r.addView(meta);
         if (problem) {
-            TextView reason = Ui.text(this, problemText(s.lastStatus), 15, Ui.CORAL_TEXT, false);
+            TextView reason = Ui.text(this, needsAccess ? WhatsAppPlugin.NEEDS_ACCESS + "." : problemText(s.lastStatus),
+                    15, Ui.CORAL_TEXT, false);
             reason.setPadding(0, dp(8), 0, 0);
             r.addView(reason);
+        }
+        if (whatsapp && (needsAccess || s.lastItemAt == null)) {
+            // Explain the limits while setting up; once messages arrive the row speaks for itself.
+            TextView hint = Ui.text(this, "Saves the messages you receive from now on, and the replies you send from a "
+                    + "notification. Older history and muted chats aren't included.", 13, Ui.MUTED, false);
+            hint.setPadding(0, dp(8), 0, 0);
+            r.addView(hint);
+        }
+        if (needsAccess) {
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+            bp.topMargin = dp(12);
+            r.addView(Ui.button(this, "Allow notification access", Ui.Style.DARK,
+                    v -> startActivity(WhatsAppPlugin.accessSettings())), bp);
         }
         return r;
     }
@@ -236,7 +256,7 @@ public final class SentientActivity extends Activity {
         return english && !value.isEmpty() ? Character.toLowerCase(value.charAt(0)) + value.substring(1) : value;
     }
 
-    private static String items(long count) { return count == 1 ? "1 item" : count + " items"; }
+    private static String count(long n, String noun) { return n + " " + noun + (n == 1 ? "" : "s"); }
 
     private Button syncButton(boolean busy) {
         Button b = Ui.button(this, busy ? "Syncing…" : "Sync now", Ui.Style.PRIMARY, v -> {
@@ -304,7 +324,7 @@ public final class SentientActivity extends Activity {
         r.setBackground(new RippleDrawable(ColorStateList.valueOf(0x3343F3B7), null, Ui.shape(this, Color.WHITE, 0)));
         String title = titleOf(this, hit.conversation, hit.source);
         r.addView(Ui.text(this, title, 17, Ui.INK, true));
-        TextView meta = Ui.text(this, kindOf(this, hit.source) + " · " + date(this, hit.ts), 13, Ui.MUTED, false);
+        TextView meta = Ui.text(this, metaOf(this, hit.source, hit.author, hit.fromMe, hit.ts), 13, Ui.MUTED, false);
         meta.setPadding(0, dp(6), 0, 0);
         r.addView(meta);
         TextView snippet = Ui.text(this, Ui.highlight(this, hit.snippet), 15, Ui.INK, false);
@@ -328,6 +348,12 @@ public final class SentientActivity extends Activity {
         return conversation == null || conversation.isEmpty() ? PluginRegistry.displayName(a, source) : conversation;
     }
 
+    /** "WhatsApp · Ana · 9 Oct, 14:02"; "Omi recording · 9 Oct, 14:02". */
+    static String metaOf(Activity a, String source, String author, boolean fromMe, long ts) {
+        String who = fromMe ? "You" : author;
+        return kindOf(a, source) + (who == null ? "" : " · " + who) + " · " + date(a, ts);
+    }
+
     static String kindOf(Activity a, String source) {
         return OmiTranscripts.ID.equals(source) ? "Omi recording" : PluginRegistry.displayName(a, source);
     }
@@ -344,7 +370,7 @@ public final class SentientActivity extends Activity {
                 .setMessage("Your knowledge base: everything GMind collects, searchable in one place.\n\n"
                         + "• Encrypted on this phone. Uninstalling or clearing the app's data deletes it.\n"
                         + "• Syncs once a day while the battery isn't low, or when you tap Sync now.\n"
-                        + "• Today it reads your GVoice transcripts. In this version nothing leaves the phone.\n"
+                        + "• It reads your GVoice transcripts, and WhatsApp messages from their notifications once you allow access. In this version nothing leaves the phone.\n"
                         + "• Read-only: GMind never sends messages or acts for you.")
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Licenses", (d, w) -> licenses())
