@@ -236,6 +236,24 @@ Both apps (GVoice and GMind) check for a newer release and update themselves fro
 - `:sentient` gains `REQUEST_INSTALL_PACKAGES`, so the `tests/sentient/verify_apk.py` allow-list changes with it.
 - An update never uninstalls or changes the signing key, so recordings and the GMind store are kept (same rule as in `RELEASING.md`).
 
+### UI update: less text, real navigation
+
+GMind's screens (`SentientActivity`) put everything on one page: the title, search, every source row with its status and setup text (notification-access reasons, what WhatsApp capture can't see, Signal's hidden-content notice, the access button), the last-sync line and **Sync now**. About and licenses are dialogs. The backlog items above (Ask, tasks, chats to monitor, your name, Todoist through Composio, updates) would all end up on that same page. The work: audit the UI again (as in `docs/SENTIENT-DESIGN.md`), cut the text, and split the app into screens.
+
+Audit findings so far:
+- The home page mixes three jobs: finding things (search), setting things up (sources, access) and checking status (sync).
+- Setup text stays on the home page once it's done its job. Source rows carry paragraphs that belong on a setup or detail screen.
+- There's nowhere to put new features except further down the same scroll.
+- About and licenses in dialogs hide the version and privacy notes.
+
+Proposed navigation (bottom bar, 4 tabs):
+- **Search** (home): the search field and results. With no query, recent items. A short line plus one button appear only when a source needs attention.
+- **Ask**: the AI question screen (Phase 2).
+- **Tasks**: tasks found in the monitored chats, with due dates and a link to the source message.
+- **Settings**: *Sources* (one row each with a status chip; a tap opens the source's own screen with its setup steps, limits and **Sync now**), *Chats to monitor*, *Your name*, *Connections* (Composio, Todoist), *Updates*, *About and licenses* (a full screen, not a dialog).
+
+Rules: one short line of explanation per screen at most, with longer help one tap away. Status is shown as chips and icons, not sentences. Keep the GVoice tokens, Ubuntu Mono and hairline rows from `docs/SENTIENT-DESIGN.md`. Update the Robolectric screenshots for every new screen.
+
 ## Verification
 
 - **Host tests (no phone)**, in the same style as `tests/sentient/run_host_checks.py`: plugin contract and `RawItem` mapping per plugin using recorded JSON fixtures (Composio responses, a Matrix `/sync` page, MessagingStyle bundles), dedupe of re-posted WhatsApp history, cursor-advances-only-after-commit, the schema migration ladder, the SQL whitelist rejecting non-SELECT queries, and that Composio write tools are refused (except the allow-listed Todoist task tools, once the Todoist sync exists).
