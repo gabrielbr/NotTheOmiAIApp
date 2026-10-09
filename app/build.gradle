@@ -28,10 +28,13 @@ android {
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
  packaging { resources { excludes += ['META-INF/AL2.0','META-INF/LGPL2.1'] } }
  lint { abortOnError true }
+ testOptions { unitTests { includeAndroidResources = true } }
 }
 // Offline Whisper JNI libraries and pinned weights are prepared by scripts/prepare_whisper.py
 // and scripts/build_whisper.py. No networking or remote inference runtime.
 dependencies {
+ testImplementation 'junit:junit:4.13.2'
+ testImplementation 'org.robolectric:robolectric:4.14.1'
  implementation 'com.alphacephei:vosk-android:0.3.75@aar'
  implementation 'net.java.dev.jna:jna:5.18.1@aar'
 }
