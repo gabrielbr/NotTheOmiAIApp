@@ -28,6 +28,12 @@ public final class ComposioClient {
         READ_TOOLS = Collections.unmodifiableSet(tools);
     }
 
+    /**
+     * The only writes GMind ever makes, each opt-in: creating Todoist tasks you approve. Kept apart
+     * from READ_TOOLS and run only through {@link #write}.
+     */
+    static final Set<String> WRITE_TOOLS = Collections.singleton(TodoistSync.CREATE);
+
     private final Http http;
     private final String apiKey, base;
 
@@ -113,6 +119,23 @@ public final class ComposioClient {
             throw new ComposioException(0, slug + " failed at Composio");
         Object data = Json.at(result, "data");
         // Some tools return their payload as a JSON string.
+        if (data instanceof String) {
+            try { return Json.parse((String) data); } catch (IllegalArgumentException notJson) { return data; }
+        }
+        return data;
+    }
+
+    /** Runs one allow-listed write tool (see WRITE_TOOLS); everything else is refused before any request. */
+    Object write(String slug, String userId, String connectedAccountId, Map<String, Object> arguments)
+            throws IOException, ComposioException {
+        if (!WRITE_TOOLS.contains(slug)) throw new IllegalArgumentException("Not an allowed write: " + slug);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("user_id", userId);
+        body.put("connected_account_id", connectedAccountId);
+        body.put("arguments", arguments);
+        Object result = call("POST", "/tools/execute/" + slug, Json.write(body));
+        if (!Json.bool(Json.at(result, "successful"))) throw new ComposioException(0, slug + " failed at Composio");
+        Object data = Json.at(result, "data");
         if (data instanceof String) {
             try { return Json.parse((String) data); } catch (IllegalArgumentException notJson) { return data; }
         }

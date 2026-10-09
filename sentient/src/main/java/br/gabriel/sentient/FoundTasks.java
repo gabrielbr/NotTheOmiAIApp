@@ -12,7 +12,7 @@ import java.util.List;
  * Todoist or dismiss it. Plain Java (host-tested).
  */
 public final class FoundTasks {
-    public static final String OPEN = "open", SHARED = "shared", DISMISSED = "dismissed";
+    public static final String OPEN = "open", SHARED = "shared", DISMISSED = "dismissed", DONE = "done";
     static final String CURSOR = "tasks.ingested_at";
 
     private FoundTasks() {}

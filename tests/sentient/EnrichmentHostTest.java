@@ -33,6 +33,7 @@ public final class EnrichmentHostTest {
         dueDates();
         requests();
         watchedChats();
+        todoistSync();
         System.out.println("PASS_ENRICHMENT_HOST_CHECKS " + checks);
     }
 
@@ -391,6 +392,56 @@ public final class EnrichmentHostTest {
         check(carried, "listed tasks carry their due date");
         db.transaction(() -> Sources.forget(db, "whatsapp"));
         check(count(db, "SELECT COUNT(*) FROM watched_chats") == 0, "forgetting a source forgets its watched chats");
+    }
+
+    private static void todoistSync() throws Exception {
+        Db db = fixture();
+        Enrichment.run(db, NOW, ZONE);
+        FoundTasks.Task pao = null, banco = null;
+        for (FoundTasks.Task t : FoundTasks.list(db, FoundTasks.OPEN, 0, 50)) {
+            if (t.text.equals("Comprar pão amanhã")) pao = t;
+            if (t.text.equals("Ligar pro banco")) banco = t;
+        }
+        SourcesHostTest.FakeHttp http = new SourcesHostTest.FakeHttp()
+                .on("POST", "/tools/execute/TODOIST_CREATE_TASK", 200, "{\"successful\":true,\"data\":{\"id\":\"td-1\",\"content\":\"x\"}}");
+        ComposioClient client = new ComposioClient(http, "ck", "https://composio.test");
+        int sent = TodoistSync.send(db, client, "gmind-u", "ca_todo", Arrays.asList(pao.id), ZONE);
+        check(sent == 1 && http.done(), "one approved task created");
+        Object body = br.gabriel.sentient.plugin.Json.parse(http.requests.get(0).body);
+        check("Comprar pão amanhã".equals(br.gabriel.sentient.plugin.Json.str(br.gabriel.sentient.plugin.Json.at(body, "arguments", "content")))
+                && "2026-10-09".equals(br.gabriel.sentient.plugin.Json.str(br.gabriel.sentient.plugin.Json.at(body, "arguments", "due_date")))
+                && br.gabriel.sentient.plugin.Json.str(br.gabriel.sentient.plugin.Json.at(body, "arguments", "description")).startsWith("From WhatsApp · Ana · 8 Oct 2026, via GMind")
+                && "ca_todo".equals(br.gabriel.sentient.plugin.Json.str(br.gabriel.sentient.plugin.Json.at(body, "connected_account_id"))),
+                "task sent with due date and where it came from: " + http.requests.get(0).body);
+        Object[] row = db.query("SELECT status, todoist_id FROM found_tasks WHERE id = ?", pao.id).get(0);
+        check(FoundTasks.SHARED.equals(row[0]) && "td-1".equals(row[1]), "sent task remembers its Todoist id");
+        check(TodoistSync.send(db, client, "gmind-u", "ca_todo", Arrays.asList(pao.id), ZONE) == 0, "never sent twice");
+
+        check(TodoistSync.reconcile(db) == 0, "still open in Todoist");
+        Ingest.upsert(db, Arrays.asList(RawItem.builder("composio.todoist", "td-1").kind(RawItem.TASK).timestamp(NOW)
+                .text("Done: Comprar pão amanhã").author("me", null, true).build()), NOW + HOUR);
+        check(TodoistSync.reconcile(db) == 1 && FoundTasks.DONE.equals(db.query("SELECT status FROM found_tasks WHERE id = ?", pao.id).get(0)[0]),
+                "completed in Todoist, done in GMind");
+        boolean listed = false;
+        for (FoundTasks.Task t : FoundTasks.list(db, FoundTasks.OPEN, 0, 50)) listed |= t.id == pao.id;
+        check(!listed && !Portrait.write(db, NOW + HOUR, ZONE).contains("Comprar pão amanhã (said"), "done tasks leave the open lists");
+
+        SourcesHostTest.FakeHttp failing = new SourcesHostTest.FakeHttp()
+                .on("POST", "/tools/execute/TODOIST_CREATE_TASK", 401, "{\"error\":{\"message\":\"PRIVATE\"}}");
+        try { TodoistSync.send(db, new ComposioClient(failing, "ck", "https://composio.test"), "u", "a", Arrays.asList(banco.id), ZONE); check(false, "refused key"); }
+        catch (ComposioClient.ComposioException e) { check(e.getMessage().contains("API key") && !e.getMessage().contains("PRIVATE"), "refused key explained without the body"); }
+        check(FoundTasks.OPEN.equals(db.query("SELECT status FROM found_tasks WHERE id = ?", banco.id).get(0)[0]), "a failed send stays open");
+
+        SourcesHostTest.FakeHttp none = new SourcesHostTest.FakeHttp();
+        ComposioClient guarded = new ComposioClient(none, "ck", "https://composio.test");
+        for (String w : new String[]{"TODOIST_CLOSE_TASK_V1", "TODOIST_UPDATE_TASK", "TODOIST_DELETE_TASK", "GMAIL_SEND_EMAIL",
+                "GOOGLEDRIVE_DELETE_FILE", "SLACK_SENDS_A_MESSAGE_TO_A_SLACK_CHANNEL", ComposioGmail.FETCH}) {
+            try { guarded.write(w, "u", "a", java.util.Collections.emptyMap()); check(false, "write refused: " + w); }
+            catch (IllegalArgumentException expected) { check(true, "write refused: " + w); }
+        }
+        try { guarded.execute(TodoistSync.CREATE, "u", "a", java.util.Collections.emptyMap()); check(false, "create isn't a read"); }
+        catch (IllegalArgumentException expected) { check(true, "create isn't runnable as a read"); }
+        check(none.requests.isEmpty() && ComposioClient.WRITE_TOOLS.size() == 1, "refusals never reach the network; one write allowed");
     }
 
     static void check(boolean ok, String what) {

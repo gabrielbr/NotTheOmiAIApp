@@ -47,6 +47,16 @@ final class Connections {
         prefs(c).edit().putString(toolkit.sourceId() + ".state", CONNECTED).apply();
     }
 
+    /** Create approved to-dos in Todoist through Composio (off until turned on; needs Todoist connected). */
+    static boolean todoistSync(Context c) { return prefs(c).getBoolean("todoist.sync", false); }
+    static void setTodoistSync(Context c, boolean on) { prefs(c).edit().putBoolean("todoist.sync", on).apply(); }
+
+    /** The connected Todoist toolkit when direct sync can run, else null. */
+    static ComposioToolkit todoistReady(Context c) {
+        ComposioToolkit todoist = ComposioToolkit.forSlug("todoist");
+        return todoist != null && CONNECTED.equals(state(c, todoist)) && SecretStore.COMPOSIO.has(c) ? todoist : null;
+    }
+
     static void remove(Context c, ComposioToolkit toolkit) {
         prefs(c).edit().remove(toolkit.sourceId() + ".account").remove(toolkit.sourceId() + ".state").apply();
     }

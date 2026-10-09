@@ -257,10 +257,11 @@ The user picks, in GMind's UI, which groups or people in which apps GMind keeps 
 
 Onboarding asks the user's name (and nicknames or other spellings, like "Gabriel" / "Gabi"). Task detection uses it to keep only tasks meant for the user: a request addressed to someone else in a group ("Ana, send the report") isn't added; a message with no name, sent in a direct chat, counts as addressed to the user. Done: a "What should GMind call you?" card on first launch (or "Not now"), editable in About you; stored as `me.names` and used for the Me person's name.
 
-### Tasks live in GMind; opt-in Todoist sync through Composio · *partly done (4A), sync decided*
+### Tasks live in GMind; opt-in Todoist sync through Composio · *done*
 
 - Done in 4A: tasks live in GMind's encrypted store, and "Send to Todoist" hands them to the Todoist app through Android's share sheet.
 - Decided: an opt-in sync through Composio (`composio.todoist`). Tasks you approve are created in Todoist (content, due date, where they came from); completing one in Todoist marks it done in GMind. Only `TODOIST_CREATE_TASK` is allow-listed as a write, only for this sync; GMind never edits, closes or deletes in Todoist. Everything else stays read-only. See *Out of scope*.
+- Done: `ComposioClient.write` with `WRITE_TOOLS = {TODOIST_CREATE_TASK}` (everything else refused before any request), `TodoistSync` (send approved tasks with due date and source; reconcile completions after each sync), and a "Create in Todoist directly" switch on the To-dos screen, shown once Todoist is connected; without it, the share sheet is used.
 
 ### Phase 6: Claude anywhere · *decided*
 
