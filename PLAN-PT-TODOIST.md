@@ -13,8 +13,10 @@
 | Whisper model swapped to multilingual `ggml-small-q5_1.bin` (SHA-256 `ae85e4a9…11bb`, cross-checked against Hugging Face's LFS hash) | Done |
 | Vosk live-draft model swapped to `vosk-model-small-pt-0.3` (archive SHA-256 `6e1ce909…93b7`, per-file manifest regenerated) | Done. Installer host tests pass against the real archive |
 | `TaskExtractor`: offline PT+EN cue-phrase finder, plus `tests/tasks/run_host_checks.py` | Done; host checks pass |
-| `TasksActivity`: review/edit/select, then share each task to `com.todoist`, plus a "Find tasks for Todoist" button on each saved recording | Done; type-checked. Full Gradle build result pending. Not run on a device yet |
+| `TasksActivity`: review/edit/select, then share each task to `com.todoist`, plus a "Find tasks for Todoist" button on each saved recording | Done; builds. Not run on a device yet |
 | All existing host suites (capture, hybrid, job, whisper-java, omi, omi-capture, omi-composition) | Pass |
+| `./gradlew assembleDebug assembleRelease assembleDebugAndroidTest lintDebug` | Pass. Lint shows only translation warnings, the same kind the existing screens have |
+| `tests/hybrid/verify_apk.py` on a signed arm64 release APK | Pass: both models pinned, native libs present, `internet_permission: false` |
 | On-device check: PT/EN accuracy with your Omi, and the Todoist share flow | **Pending; needs your phone** |
 | New applicationId / app name (Phase 0) | Pending |
 | Notification after refinement ("N tarefas encontradas") | Deferred. The per-recording button covers v1 |
