@@ -40,7 +40,7 @@ final class VaultFolder {
     static void choose(Context c, Uri tree) {
         c.getContentResolver().takePersistableUriPermission(tree,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        prefs(c).edit().putString(URI, tree.toString()).putBoolean(AUTO, true).remove(STATUS).apply();
+        prefs(c).edit().putString(URI, tree.toString()).putBoolean(AUTO, true).putBoolean("drive", false).remove(STATUS).apply();
     }
 
     /** Stops exporting; the files already written stay where they are. */
@@ -56,6 +56,27 @@ final class VaultFolder {
     }
 
     static boolean auto(Context c) { return prefs(c).getBoolean(AUTO, true); }
+
+    /** Export to the "GMind vault" folder in Google Drive (through Composio) instead of a phone folder. */
+    static boolean drive(Context c) { return prefs(c).getBoolean("drive", false); }
+
+    static void setDrive(Context c, boolean on) {
+        if (on) forgetFolderOnly(c);
+        prefs(c).edit().putBoolean("drive", on).putBoolean(AUTO, true).remove(STATUS).apply();
+    }
+
+    /** A phone folder or Drive is set up. */
+    static boolean enabled(Context c) { return folder(c) != null || drive(c); }
+
+    private static void forgetFolderOnly(Context c) {
+        Uri tree = folder(c);
+        if (tree == null) return;
+        try {
+            c.getContentResolver().releasePersistableUriPermission(tree,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        } catch (SecurityException alreadyGone) { /* nothing to release */ }
+        prefs(c).edit().remove(URI).apply();
+    }
     static void setAuto(Context c, boolean on) { prefs(c).edit().putBoolean(AUTO, on).apply(); }
     static String status(Context c) { return prefs(c).getString(STATUS, null); }
 
@@ -69,6 +90,7 @@ final class VaultFolder {
 
     /** Exports now; returns the status line shown under the folder. Call off the main thread. */
     static String export(Context c, Db db, long now) {
+        if (drive(c)) return exportToDrive(c, db, now);
         Uri tree = folder(c);
         if (tree == null) return null;
         String status;
@@ -81,6 +103,35 @@ final class VaultFolder {
             status = refused.getMessage();
         } catch (SecurityException | FileNotFoundException lostAccess) {
             status = "GMind can't reach the folder anymore. Pick it again.";
+        } catch (Exception failed) {
+            status = "Export failed (" + failed.getClass().getSimpleName() + "). It'll try again after the next sync.";
+        }
+        prefs(c).edit().putString(STATUS, status).apply();
+        return status;
+    }
+
+    /** Exports into "GMind vault" in Google Drive through the connected Composio Google Drive account. */
+    private static String exportToDrive(Context c, Db db, long now) {
+        String status;
+        try {
+            ComposioToolkit drive = ComposioToolkit.forSlug("googledrive");
+            String key = SecretStore.COMPOSIO.read(c);
+            if (drive == null || !Connections.CONNECTED.equals(Connections.state(c, drive)) || key == null)
+                throw new IllegalStateException("Connect Google Drive in Connect sources to export there.");
+            ComposioClient client = new ComposioClient(new UrlHttp(), key, ComposioClient.BASE);
+            String user = Connections.composioUser(c), account = Connections.account(c, drive);
+            DriveVault writer = new DriveVault(db, (slug, args) -> client.write(slug, user, account, args), DriveVault.MAX_WRITES);
+            int notes = Vault.export(db, writer, now, ZoneId.systemDefault());
+            status = "Exported " + notes + " notes to \"" + DriveVault.FOLDER + "\" in Google Drive"
+                    + (writer.deferred > 0 ? " · " + writer.deferred + " more next sync" : "") + " · "
+                    + android.text.format.DateUtils.formatDateTime(c, now, android.text.format.DateUtils.FORMAT_SHOW_DATE
+                            | android.text.format.DateUtils.FORMAT_SHOW_TIME | android.text.format.DateUtils.FORMAT_ABBREV_MONTH);
+        } catch (IllegalStateException setup) {
+            status = setup.getMessage();
+        } catch (ComposioClient.ComposioException refused) {
+            status = refused.getMessage();
+        } catch (java.io.IOException offline) {
+            status = "Couldn't reach Composio; the vault goes up after the next sync.";
         } catch (Exception failed) {
             status = "Export failed (" + failed.getClass().getSimpleName() + "). It'll try again after the next sync.";
         }

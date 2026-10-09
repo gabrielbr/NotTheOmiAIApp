@@ -41,6 +41,12 @@ public final class Vault {
         String read(String path) throws Exception;
     }
 
+    /** First lines of README.md, for Claude (or anyone) opening the vault cold, as in Sentient OS. */
+    static final String GUIDE = "> **GMind vault** · a personal knowledge base exported by GMind from the owner's messages, emails,\n"
+            + "> calendar, files, tasks and recordings. Start here: the portrait below says who they are. Folders: People/ (one note\n"
+            + "> per person), Chats/, Days/ (a digest per day), Projects/, Places/, Topics/, and Tasks.md. Notes link with [[Name]];\n"
+            + "> \"(WhatsApp · 8 Oct)\" marks where a line comes from. Read-only copy: changes here don't go back to GMind.\n\n";
+
     private final Db db;
     private final ZoneId zone;
     private final Map<Long, String> citeCache = new HashMap<>();
@@ -107,7 +113,7 @@ public final class Vault {
 
         String portrait = Portrait.read(db);
         if (portrait == null) portrait = Portrait.build(db, now, zone);
-        files.put("README.md", linkPeople(cite(portrait)));
+        files.put("README.md", GUIDE + linkPeople(cite(portrait)));
         for (Map.Entry<Long, String> p : personNotes.entrySet()) files.put("People/" + p.getValue() + ".md", person(p.getKey(), p.getValue()));
         for (Map.Entry<Long, String> c : chatNotes.entrySet()) files.put("Chats/" + c.getValue() + ".md", chat(c.getKey(), c.getValue()));
         for (Map.Entry<Long, String> e : entityNotes.entrySet())

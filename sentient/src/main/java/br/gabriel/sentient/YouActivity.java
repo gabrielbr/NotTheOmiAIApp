@@ -188,16 +188,38 @@ public final class YouActivity extends Activity {
     private void vault() {
         section("Markdown vault");
         Uri folder = VaultFolder.folder(this);
-        content.addView(Ui.text(this, "Exports your portrait, a note per person, chat and day, and your to-dos as "
+        boolean drive = VaultFolder.drive(this);
+        ComposioToolkit googleDrive = ComposioToolkit.forSlug("googledrive");
+        boolean driveConnected = googleDrive != null && Connections.CONNECTED.equals(Connections.state(this, googleDrive));
+        content.addView(Ui.text(this, "Exports your portrait, a note per person, chat, project and day, and your to-dos as "
                 + "Markdown with [[links]], for Obsidian or any notes app. The files are not encrypted: anything that "
                 + "can read that folder can read them.", 14, Ui.MUTED, false));
-        if (folder == null) {
+        if (folder == null && !drive) {
             content.addView(Ui.button(this, "Choose an empty folder", Ui.Style.PRIMARY, v -> pick()), buttonParams());
+            TextView claude = Ui.text(this, driveConnected
+                    ? "Or put it in Google Drive, so Claude can read it in any chat with its Google Drive connector. "
+                      + "It goes through Composio; Google and Composio can read the notes."
+                    : "To read it from Claude in any chat, connect Google Drive in Connect sources, then export it there.",
+                    13, Ui.MUTED, false);
+            claude.setPadding(0, dp(14), 0, 0);
+            content.addView(claude);
+            if (driveConnected)
+                content.addView(Ui.button(this, "Export to Google Drive", Ui.Style.DARK, v -> {
+                    VaultFolder.setDrive(this, true);
+                    exportNow();
+                }), buttonParams());
             return;
         }
-        TextView where = Ui.text(this, "Folder · " + VaultFolder.label(folder), 15, Ui.INK, true);
+        TextView where = Ui.text(this, drive ? "Google Drive · \"" + DriveVault.FOLDER + "\"" : "Folder · " + VaultFolder.label(folder),
+                15, Ui.INK, true);
         where.setPadding(0, dp(12), 0, 0);
         content.addView(where);
+        if (drive) {
+            TextView how = Ui.text(this, "In Claude, with the Google Drive connector on, ask it to read README.md in \""
+                    + DriveVault.FOLDER + "\".", 13, Ui.MUTED, false);
+            how.setPadding(0, dp(4), 0, 0);
+            content.addView(how);
+        }
         String status = VaultFolder.status(this);
         if (status != null) {
             TextView st = Ui.text(this, status, 13, status.startsWith("Exported") ? Ui.MUTED : Ui.CORAL_TEXT, false);
@@ -213,8 +235,28 @@ public final class YouActivity extends Activity {
         auto.setChecked(VaultFolder.auto(this));
         auto.setOnCheckedChangeListener((b, on) -> VaultFolder.setAuto(this, on));
         content.addView(auto, buttonParams());
-        content.addView(Ui.button(this, "Choose another folder", Ui.Style.QUIET, v -> pick()), buttonParams());
-        content.addView(Ui.button(this, "Stop exporting", Ui.Style.QUIET, v -> { VaultFolder.forget(this); load(); }), buttonParams());
+        if (drive) content.addView(Ui.button(this, "Use a folder on this phone instead", Ui.Style.QUIET, v -> pick()), buttonParams());
+        else {
+            content.addView(Ui.button(this, "Choose another folder", Ui.Style.QUIET, v -> pick()), buttonParams());
+            if (driveConnected)
+                content.addView(Ui.button(this, "Export to Google Drive instead", Ui.Style.QUIET, v -> {
+                    VaultFolder.setDrive(this, true);
+                    exportNow();
+                }), buttonParams());
+        }
+        content.addView(Ui.button(this, "Stop exporting", Ui.Style.QUIET, v -> {
+            VaultFolder.forget(this);
+            io.execute(() -> {
+                try { DriveVault.forget(KnowledgeStore.get(this)); } catch (Exception ignored) { /* nothing to forget */ }
+                main.post(() -> { if (!destroyed) load(); });
+            });
+        }), buttonParams());
+        if (drive) {
+            TextView keep = Ui.text(this, "Stopping leaves the notes already in Drive; delete the folder there if you want them gone.",
+                    12, Ui.MUTED, false);
+            keep.setPadding(0, dp(6), 0, 0);
+            content.addView(keep);
+        }
     }
 
     private void pick() {

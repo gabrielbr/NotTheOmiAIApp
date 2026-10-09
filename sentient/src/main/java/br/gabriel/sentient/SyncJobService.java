@@ -92,7 +92,7 @@ public final class SyncJobService extends JobService {
                             AskSettings.setEnrichStatus(this, "Enrichment failed (" + failure.getClass().getSimpleName() + "); it resumes next sync.");
                         }
                     }
-                    if (VaultFolder.folder(this) != null && VaultFolder.auto(this)) VaultFolder.export(this, db, now);
+                    if (VaultFolder.enabled(this) && VaultFolder.auto(this)) VaultFolder.export(this, db, now);
                     try { UpdateInstaller.remember(this, Updates.latest(new UrlHttp()), now); }
                     catch (Exception offlineOrLimited) { /* the next sync checks again */ }
                 }
