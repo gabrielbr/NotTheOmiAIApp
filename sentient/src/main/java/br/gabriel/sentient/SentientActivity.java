@@ -197,7 +197,7 @@ public final class SentientActivity extends Activity {
         }
         body.addView(Ui.divider(this));
         Ui.gap(body, 12);
-        body.addView(Ui.button(this, "Connect Gmail, Calendar, Matrix…", Ui.Style.QUIET,
+        body.addView(Ui.button(this, "Connect Gmail, Slack, Matrix and more", Ui.Style.QUIET,
                 v -> startActivity(new Intent(this, ConnectActivity.class))), new LinearLayout.LayoutParams(-1, -2));
         Ui.gap(body, 20);
         if (!empty) {
@@ -296,6 +296,8 @@ public final class SentientActivity extends Activity {
         if (toolkit instanceof ComposioGmail) return "email";
         if (toolkit instanceof ComposioCalendar) return "event";
         if (toolkit instanceof ComposioDrive) return "file";
+        if (toolkit instanceof ComposioSlack) return "message";
+        if (toolkit instanceof ComposioTodoist || toolkit instanceof ComposioTickTick) return "task";
         return "item";
     }
 
@@ -414,7 +416,7 @@ public final class SentientActivity extends Activity {
                         + "• Encrypted on this phone. Uninstalling or clearing the app's data deletes it.\n"
                         + "• Syncs once a day while the battery isn't low, or when you tap Sync now.\n"
                         + "• It reads your GVoice transcripts, and WhatsApp, Signal and Telegram messages from their notifications once you allow access.\n"
-                        + "• Sources you connect are read from their servers: Matrix directly from your homeserver; Gmail, Calendar and Drive through Composio, whose servers fetch that data with your Composio key.\n"
+                        + "• Sources you connect are read from their servers: Matrix directly from your homeserver; Gmail, Calendar, Drive, Slack, Todoist and TickTick through Composio, whose servers fetch that data with your Composio key.\n"
                         + "• Nothing you collected is uploaded anywhere, except when you ask Claude a question: then your question and the items Claude looks up are sent to Anthropic. Ask can also answer on the phone, offline, with a downloaded model.\n"
                         + "• Read-only: GMind never sends messages or acts for you.")
                 .setNegativeButton("Close", null)

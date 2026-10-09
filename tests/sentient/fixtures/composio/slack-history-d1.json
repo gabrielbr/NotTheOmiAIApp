@@ -1,0 +1,15 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "ok": true,
+  "messages": [
+   {
+    "type": "message",
+    "user": "U1",
+    "text": "Almoço amanhã?",
+    "ts": "1791546600.000100"
+   }
+  ]
+ }
+}

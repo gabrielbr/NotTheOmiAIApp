@@ -1,0 +1,20 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "ok": true,
+  "messages": [
+   {
+    "type": "message",
+    "subtype": "bot_message",
+    "bot_id": "B1",
+    "username": "CI",
+    "text": "<!here> build ok",
+    "ts": "1791538200.000100"
+   }
+  ],
+  "response_metadata": {
+   "next_cursor": ""
+  }
+ }
+}
