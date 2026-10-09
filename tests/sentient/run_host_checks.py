@@ -16,7 +16,8 @@ JAR_SHA256 = 'a3f53a2aa15ae9425a9e793bbe9c8e5288febeb4b65ef5c1a4e80d4c2045cf08'
 JAR = ROOT/'.cache/host/sqlite-jdbc-3.50.3.0.jar'
 PURE = ['Db', 'Schema', 'Ingest', 'Sources', 'SyncRunner', 'Search', 'Items', 'OmiTranscripts', 'ChatMessages', 'KnowledgeTools', 'Citations', 'LlmBackend', 'AskPrompts', 'LocalPrompt',
         'ComposioClient', 'ComposioToolkit', 'ComposioGmail', 'ComposioCalendar', 'ComposioDrive', 'ComposioSlack', 'ComposioTodoist', 'ComposioTickTick', 'ComposioPlugin',
-        'MatrixClient', 'MatrixPlugin']
+        'MatrixClient', 'MatrixPlugin',
+        'TaskExtractor', 'Meta', 'FoundTasks', 'People', 'Digest', 'Portrait', 'Vault', 'Enrichment']
 
 
 def jar():
@@ -34,13 +35,15 @@ def main():
     sources = sorted((ROOT/'plugin-api/src/main/java').rglob('*.java'))
     sources += [ROOT/f'sentient/src/main/java/br/gabriel/sentient/{name}.java' for name in PURE]
     sources += [ROOT/'tests/sentient/JdbcDb.java', ROOT/'tests/sentient/SentientHostTest.java',
-                ROOT/'tests/sentient/SourcesHostTest.java']
+                ROOT/'tests/sentient/SourcesHostTest.java', ROOT/'tests/sentient/TaskExtractorChecks.java',
+                ROOT/'tests/sentient/EnrichmentHostTest.java']
     with tempfile.TemporaryDirectory(prefix='sentient-host-') as work:
         subprocess.run(['javac', '--release', '17', '-Xlint:all', '-Werror', '-cp', classpath, '-d', work,
                         *map(str, sources)], check=True)
         subprocess.run(['java', '-cp', work + ':' + classpath, 'br.gabriel.sentient.SentientHostTest'], check=True)
         subprocess.run(['java', '-cp', work + ':' + classpath, 'br.gabriel.sentient.SourcesHostTest',
                         str(ROOT/'tests/sentient/fixtures')], check=True)
+        subprocess.run(['java', '-cp', work + ':' + classpath, 'br.gabriel.sentient.EnrichmentHostTest'], check=True)
 
 
 if __name__ == '__main__':

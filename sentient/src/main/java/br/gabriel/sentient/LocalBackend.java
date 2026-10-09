@@ -19,10 +19,12 @@ final class LocalBackend implements LlmBackend {
     private static String loadedPath;
     private final Context context;
     private final KnowledgeTools tools;
+    private final Db db;
 
     LocalBackend(Context context, Db db) {
         this.context = context.getApplicationContext();
         this.tools = new KnowledgeTools(db, ZoneId.systemDefault());
+        this.db = db;
     }
 
     @Override public String name() { return LocalModel.NAME + " on this phone"; }
@@ -31,14 +33,15 @@ final class LocalBackend implements LlmBackend {
             throws Exception {
         listener.status("Finding related messages…");
         String sources = LocalPrompt.sources(tools, question, SOURCE_BUDGET);
+        String about = Portrait.brief(Portrait.read(db));
         if (cancelled.getAsBoolean()) throw new ClaudeBackend.AskException("Stopped.");
         synchronized (LOCK) {
             long h = load(listener);
             listener.status("Writing the answer on this phone…");
             StringBuilder text = new StringBuilder();
-            int result = generate(h, LocalPrompt.chat(sources, history, question), text, listener, cancelled);
+            int result = generate(h, LocalPrompt.chat(about, sources, history, question), text, listener, cancelled);
             if (result == LlamaNative.TOO_LONG) {
-                // Long history or sources: retry once with half the sources and no history.
+                // Long history or sources: retry once with half the sources, no history and no portrait.
                 text.setLength(0);
                 String fewer = sources.substring(0, Math.min(sources.length(), SOURCE_BUDGET / 2));
                 fewer = fewer.substring(0, Math.max(0, fewer.lastIndexOf('\n') + 1));

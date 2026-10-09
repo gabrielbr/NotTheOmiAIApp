@@ -60,8 +60,15 @@ final class ClaudeBackend implements LlmBackend {
     private final String model;
     private final KnowledgeTools tools;
     private final ZoneId zone;
+    private final String portrait;
+    /** Room for the portrait in each request; it's a summary, the tools hold the details. */
+    static final int PORTRAIT_CHARS = 6000;
 
     ClaudeBackend(String apiKey, String model, KnowledgeTools tools, ZoneId zone, String baseUrl) {
+        this(apiKey, model, tools, zone, baseUrl, null);
+    }
+
+    ClaudeBackend(String apiKey, String model, KnowledgeTools tools, ZoneId zone, String baseUrl, String portrait) {
         AnthropicOkHttpClient.Builder builder = AnthropicOkHttpClient.builder()
                 .apiKey(apiKey).maxRetries(2).timeout(Duration.ofSeconds(120));
         if (baseUrl != null) builder.baseUrl(baseUrl);
@@ -69,6 +76,7 @@ final class ClaudeBackend implements LlmBackend {
         this.model = model;
         this.tools = tools;
         this.zone = zone;
+        this.portrait = portrait;
     }
 
     @Override public String name() { return AskSettings.modelName(model); }
@@ -83,7 +91,7 @@ final class ClaudeBackend implements LlmBackend {
         messages.add(text(MessageParam.Role.USER, question));
         // The date changes daily, so it goes in a mid-conversation system message, after the
         // cached system prompt and tools, instead of in them.
-        messages.add(text(MessageParam.Role.SYSTEM, "Today is " + LocalDate.now(zone) + "."));
+        messages.add(text(MessageParam.Role.SYSTEM, "Today is " + LocalDate.now(zone) + "." + portraitNote(portrait)));
 
         StringBuilder answer = new StringBuilder();
         for (int round = 0; round < MAX_ROUNDS; round++) {
@@ -149,6 +157,14 @@ final class ClaudeBackend implements LlmBackend {
         }
         return ContentBlockParam.ofToolResult(ToolResultBlockParam.builder()
                 .toolUseId(use.id()).content(result).isError(error).build());
+    }
+
+    /** The user's portrait as background, after the cached prefix (it changes daily). */
+    static String portraitNote(String portrait) {
+        if (portrait == null || portrait.trim().isEmpty()) return "";
+        String p = portrait.length() > PORTRAIT_CHARS ? portrait.substring(0, PORTRAIT_CHARS) + "…" : portrait;
+        return "\n\nGMind's portrait of the user, rebuilt after each sync. Use it as background to know who they are "
+                + "and who matters to them; its [#id] citations are real items you can cite or open with the tools:\n\n" + p;
     }
 
     static String statusFor(String tool) {

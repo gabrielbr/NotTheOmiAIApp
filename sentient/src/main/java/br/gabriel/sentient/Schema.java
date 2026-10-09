@@ -62,6 +62,14 @@ public final class Schema {
                 + " confidence REAL, updated_at INTEGER)",
             "CREATE TABLE daily_digests(date TEXT PRIMARY KEY, markdown TEXT NOT NULL, generated_at INTEGER NOT NULL)",
         },
+        { // 2: enrichment: to-dos found in what was said, people kept apart, small key/value state
+            "CREATE TABLE found_tasks(id INTEGER PRIMARY KEY, item_id INTEGER NOT NULL REFERENCES items(id),"
+                + " text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', found_at INTEGER NOT NULL,"
+                + " UNIQUE(item_id, text))",
+            "CREATE INDEX found_tasks_status ON found_tasks(status, found_at)",
+            "CREATE TABLE not_same_person(a INTEGER NOT NULL, b INTEGER NOT NULL, PRIMARY KEY(a, b))",
+            "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT)",
+        },
     };
 
     public static int latest() { return MIGRATIONS.length; }

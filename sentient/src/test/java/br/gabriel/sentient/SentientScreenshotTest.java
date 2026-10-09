@@ -131,6 +131,48 @@ public final class SentientScreenshotTest {
         settle(); shot(home, "home-connected");
     }
 
+    @Test public void you() throws Exception {
+        YouActivity a = Robolectric.buildActivity(YouActivity.class).setup().get();
+        settle();
+        YouActivity.State s = new YouActivity.State();
+        s.suggestions = 2;
+        s.openTasks = 5;
+        s.portrait = "# About me\n\n_Built by GMind on 2026-10-09 from what it collected. Each line cites its evidence._\n\n"
+                + "## Who I am\n\n- Known as Gabriel · me@example.com (Gmail) [#9], @gabriel:matrix.org (Matrix) [#21]\n\n"
+                + "## People I talk to most (last 30 days)\n\n1. Ana · 120 items in WhatsApp, Gmail, last 8 Oct [#41]\n"
+                + "2. Mãe · 64 items in WhatsApp, last 9 Oct [#77]\n3. Rui · 31 items in Signal, last 7 Oct [#90]\n\n"
+                + "## Coming up (next 7 days)\n\n- Sat 10 Oct, 10:00 · Dentista [#12]\n\n"
+                + "## Open to-dos\n\n- Pagar luz (Todoist) [#13]\n- Ligar pro banco (said in WhatsApp, 8 Oct) [#2]\n";
+        s.days.addAll(Arrays.asList("2026-10-09", "2026-10-08"));
+        a.show(s);
+        settle(); shot(a, "you");
+
+        PeopleActivity p = Robolectric.buildActivity(PeopleActivity.class).setup().get();
+        settle();
+        Constructor<People.Person> pc = People.Person.class.getDeclaredConstructor(Object[].class);
+        pc.setAccessible(true);
+        long now = System.currentTimeMillis();
+        People.Person me = pc.newInstance((Object) new Object[]{1L, "Gabriel", 1L, "whatsapp,composio.gmail", 210L, now - HOUR});
+        People.Person ana = pc.newInstance((Object) new Object[]{2L, "Ana", 0L, "whatsapp", 120L, now - 2 * HOUR});
+        People.Person anaMx = pc.newInstance((Object) new Object[]{3L, "Ana", 0L, "matrix", 8L, now - 30 * HOUR});
+        People.Person mae = pc.newInstance((Object) new Object[]{4L, "Mãe", 0L, "whatsapp", 64L, now - 3 * HOUR});
+        Constructor<People.Suggestion> sc = People.Suggestion.class.getDeclaredConstructor(People.Person.class, People.Person.class, String.class);
+        sc.setAccessible(true);
+        p.show(Arrays.asList(sc.newInstance(ana, anaMx, "Same name in WhatsApp and Matrix")), Arrays.asList(me, ana, mae, anaMx));
+        settle(); shot(p, "people");
+
+        TasksActivity t = Robolectric.buildActivity(TasksActivity.class).setup().get();
+        settle();
+        Constructor<FoundTasks.Task> tc = FoundTasks.Task.class.getDeclaredConstructor(Object[].class);
+        tc.setAccessible(true);
+        t.show(Arrays.asList(
+                tc.newInstance((Object) new Object[]{1L, 41L, "Comprar pão amanhã", "open", now - 3 * HOUR, "whatsapp", "Ana", "Ana", 0L}),
+                tc.newInstance((Object) new Object[]{2L, 42L, "Mandar o relatório na segunda", "open", now - 5 * HOUR, "omi.transcripts", "Reunião com o João", null, 0L}),
+                tc.newInstance((Object) new Object[]{3L, 43L, "Ligar pro banco", "open", now - 26 * HOUR, "whatsapp", "Ana", null, 1L})),
+                Arrays.asList(tc.newInstance((Object) new Object[]{4L, 44L, "Renovar o passaporte", "shared", now - 50 * HOUR, "omi.transcripts", null, null, 0L})));
+        settle(); shot(t, "tasks");
+    }
+
     /** Same state plus a standing notice (row column 7). */
     static Sources.State noticed(Sources.State s, String notice) throws Exception {
         Constructor<Sources.State> c = Sources.State.class.getDeclaredConstructor(Object[].class);
