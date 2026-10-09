@@ -24,6 +24,7 @@ Decisions already made:
 | Host tests `tests/sentient/run_host_checks.py`: real SQL through SQLite/JDBC, 46 checks (migrations, idempotent ingest, FTS accents, identities, page-by-page cursor commits, failure isolation, foreign-item rejection, Omi cursor rewind) | Pass |
 | Device test `SqlCipherStoreTest` (real SQLCipher FTS5, no plaintext on disk, wrong key refused) | Compiles; **not run yet: no emulator here** |
 | Signing both apps (`scripts/sign_release.py --modules`), `tests/sentient/verify_apk.py` (permission allow-list, no computer-control surface, pinned native libs, same signer), release workflow publishes both APKs | Done; verified locally with a throwaway key |
+| UX/UI audit and the Omi Tarefas design system: search first, highlighted matches, item screen, sync states, About (`docs/SENTIENT-DESIGN.md`) | Done; screenshots rendered with Robolectric |
 | On-device: install both, record, "Sync now", search | **Pending; needs your phone** |
 
 Phase 0 decisions that differ from the sketch below:

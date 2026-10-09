@@ -83,10 +83,10 @@ def main():
         assert abis == ['arm64-v8a', 'x86_64'], 'Unintended ABI set'
         actual = {n: sha(archive.read(n)) for n in names if n.startswith('lib/') and n.endswith('.so')}
         assert actual == pinned_native(), 'APK native libraries differ from pinned AARs'
-        for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt']:
+        for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt', 'ubuntu-font-licence.txt']:
             assert len(archive.read('assets/licenses/'+name)) > 100, 'Missing license ' + name
         dex = b'\n'.join(archive.read(n) for n in names if n.endswith('.dex'))
-        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;',
+        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;',
                            'Lnet/zetetic/database/sqlcipher/SQLiteDatabase;']:
             assert class_name.encode() in dex, 'Missing runtime class ' + class_name
     digest = hashlib.sha256(args.apk.read_bytes()).hexdigest()

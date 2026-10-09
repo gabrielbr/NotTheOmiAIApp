@@ -5,6 +5,10 @@ import java.util.List;
 
 /** Full-text search over items (FTS5, accent-insensitive), best matches first. */
 public final class Search {
+    /** Wrap each match in snippets and highlighted text; never present in real text. */
+    public static final char MATCH_START = '\u0002', MATCH_END = '\u0003';
+    static final String START = String.valueOf(MATCH_START), END = String.valueOf(MATCH_END);
+
     private Search() {}
 
     public static final class Hit {
@@ -25,10 +29,10 @@ public final class Search {
         String match = matchExpression(query);
         if (match.isEmpty()) return hits;
         for (Object[] row : db.query("SELECT items.id, items.source, items.kind, items.ts, conversations.title,"
-                + " snippet(items_fts, 0, '«', '»', '…', 16) FROM items_fts"
+                + " snippet(items_fts, 0, ?, ?, '…', 16) FROM items_fts"
                 + " JOIN items ON items.id = items_fts.rowid"
                 + " LEFT JOIN conversations ON conversations.id = items.conversation_id"
-                + " WHERE items_fts MATCH ? ORDER BY bm25(items_fts) LIMIT ?", match, limit))
+                + " WHERE items_fts MATCH ? ORDER BY bm25(items_fts) LIMIT ?", START, END, match, limit))
             hits.add(new Hit(row));
         return hits;
     }

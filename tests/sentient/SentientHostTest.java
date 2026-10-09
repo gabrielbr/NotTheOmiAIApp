@@ -62,7 +62,16 @@ public final class SentientHostTest {
         check(stats.added == 2 && stats.updated == 0, "two items added");
         List<Search.Hit> hits = Search.find(db, "reuniao orcamento", 10);
         check(hits.size() == 1 && hits.get(0).conversation.equals("Recording a"), "accent-insensitive PT search");
-        check(hits.get(0).snippet.contains("«"), "snippet highlights the match");
+        check(hits.get(0).snippet.contains(Search.MATCH_START + "reunião" + Search.MATCH_END), "snippet marks the match");
+        Items.Item item = Items.get(db, hits.get(0).itemId);
+        check(item != null && item.text.startsWith("Amanhã") && "Recording a".equals(item.conversation)
+                && item.ts == 1000 && RawItem.TRANSCRIPT.equals(item.kind), "item loads with its conversation");
+        check(Items.get(db, 9999) == null, "missing item is null");
+        String marked = Items.highlighted(db, item.id, "orcamento");
+        check(marked != null && marked.contains(Search.MATCH_START + "orçamento" + Search.MATCH_END)
+                && marked.replace(Search.START, "").replace(Search.END, "").equals(item.text), "full text highlighted");
+        check(Items.highlighted(db, item.id, "lisbon") == null, "no highlight when the item doesn't match");
+        check(Items.highlighted(db, item.id, " ") == null, "no highlight for a blank query");
         check(Search.find(db, "lisb", 10).size() == 1, "prefix search");
         check(Search.find(db, "ana ( \" * -", 10).size() == 1, "FTS syntax characters are ignored");
         check(Search.find(db, "ana NOT", 10).isEmpty(), "operator words are plain words that must match");
