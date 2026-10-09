@@ -77,6 +77,10 @@ public final class SentientActivity extends Activity {
         ap.topMargin = dp(10);
         content.addView(Ui.button(this, "Ask a question", Ui.Style.DARK,
                 v -> startActivity(new Intent(this, AskActivity.class))), ap);
+        LinearLayout.LayoutParams yp = new LinearLayout.LayoutParams(-1, -2);
+        yp.topMargin = dp(6);
+        content.addView(Ui.button(this, "About you · people · to-dos", Ui.Style.QUIET,
+                v -> startActivity(new Intent(this, YouActivity.class))), yp);
         searchNote = Ui.text(this, "", 14, Ui.MUTED, false);
         searchNote.setPadding(0, dp(8), 0, 0);
         searchNote.setVisibility(View.GONE);
@@ -280,7 +284,7 @@ public final class SentientActivity extends Activity {
     }
 
     /** "2 hours ago"; passing now explicitly keeps it relative instead of a calendar date. */
-    private static String ago(long time) {
+    static String ago(long time) {
         String value = DateUtils.getRelativeTimeSpanString(time, System.currentTimeMillis(),
                 DateUtils.MINUTE_IN_MILLIS).toString();
         // Android capitalises "Yesterday"; it reads mid-sentence here ("Synced yesterday").

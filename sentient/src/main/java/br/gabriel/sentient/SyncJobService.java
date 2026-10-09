@@ -67,9 +67,17 @@ public final class SyncJobService extends JobService {
                     updated += outcome.updated;
                     if (outcome.failed) failed++;
                 }
+                String enriched = "";
+                if (!cancelled) {
+                    // People, to-dos, digests and the portrait; then the vault, if a folder is set.
+                    long now = System.currentTimeMillis();
+                    try { Enrichment.run(db, now, java.time.ZoneId.systemDefault()); }
+                    catch (Exception failure) { enriched = " · portrait not updated (" + failure.getClass().getSimpleName() + ")"; }
+                    if (VaultFolder.folder(this) != null && VaultFolder.auto(this)) VaultFolder.export(this, db, now);
+                }
                 setState(cancelled ? "Sync paused by Android · will resume"
                         : "Synced · " + added + " new, " + updated + " updated"
-                        + (failed == 0 ? "" : " · " + failed + " source(s) need attention"));
+                        + (failed == 0 ? "" : " · " + failed + " source(s) need attention") + enriched);
             } catch (Exception failure) {
                 setState("Sync failed · " + failure.getClass().getSimpleName());
             } finally {

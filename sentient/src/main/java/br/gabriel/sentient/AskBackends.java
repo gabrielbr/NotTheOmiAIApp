@@ -28,7 +28,7 @@ final class AskBackends {
         ZoneId zone = ZoneId.systemDefault();
         String key = AskSettings.apiKey(c);
         if (key == null) throw new ClaudeBackend.AskException("Add your Claude API key in Ask settings.");
-        return new ClaudeBackend(key, AskSettings.model(c), new KnowledgeTools(db, zone), zone, null);
+        return new ClaudeBackend(key, AskSettings.model(c), new KnowledgeTools(db, zone), zone, null, Portrait.read(db));
     }
 
     /** The one-line footer: who answers and where the data goes. */

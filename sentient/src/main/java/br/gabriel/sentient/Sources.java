@@ -67,6 +67,7 @@ public final class Sources {
     public static int forget(Db db, String pluginId) throws Exception {
         List<Object[]> count = db.query("SELECT COUNT(*) FROM items WHERE source = ?", pluginId);
         db.exec("DELETE FROM mentions WHERE item_id IN (SELECT id FROM items WHERE source = ?)", pluginId);
+        db.exec("DELETE FROM found_tasks WHERE item_id IN (SELECT id FROM items WHERE source = ?)", pluginId);
         db.exec("UPDATE relations SET evidence_item_id = NULL"
                 + " WHERE evidence_item_id IN (SELECT id FROM items WHERE source = ?)", pluginId);
         db.exec("UPDATE facts SET evidence_item_id = NULL"
@@ -79,6 +80,7 @@ public final class Sources {
                 + " (SELECT id FROM identities WHERE source = ?)", pluginId);
         db.exec("DELETE FROM identities WHERE source = ?", pluginId);
         db.exec("DELETE FROM people WHERE is_me = 0 AND id NOT IN (SELECT person_id FROM identities)");
+        db.exec("DELETE FROM not_same_person WHERE a NOT IN (SELECT id FROM people) OR b NOT IN (SELECT id FROM people)");
         db.exec("DELETE FROM source_config WHERE plugin_id = ?", pluginId);
         db.exec("DELETE FROM sources WHERE plugin_id = ?", pluginId);
         return ((Number) count.get(0)[0]).intValue();

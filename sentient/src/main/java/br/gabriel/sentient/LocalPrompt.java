@@ -76,7 +76,14 @@ public final class LocalPrompt {
 
     /** The full ChatML prompt for Qwen2.5 Instruct. */
     static String chat(String sources, List<LlmBackend.Turn> history, String question) {
-        StringBuilder p = new StringBuilder("<|im_start|>system\n").append(AskPrompts.LOCAL_SYSTEM)
+        return chat(null, sources, history, question);
+    }
+
+    /** {@code about}: a short portrait of the user (Portrait.brief), or null. */
+    static String chat(String about, String sources, List<LlmBackend.Turn> history, String question) {
+        StringBuilder p = new StringBuilder("<|im_start|>system\n").append(AskPrompts.LOCAL_SYSTEM);
+        if (about != null && !about.isEmpty()) p.append("\n\nAbout the user:\n").append(clean(about));
+        p
                 .append("\n\nSources:\n").append(sources.isEmpty() ? "(nothing related was found)\n" : sources)
                 .append("<|im_end|>\n");
         for (int i = Math.max(0, history.size() - HISTORY_TURNS); i < history.size(); i++) {
