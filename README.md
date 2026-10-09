@@ -27,7 +27,7 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 ## What Omi Tarefas does
 
 - Omi Bluetooth LE Opus audio → encrypted phone-local PCM and transcript history.
-- Bundled **Vosk** (Portuguese) for streaming drafts; CPU-only multilingual **Whisper small Q5_1** for post-save refinement, auto-detecting Portuguese or English per 30-second window.
+- Bundled **Vosk** (Portuguese) for streaming drafts; CPU-only multilingual **Whisper medium Q5_0** for post-save refinement, auto-detecting Portuguese or English per 30-second window.
 - Playback, searchable library and explicit WAV/text export.
 - No Omi account, PC relay, cloud transcription, runtime model download or `INTERNET` permission.
 - Capability-gated battery, brightness and button controls. Long-press/power behavior stays firmware-owned.
