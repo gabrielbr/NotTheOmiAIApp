@@ -11,6 +11,16 @@ Independent **offline Omi companion for Android 8+**. Public Android application
 - This source push does not publish a new 0.4.4 binary release. Do not confuse a GitHub source ZIP with an installable APK.
 - **This fork installs as `br.gabriel.omitarefas` ("Omi Tarefas")**, beside the original `app.nottheomi.ai`. Every merge to `main` publishes a signed APK under [Releases](https://github.com/gabrielbr/NotTheOmiAIApp/releases); see [RELEASING.md](RELEASING.md). Upstream note for the original package `app.nottheomi.ai`: Install an update over the existing app only with the same signer; **do not uninstall or clear data** to preserve the local encryption key and recordings. Your own signing key cannot update an existing differently signed installation.
 
+## Updates
+
+Omi Tarefas has no internet access, so it can't check for updates itself. Use [Obtainium](https://github.com/ImranR98/Obtainium) to get notified and update from GitHub Releases:
+
+1. Install Obtainium on the phone.
+2. Tap **Add App**, paste `https://github.com/gabrielbr/NotTheOmiAIApp` and tap **Add**.
+3. If it asks which file to install, pick `OmiTarefas-<version>-arm64-v8a.apk`.
+
+Obtainium then checks in the background, notifies you when a new release is out, and opens Android's install prompt. Each release is signed with the same key and has a higher version code, so it updates in place and keeps your recordings.
+
 ## What it does
 
 - Omi Bluetooth LE Opus audio → encrypted phone-local PCM and transcript history.
