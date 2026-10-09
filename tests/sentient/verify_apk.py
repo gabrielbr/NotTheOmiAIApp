@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a signed Sentient APK: exact permission allow-list, no computer-control surface,
+"""Verify a signed GMind (Sentient module) APK: exact permission allow-list, no computer-control surface,
 pinned ABIs, and (with --omi-apk) the same signer as Omi Tarefas, which the
 signature-protected transcript provider requires."""
 import argparse
@@ -60,7 +60,7 @@ def main():
     signature = run(tools/'apksigner', 'verify', '--verbose', '--print-certs', args.apk)
     run(tools/'zipalign', '-c', '-p', '4', args.apk)
     assert "package: name='br.gabriel.sentient'" in badging
-    assert "application-label:'Sentient'" in badging
+    assert "application-label:'GMind'" in badging
     assert 'application-debuggable' not in badging
     if args.version_code:
         assert f"versionCode='{args.version_code}'" in badging
@@ -83,10 +83,10 @@ def main():
         assert abis == ['arm64-v8a', 'x86_64'], 'Unintended ABI set'
         actual = {n: sha(archive.read(n)) for n in names if n.startswith('lib/') and n.endswith('.so')}
         assert actual == pinned_native(), 'APK native libraries differ from pinned AARs'
-        for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt']:
+        for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt', 'ubuntu-font-licence.txt']:
             assert len(archive.read('assets/licenses/'+name)) > 100, 'Missing license ' + name
         dex = b'\n'.join(archive.read(n) for n in names if n.endswith('.dex'))
-        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;',
+        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;',
                            'Lnet/zetetic/database/sqlcipher/SQLiteDatabase;']:
             assert class_name.encode() in dex, 'Missing runtime class ' + class_name
     digest = hashlib.sha256(args.apk.read_bytes()).hexdigest()

@@ -5,10 +5,10 @@ Every push to `main` (each merged PR) runs `.github/workflows/release.yml`. It:
 1. downloads and hash-checks the pinned models and whisper.cpp source,
 2. builds the native Whisper library and runs the host checks,
 3. builds the release APKs with versionCode `100 + run number` and versionName `0.5.<run number>`,
-4. signs both apps with the persistent release key and runs `tests/hybrid/verify_apk.py` (GVoice: no INTERNET) and `tests/sentient/verify_apk.py` (Sentient: exact permission allow-list, same signer),
-5. publishes GitHub Release `v0.5.<run number>` with `GVoice-<version>-arm64-v8a.apk`, `Sentient-<version>.apk`, the same Sentient APK under the fixed name `Sentient.apk`, and `SHA256SUMS.txt`.
+4. signs both apps with the persistent release key and runs `tests/hybrid/verify_apk.py` (GVoice: no INTERNET) and `tests/sentient/verify_apk.py` (GMind: exact permission allow-list, same signer),
+5. publishes GitHub Release `v0.5.<run number>` with `GVoice-<version>-arm64-v8a.apk`, `GMind-<version>.apk` and `SHA256SUMS.txt`.
 
-Both apps must share the signing key: Sentient reads GVoice transcripts through a signature-level permission.
+Both apps must share the signing key: GMind (module `sentient`) reads GVoice transcripts through a signature-level permission.
 
 Install the newest release's arm64 APK on the phone. Because the versionCode always grows and the signing key never changes, it installs as an update and keeps your recordings.
 
@@ -42,4 +42,4 @@ After adding the secrets, re-run the latest "Release APK" workflow from the Acti
 ## Obtainium
 
 - **GVoice:** add `https://github.com/gabrielbr/NotTheOmiAIApp` as a GitHub source, with APK filter `^GVoice-.*-arm64-v8a\.apk$`.
-- **Sentient:** Obtainium won't add the same repository URL twice ("App already added"). Add it instead as a **Direct APK Link** source with `https://github.com/gabrielbr/NotTheOmiAIApp/releases/latest/download/Sentient.apk`.
+- **GMind:** Obtainium won't add the same repository URL twice ("App already added"), so install `GMind-<version>.apk` from the release by hand.

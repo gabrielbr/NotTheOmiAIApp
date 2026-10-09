@@ -17,7 +17,7 @@ public final class SyncJobService extends JobService {
     static final int DAILY_JOB = 52001, NOW_JOB = 52002;
     private static final long DAY_MS = 24L * 60 * 60 * 1000, FLEX_MS = 6L * 60 * 60 * 1000;
     private static final Object LOCK = new Object();
-    private static boolean running;
+    private static boolean running, requested;
     public static volatile String state = "Not synced yet";
     public static volatile long revision;
     private volatile boolean cancelled;
@@ -39,15 +39,18 @@ public final class SyncJobService extends JobService {
         int result = scheduler.schedule(new JobInfo.Builder(NOW_JOB, new ComponentName(context, SyncJobService.class))
                 .setOverrideDeadline(0)
                 .build());
+        synchronized (LOCK) { requested = result == JobScheduler.RESULT_SUCCESS; }
         setState(result == JobScheduler.RESULT_SUCCESS ? "Sync starting…" : "Sync could not be scheduled");
     }
 
-    static boolean running() { synchronized (LOCK) { return running; } }
+    /** True from "Sync now" until that run finishes, so the button can't queue a second run. */
+    static boolean busy() { synchronized (LOCK) { return running || requested; } }
 
     private static void setState(String value) { state = value; revision++; }
 
     @Override public boolean onStartJob(JobParameters params) {
         synchronized (LOCK) {
+            if (params.getJobId() == NOW_JOB) requested = false;
             if (running) return false; // the run in progress covers this request
             running = true;
         }

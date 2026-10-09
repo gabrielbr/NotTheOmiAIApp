@@ -6,13 +6,14 @@
  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
  <!-- Same definition as Omi Tarefas (same signing key), so the grant works whichever app is
       installed first. Apps with different signers can't both define it, which is intended. -->
- <permission android:name="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS" android:protectionLevel="signature" android:label="Read Omi Tarefas transcripts"/>
+ <permission android:name="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS" android:protectionLevel="signature" android:label="Read GVoice transcripts"/>
  <uses-permission android:name="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS"/>
  <queries><package android:name="br.gabriel.omitarefas"/></queries>
- <application android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:label="Sentient" android:icon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:supportsRtl="true">
+ <application android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:label="GMind" android:icon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:supportsRtl="true">
   <activity android:name=".SentientActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
   </activity>
+  <activity android:name=".ItemActivity" android:exported="false"/>
   <service android:name=".SyncJobService" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true"/>
  </application>
 </manifest>

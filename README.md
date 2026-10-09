@@ -1,6 +1,6 @@
 # GVoice
 
-Offline **Omi companion for Android 8+** that transcribes Portuguese and English, and keeps everything encrypted on your phone. A fork of [NotTheOmiAIApp](https://github.com/five0nit/NotTheOmiAIApp), installed as `br.gabriel.omitarefas` so it sits beside the original. It comes with **Sentient**, an optional companion app that builds a searchable personal knowledge base and is where task extraction and Todoist live.
+Offline **Omi companion for Android 8+** that transcribes Portuguese and English, and keeps everything encrypted on your phone. A fork of [NotTheOmiAIApp](https://github.com/five0nit/NotTheOmiAIApp), installed as `br.gabriel.omitarefas` so it sits beside the original. It comes with **GMind**, an optional companion app that builds a searchable personal knowledge base and is where task extraction and Todoist live.
 
 Formerly **Omi Tarefas**. The package ID stays `br.gabriel.omitarefas`, so GVoice installs as an update over it and keeps your recordings. If you set up Obtainium with the old `^OmiTarefas-…` APK filter, change it to the one below.
 
@@ -15,14 +15,14 @@ Every merge to `main` publishes a signed release under [Releases](https://github
 | File | App |
 |---|---|
 | `GVoice-<version>-arm64-v8a.apk` | GVoice. Install this one. |
-| `Sentient-<version>.apk` (also `Sentient.apk`) | Optional Sentient companion |
+| `GMind-<version>.apk` | Optional GMind companion |
 
 Both apps are signed with the same key and every release has a higher version code, so a new APK installs over the old one and keeps your data. Release details are in [RELEASING.md](RELEASING.md).
 
 GVoice has no internet access, so it can't check for updates itself. Use [Obtainium](https://github.com/ImranR98/Obtainium) instead:
 
 1. **GVoice:** **Add App** → `https://github.com/gabrielbr/NotTheOmiAIApp`, and set the APK filter to `^GVoice-.*-arm64-v8a\.apk$`.
-2. **Sentient (optional):** Obtainium won't add the same repository twice, so add it as a **Direct APK Link** source: `https://github.com/gabrielbr/NotTheOmiAIApp/releases/latest/download/Sentient.apk`.
+2. **GMind (optional):** download `GMind-<version>.apk` from the latest release and install it by hand. Obtainium won't track a second app from the same repository.
 
 Obtainium checks in the background, notifies you of new releases and opens Android's install prompt.
 
@@ -35,14 +35,14 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 - Capability-gated battery, brightness and button controls. Long-press/power behavior stays firmware-owned.
 - Explicit phone-microphone fallback; no automatic substitution when the wearable is absent.
 
-## Sentient companion (optional, in development)
+## GMind companion (optional, in development)
 
-`Sentient` (`br.gabriel.sentient`) is a separate app: a personal knowledge base that collects content through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5).
+**GMind** (package `br.gabriel.sentient`; the code still calls it Sentient) is a separate app: a personal knowledge base that collects content through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5).
 
 - **Phase 0 (now):** syncs GVoice transcripts once a day (or with **Sync now**) and offers full-text search.
 - **Later phases:** task extraction to Todoist, WhatsApp notifications, Composio and Matrix sources, and asking questions with Claude or an on-device model. Read-only: it never acts on other services.
-- **Privacy split:** GVoice stays offline. It only exposes a read-only transcript provider behind a signature permission, so only an app signed with the same key can read it. Sentient is the only one of the two apps with internet access.
-- Not yet tested on a phone. It is moving to the design system below.
+- **Privacy split:** GVoice stays offline. It only exposes a read-only transcript provider behind a signature permission, so only an app signed with the same key can read it. GMind is the only one of the two apps with internet access.
+- Not yet tested on a phone. It uses the same design system as GVoice ([GMind audit](docs/SENTIENT-DESIGN.md)).
 
 The full plan and status are in [PLAN-SENTIENT.md](PLAN-SENTIENT.md).
 
@@ -75,7 +75,7 @@ The **2 GiB aggregate retained PCM quota** includes existing recordings; 128 MiB
 
 ## Build from source
 
-Modules: `:app` (GVoice), `:sentient` (Sentient) and `:plugin-api` (plain-Java plugin contracts). The Gradle command below builds both apps.
+Modules: `:app` (GVoice), `:sentient` (GMind) and `:plugin-api` (plain-Java plugin contracts). The Gradle command below builds both apps.
 
 Prerequisites: Java 17, Python 3, Android SDK/platform 34, Android build-tools 34.0.0, Android NDK **27.2.12479018**, and CMake. Native build scripts target Linux/WSL. Set `ANDROID_SDK_ROOT` to your SDK location and configure `sdk.dir` in your local, untracked `local.properties` if needed.
 
