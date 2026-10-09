@@ -18,11 +18,12 @@ def run(argv):
     result = subprocess.run([str(x) for x in argv], check=True, text=True, capture_output=True)
     return result.stdout + result.stderr
 
-# Omi Tarefas must stay offline; Sentient is the companion that may use the network.
+# Omi Tarefas must stay offline; GMind (module sentient) is the companion that may use the network.
 MODULES = {
     'app': {'dir': 'app', 'id': 'br.gabriel.omitarefas', 'label': 'Omi Tarefas', 'prefix': 'OmiTarefas',
             'input': r'app-[a-z0-9_-]+-release-unsigned\.apk', 'internet': False},
-    'sentient': {'dir': 'sentient', 'id': 'br.gabriel.sentient', 'label': 'Sentient', 'prefix': 'Sentient',
+    # The companion app is named GMind; its module and package keep the name sentient.
+    'sentient': {'dir': 'sentient', 'id': 'br.gabriel.sentient', 'label': 'GMind', 'prefix': 'GMind',
                  'input': r'sentient-release-unsigned\.apk', 'internet': True},
 }
 
@@ -71,7 +72,7 @@ def main():
     p.add_argument('--key-dir', type=Path, required=True, help='Persistent private directory OUTSIDE repository; back it up securely')
     p.add_argument('--version', help='Expected versionName; defaults to the built release output metadata')
     p.add_argument('--modules', nargs='+', choices=sorted(MODULES), default=['app', 'sentient'],
-                   help='Apps to sign with the same key (Sentient reads Omi Tarefas through a signature permission)')
+                   help='Apps to sign with the same key (GMind reads Omi Tarefas through a signature permission)')
     args = p.parse_args()
     keydir = args.key_dir.expanduser().resolve()
     if keydir == ROOT or ROOT in keydir.parents:

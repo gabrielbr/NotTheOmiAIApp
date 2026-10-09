@@ -216,7 +216,7 @@ final class Ui {
     }
 
     /** App header: black monogram block (like the site's logo) and the app name. */
-    static LinearLayout header(Context c, View trailing) { return header(c, "SE_", "Sentient", trailing); }
+    static LinearLayout header(Context c, View trailing) { return header(c, "GM_", "GMind", trailing); }
 
     static LinearLayout header(Context c, String monogram, String appName, View trailing) {
         LinearLayout bar = row(c);

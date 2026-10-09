@@ -31,9 +31,9 @@ Obtainium then checks in the background, notifies you when a new release is out,
 - Capability-gated battery, brightness and button controls. Long-press/power behavior stays firmware-owned.
 - Explicit phone-microphone fallback; no automatic substitution when the wearable is absent.
 
-## Sentient companion (optional, in development)
+## GMind companion (optional, in development)
 
-`Sentient` (`br.gabriel.sentient`) is a separate companion app: a personal knowledge base that collects content daily through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5). Omi Tarefas itself stays offline. It only exposes a read-only transcript provider, guarded by a signature permission, so only an app signed with the same key can read it. Sentient is the only one of the two apps with INTERNET, which later phases need for Composio, Matrix and Claude. Phase 0 syncs Omi Tarefas transcripts once a day and offers full-text search. See [PLAN-SENTIENT.md](PLAN-SENTIENT.md).
+**GMind** (package `br.gabriel.sentient`; the code still calls it Sentient) is a separate companion app: a personal knowledge base that collects content daily through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5). Omi Tarefas itself stays offline. It only exposes a read-only transcript provider, guarded by a signature permission, so only an app signed with the same key can read it. GMind is the only one of the two apps with INTERNET, which later phases need for Composio, Matrix and Claude. Phase 0 syncs Omi Tarefas transcripts once a day and offers full-text search. See [PLAN-SENTIENT.md](PLAN-SENTIENT.md).
 
 ## Connect and record
 

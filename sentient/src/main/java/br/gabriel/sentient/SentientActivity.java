@@ -170,7 +170,7 @@ public final class SentientActivity extends Activity {
         if (lastSync == 0 && !busy) {
             Ui.gap(body, 28);
             body.addView(Ui.text(this, "Nothing synced yet.", 20, Ui.INK, true));
-            TextView hint = Ui.text(this, "Sentient copies your Omi Tarefas transcripts once a day. Start the first sync now.",
+            TextView hint = Ui.text(this, "GMind copies your Omi Tarefas transcripts once a day. Start the first sync now.",
                     15, Ui.MUTED, false);
             hint.setPadding(0, dp(8), 0, dp(16));
             body.addView(hint);
@@ -252,7 +252,7 @@ public final class SentientActivity extends Activity {
         Ui.gap(body, 28);
         body.addView(Ui.text(this, "Can't open your knowledge base.", 20, Ui.INK, true));
         TextView hint = Ui.text(this, "It's encrypted with a key kept by Android. If the app's data was cleared, "
-                + "the key is gone and Sentient starts empty after a reinstall. (" + failure.getClass().getSimpleName() + ")",
+                + "the key is gone and GMind starts empty after a reinstall. (" + failure.getClass().getSimpleName() + ")",
                 15, Ui.MUTED, false);
         hint.setPadding(0, dp(8), 0, 0);
         body.addView(hint);
@@ -340,12 +340,12 @@ public final class SentientActivity extends Activity {
     // --- About ---------------------------------------------------------------------------------
 
     private void about() {
-        new AlertDialog.Builder(this).setTitle("Sentient " + versionName())
-                .setMessage("Your knowledge base: everything Sentient collects, searchable in one place.\n\n"
+        new AlertDialog.Builder(this).setTitle("GMind " + versionName())
+                .setMessage("Your knowledge base: everything GMind collects, searchable in one place.\n\n"
                         + "• Encrypted on this phone. Uninstalling or clearing the app's data deletes it.\n"
                         + "• Syncs once a day while the battery isn't low, or when you tap Sync now.\n"
                         + "• Today it reads your Omi Tarefas transcripts. In this version nothing leaves the phone.\n"
-                        + "• Read-only: Sentient never sends messages or acts for you.")
+                        + "• Read-only: GMind never sends messages or acts for you.")
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Licenses", (d, w) -> licenses())
                 .show();

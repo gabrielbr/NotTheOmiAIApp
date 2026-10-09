@@ -9,7 +9,7 @@
  <permission android:name="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS" android:protectionLevel="signature" android:label="Read Omi Tarefas transcripts"/>
  <uses-permission android:name="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS"/>
  <queries><package android:name="br.gabriel.omitarefas"/></queries>
- <application android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:label="Sentient" android:icon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:supportsRtl="true">
+ <application android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:label="GMind" android:icon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:supportsRtl="true">
   <activity android:name=".SentientActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
   </activity>

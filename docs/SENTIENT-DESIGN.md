@@ -1,6 +1,6 @@
-# Sentient UI audit and design system
+# GMind UI audit and design system
 
-Sentient uses the same design system as Omi Tarefas ([docs/DESIGN.md](DESIGN.md)): a mint frame, Ubuntu Mono, near-black ink, a mint highlighter on one key word, hairline rows and 4dp corners. The tokens and components are a copy of Omi Tarefas' `Ui.java` in `sentient/src/main/java/br/gabriel/sentient/Ui.java`. They are copied rather than shared because Omi Tarefas is frozen, so keep the two in step by hand. The header monogram is `SE_`.
+GMind (built from the `sentient` module) uses the same design system as Omi Tarefas ([docs/DESIGN.md](DESIGN.md)): a mint frame, Ubuntu Mono, near-black ink, a mint highlighter on one key word, hairline rows and 4dp corners. The tokens and components are a copy of Omi Tarefas' `Ui.java` in `sentient/src/main/java/br/gabriel/sentient/Ui.java`. They are copied rather than shared because Omi Tarefas is frozen, so keep the two in step by hand. The header monogram is `GM_`.
 
 ![Before](ui/sentient-before.png)
 *Before (0.5.7): one long screen.*

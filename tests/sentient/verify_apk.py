@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a signed Sentient APK: exact permission allow-list, no computer-control surface,
+"""Verify a signed GMind (Sentient module) APK: exact permission allow-list, no computer-control surface,
 pinned ABIs, and (with --omi-apk) the same signer as Omi Tarefas, which the
 signature-protected transcript provider requires."""
 import argparse
@@ -60,7 +60,7 @@ def main():
     signature = run(tools/'apksigner', 'verify', '--verbose', '--print-certs', args.apk)
     run(tools/'zipalign', '-c', '-p', '4', args.apk)
     assert "package: name='br.gabriel.sentient'" in badging
-    assert "application-label:'Sentient'" in badging
+    assert "application-label:'GMind'" in badging
     assert 'application-debuggable' not in badging
     if args.version_code:
         assert f"versionCode='{args.version_code}'" in badging

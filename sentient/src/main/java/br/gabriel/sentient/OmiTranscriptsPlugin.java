@@ -43,7 +43,7 @@ final class OmiTranscriptsPlugin implements SourcePlugin {
                         c.getString(c.getColumnIndexOrThrow("text"))));
             }
         } catch (SecurityException denied) {
-            throw new SourceUnavailableException("No access: reinstall Sentient after Omi Tarefas, from the same release");
+            throw new SourceUnavailableException("No access: reinstall GMind after Omi Tarefas, from the same release");
         }
         List<RawItem> items = new ArrayList<>();
         for (OmiTranscripts.Row row : rows) {

@@ -1,5 +1,7 @@
 # Plan: "Sentient" — a mobile personal-knowledge companion for Omi Tarefas (Android)
 
+> **The app is named GMind.** The code, module and package keep the name *sentient* (`:sentient`, `br.gabriel.sentient`).
+
 ## Context
 
 Omi Tarefas (`br.gabriel.omitarefas`) already records and transcribes all day, fully offline. We want a phone-based version of Sentient OS (the Mac app that turns your messages, notes and files into a queryable knowledge base), built for Android instead of the Mac:
