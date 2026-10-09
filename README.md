@@ -1,10 +1,12 @@
-# Omi Tarefas
+# GVoice
 
 Offline **Omi companion for Android 8+** that transcribes Portuguese and English, and keeps everything encrypted on your phone. A fork of [NotTheOmiAIApp](https://github.com/five0nit/NotTheOmiAIApp), installed as `br.gabriel.omitarefas` so it sits beside the original. It comes with **Sentient**, an optional companion app that builds a searchable personal knowledge base and is where task extraction and Todoist live.
 
+Formerly **Omi Tarefas**. The package ID stays `br.gabriel.omitarefas`, so GVoice installs as an update over it and keeps your recordings. If you set up Obtainium with the old `^OmiTarefas-…` APK filter, change it to the one below.
+
 Not affiliated with Omi or Based Hardware. Application license: [MIT](LICENSE); third-party components keep their [own notices](THIRD_PARTY_NOTICES.md).
 
-![Omi Tarefas: Home, Library and Omi device](docs/ui/after.png)
+![GVoice: Home, Library and Omi device](docs/ui/after.png)
 
 ## Install and update
 
@@ -12,19 +14,19 @@ Every merge to `main` publishes a signed release under [Releases](https://github
 
 | File | App |
 |---|---|
-| `OmiTarefas-<version>-arm64-v8a.apk` | Omi Tarefas. Install this one. |
+| `GVoice-<version>-arm64-v8a.apk` | GVoice. Install this one. |
 | `Sentient-<version>.apk` (also `Sentient.apk`) | Optional Sentient companion |
 
 Both apps are signed with the same key and every release has a higher version code, so a new APK installs over the old one and keeps your data. Release details are in [RELEASING.md](RELEASING.md).
 
-Omi Tarefas has no internet access, so it can't check for updates itself. Use [Obtainium](https://github.com/ImranR98/Obtainium) instead:
+GVoice has no internet access, so it can't check for updates itself. Use [Obtainium](https://github.com/ImranR98/Obtainium) instead:
 
-1. **Omi Tarefas:** **Add App** → `https://github.com/gabrielbr/NotTheOmiAIApp`, and set the APK filter to `^OmiTarefas-.*-arm64-v8a\.apk$`.
+1. **GVoice:** **Add App** → `https://github.com/gabrielbr/NotTheOmiAIApp`, and set the APK filter to `^GVoice-.*-arm64-v8a\.apk$`.
 2. **Sentient (optional):** Obtainium won't add the same repository twice, so add it as a **Direct APK Link** source: `https://github.com/gabrielbr/NotTheOmiAIApp/releases/latest/download/Sentient.apk`.
 
 Obtainium checks in the background, notifies you of new releases and opens Android's install prompt.
 
-## What Omi Tarefas does
+## What GVoice does
 
 - Omi Bluetooth LE Opus audio → encrypted phone-local PCM and transcript history.
 - Bundled **Vosk** (Portuguese) for streaming drafts; CPU-only multilingual **Whisper medium Q5_0** for post-save refinement, auto-detecting Portuguese or English per 30-second window.
@@ -37,16 +39,16 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 
 `Sentient` (`br.gabriel.sentient`) is a separate app: a personal knowledge base that collects content through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5).
 
-- **Phase 0 (now):** syncs Omi Tarefas transcripts once a day (or with **Sync now**) and offers full-text search.
+- **Phase 0 (now):** syncs GVoice transcripts once a day (or with **Sync now**) and offers full-text search.
 - **Later phases:** task extraction to Todoist, WhatsApp notifications, Composio and Matrix sources, and asking questions with Claude or an on-device model. Read-only: it never acts on other services.
-- **Privacy split:** Omi Tarefas stays offline. It only exposes a read-only transcript provider behind a signature permission, so only an app signed with the same key can read it. Sentient is the only one of the two apps with internet access.
+- **Privacy split:** GVoice stays offline. It only exposes a read-only transcript provider behind a signature permission, so only an app signed with the same key can read it. Sentient is the only one of the two apps with internet access.
 - Not yet tested on a phone. It is moving to the design system below.
 
 The full plan and status are in [PLAN-SENTIENT.md](PLAN-SENTIENT.md).
 
 ## Design system
 
-Omi Tarefas follows the look and feel of [gabriellopes.com](https://gabriellopes.com):
+GVoice follows the look and feel of [gabriellopes.com](https://gabriellopes.com):
 
 - **Page:** light grey `#F2F2F2` inside a 4dp mint `#43F3B7` frame, near-black ink `#17161A`.
 - **Type:** Ubuntu Mono throughout (bundled, Ubuntu Font Licence 1.0).
@@ -73,7 +75,7 @@ The **2 GiB aggregate retained PCM quota** includes existing recordings; 128 MiB
 
 ## Build from source
 
-Modules: `:app` (Omi Tarefas), `:sentient` (Sentient) and `:plugin-api` (plain-Java plugin contracts). The Gradle command below builds both apps.
+Modules: `:app` (GVoice), `:sentient` (Sentient) and `:plugin-api` (plain-Java plugin contracts). The Gradle command below builds both apps.
 
 Prerequisites: Java 17, Python 3, Android SDK/platform 34, Android build-tools 34.0.0, Android NDK **27.2.12479018**, and CMake. Native build scripts target Linux/WSL. Set `ANDROID_SDK_ROOT` to your SDK location and configure `sdk.dir` in your local, untracked `local.properties` if needed.
 
@@ -102,7 +104,7 @@ python3 tests/whisper-java/run_host_checks.py
 python3 tests/sentient/run_host_checks.py
 ```
 
-UI screenshots (Robolectric, no device): `./gradlew testDebugUnitTest --tests '*UiScreenshotTest*'` writes PNGs of every Omi Tarefas screen to `app/build/ui-screenshots/`.
+UI screenshots (Robolectric, no device): `./gradlew testDebugUnitTest --tests '*UiScreenshotTest*'` writes PNGs of every GVoice screen to `app/build/ui-screenshots/`.
 
 Device/instrumentation tests require their explicitly selected Android target and prepared artifacts. For the optional `tests/whisper-device/run_probe.py` helper with Windows `adb.exe`, pass `--windows-temp` with an existing Windows-accessible WSL directory; no developer-specific user path is embedded.
 
