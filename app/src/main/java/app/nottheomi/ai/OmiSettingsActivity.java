@@ -30,7 +30,7 @@ public final class OmiSettingsActivity extends Activity {
     private final Set<String> seen=new HashSet<>();
     private LinearLayout page, devices;
     private TextView selected, scanStatus, live, led, desired, presses;
-    private Button scanButton, forgetButton, readButton, applyButton, singleButton, doubleButton;
+    private Button scanButton, forgetButton, readButton, applyButton, singleButton, doubleButton, batteryButton;
     private SeekBar brightness;
     private OmiBle scanner;
     private boolean resumed, scanning;
@@ -63,6 +63,7 @@ public final class OmiSettingsActivity extends Activity {
             preferences(this).edit().remove("address").remove("name").apply();refresh();
         });
         Ui.style(this,forgetButton,Ui.Style.DANGER);
+        batteryButton=addButton("Allow background recording",()->Battery.request(this,0));Ui.icon(this,batteryButton,R.drawable.ic_settings,Ui.INK);
         scanStatus=label(connectAfterSelection?"Pick your Omi. Recording starts once it connects.":"Pick your Omi, then tap Connect Omi on Home.",14,Ui.MUTED);
         devices=new LinearLayout(this);devices.setOrientation(LinearLayout.VERTICAL);page.addView(devices);
         live=label("Disconnected",14,Ui.MUTED);
@@ -113,6 +114,7 @@ public final class OmiSettingsActivity extends Activity {
         doubleButton.setText("Double press · "+actionLabel(p.getString("double_action","stop")));
         singleButton.setEnabled(!active);doubleButton.setEnabled(!active);
         presses.setText(OmiCaptureService.lastButton);
+        batteryButton.setVisibility(Battery.unrestricted(this)?android.view.View.GONE:android.view.View.VISIBLE);
     }
     private static String actionLabel(String value){return "bookmark".equals(value)?"Bookmark":"stop".equals(value)?"Stop & save":"No action";}
     private void chooseAction(String key,String title,String fallback){
