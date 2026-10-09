@@ -49,7 +49,7 @@ def main():
     temp_root = str(args.windows_temp) if windows else None
     sources = [ROOT/'app/src/main/java/app/nottheomi/ai'/f'{name}.java' for name in ['WhisperNative','WhisperModel','WhisperRecognizer']]
     sources += [ROOT/'tests/whisper-device/WhisperDeviceProbe.java']
-    model = ROOT/'app/src/main/assets/ggml-small.en-q5_1.bin'
+    model = ROOT/'app/src/main/assets/ggml-small-q5_1.bin'
     native = ROOT/'app/src/main/jniLibs'/args.abi/'libnottheomi-whisper.so'
     wav = ROOT/'app/src/androidTest/assets/jfk.wav'
     paths = sources + [model, native, wav]

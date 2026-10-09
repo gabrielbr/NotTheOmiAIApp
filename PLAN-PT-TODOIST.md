@@ -9,11 +9,13 @@
 
 | Item | State |
 |---|---|
-| Whisper `language="auto"` when the loaded model is multilingual (`whisper_jni.cpp`). The current `.en` model keeps `"en"` | Done; syntax-checked against pinned whisper.cpp headers. Not built for Android yet |
+| Whisper `language="auto"` when the loaded model is multilingual, otherwise `"en"` (`whisper_jni.cpp`) | Done. Native JNI safety suite passes (ASan+UBSan); cross-compiled for arm64-v8a and x86_64 |
+| Whisper model swapped to multilingual `ggml-small-q5_1.bin` (SHA-256 `ae85e4a9…11bb`, cross-checked against Hugging Face's LFS hash) | Done |
+| Vosk live-draft model swapped to `vosk-model-small-pt-0.3` (archive SHA-256 `6e1ce909…93b7`, per-file manifest regenerated) | Done. Installer host tests pass against the real archive |
 | `TaskExtractor`: offline PT+EN cue-phrase finder, plus `tests/tasks/run_host_checks.py` | Done; host checks pass |
-| `TasksActivity`: review/edit/select, then share each task to `com.todoist`, plus a "Find tasks for Todoist" button on each saved recording | Done; type-checked against the Android 14 API. Not run on a device yet |
-| Swap Whisper to multilingual `ggml-small-q5_1.bin` and Vosk to `vosk-model-small-pt-0.3` (URLs + SHA-256 pins) | **Blocked**: this cloud environment's network denies `huggingface.co`, `alphacephei.com` and `dl.google.com`. Do it where these hosts are reachable |
-| Gradle build, lint, APK | **Blocked**: Android SDK/NDK download denied here |
+| `TasksActivity`: review/edit/select, then share each task to `com.todoist`, plus a "Find tasks for Todoist" button on each saved recording | Done; type-checked. Full Gradle build result pending. Not run on a device yet |
+| All existing host suites (capture, hybrid, job, whisper-java, omi, omi-capture, omi-composition) | Pass |
+| On-device check: PT/EN accuracy with your Omi, and the Todoist share flow | **Pending; needs your phone** |
 | New applicationId / app name (Phase 0) | Pending |
 | Notification after refinement ("N tarefas encontradas") | Deferred. The per-recording button covers v1 |
 | Portuguese UI strings | Deferred |

@@ -24,8 +24,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 ABIS = ('arm64-v8a', 'x86_64')
 PINS = {
-    'app/src/main/assets/model.zip': '30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498',
-    'app/src/main/assets/ggml-small.en-q5_1.bin': 'bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30',
+    'app/src/main/assets/model.zip': '6e1ce909032e1afa7a88e68a3d628ecafff302bdf195befab308826c395e93b7',
+    'app/src/main/assets/ggml-small-q5_1.bin': 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb',
     'app/src/androidTest/assets/jfk.wav': '59dfb9a4acb36fe2a2affc14bacbee2920ff435cb13cc314a08c13f66ba7860e',
 }
 AARS = {
@@ -34,7 +34,7 @@ AARS = {
     'jna': ('net.java.dev.jna/jna/5.18.1', 'jna-5.18.1.aar',
             '7f053e3ec99e14dd71259c82c1c8a02738d64a13c31226b2acc170f3060951e0', 'libjnidispatch.so'),
 }
-MODEL_ROOT = 'vosk-model-small-en-us-0.15'
+MODEL_ROOT = 'vosk-model-small-pt-0.3'
 MAX_EXTRACT = 100 * 1024 * 1024
 
 
@@ -186,7 +186,7 @@ def prepare(work):
         raise RuntimeError('Expected a single probe DEX')
     with zipfile.ZipFile(payload / 'probe.jar', 'w') as archive:
         archive.write(dex / 'classes.dex', 'classes.dex')
-    for rel in ('app/src/main/assets/ggml-small.en-q5_1.bin', 'app/src/androidTest/assets/jfk.wav'):
+    for rel in ('app/src/main/assets/ggml-small-q5_1.bin', 'app/src/androidTest/assets/jfk.wav'):
         shutil.copyfile(ROOT / rel, payload / Path(rel).name)
         verify(payload / Path(rel).name, PINS[rel])
     recheck(inputs)
@@ -271,7 +271,7 @@ def device_run(args, payload, inputs, proof):
                        '/system/bin/app_process64', '-Djava.library.path=' + remote,
                        '-Djna.boot.library.path=' + remote, '-Djna.library.path=' + remote,
                        '-Djna.nounpack=true', '/system/bin', 'app.nottheomi.ai.HybridDeviceProbe',
-                       remote + '/' + MODEL_ROOT, remote + '/ggml-small.en-q5_1.bin', remote + '/jfk.wav']
+                       remote + '/' + MODEL_ROOT, remote + '/ggml-small-q5_1.bin', remote + '/jfk.wav']
             # Record the exact shell PID before exec; only that owned process may be killed on timeout.
             launch = 'printf "%s\\n" "$$" > ' + shlex.quote(remote + '/probe.pid') + '; exec ' + shlex.join(command)
             began = time.monotonic()

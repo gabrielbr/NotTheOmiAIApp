@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Targeted host checks: real installer + mocked Android/native capture lifecycle.
 Not a replacement for APK/emulator/physical microphone acceptance.
-Run: python3 tests/capture/run_host_checks.py [--sdk /path/to/android-sdk] [--model /path/to/ggml-small.en-q5_1.bin]
+Run: python3 tests/capture/run_host_checks.py [--sdk /path/to/android-sdk] [--model /path/to/ggml-small-q5_1.bin]
 """
 import argparse
 import pathlib
@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--sdk', type=pathlib.Path)
 parser.add_argument('--service-only', action='store_true', help='run service fixtures without the installer or Android SDK')
 parser.add_argument('--model', type=pathlib.Path,
-                    default=ROOT / 'app/src/main/assets/ggml-small.en-q5_1.bin',
+                    default=ROOT / 'app/src/main/assets/ggml-small-q5_1.bin',
                     help='real Whisper model file (defaults to the packaged asset)')
 parser.add_argument('--preview-model', type=pathlib.Path,
                     default=ROOT / 'app/src/main/assets/model.zip', help='pinned Vosk model ZIP')
@@ -185,7 +185,7 @@ public class AudioRecord {
  public static volatile boolean hold; public static java.util.concurrent.CountDownLatch entered=new java.util.concurrent.CountDownLatch(1);
  public static java.io.File prepare(android.content.Context c,java.util.function.BooleanSupplier stop)throws Exception{
   entered.countDown();while(hold){if(stop.getAsBoolean())throw new java.io.InterruptedIOException("cancelled");Thread.sleep(2);}
-  if(stop.getAsBoolean())throw new java.io.InterruptedIOException("cancelled");return new java.io.File("speech-model/vosk-model-small-en-us-0.15");
+  if(stop.getAsBoolean())throw new java.io.InterruptedIOException("cancelled");return new java.io.File("speech-model/vosk-model-small-pt-0.3");
  }
 }''',
 'app/nottheomi/ai/RefinementJobService.java': '''package app.nottheomi.ai; public class RefinementJobService {

@@ -16,10 +16,10 @@ import java.util.function.BooleanSupplier;
 
 /** Copies only the pinned bundled Whisper model; never downloads or touches recordings. */
 public final class ModelInstaller {
-    public static final String MODEL_FILE = "ggml-small.en-q5_1.bin";
+    public static final String MODEL_FILE = "ggml-small-q5_1.bin";
     public static final String MODEL_SHA256 =
-            "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30";
-    public static final long MODEL_BYTES = 190098681L;
+            "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb";
+    public static final long MODEL_BYTES = 190085487L;
     private ModelInstaller() { }
 
     public static File prepare(Context context) throws Exception {
