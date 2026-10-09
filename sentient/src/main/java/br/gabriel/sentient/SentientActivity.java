@@ -46,7 +46,7 @@ public final class SentientActivity extends Activity {
     private String query = "";
     private int searchGeneration;
     private long shownRevision = -1;
-    private boolean visible, destroyed;
+    private boolean visible, destroyed, accessButtonShown, limitsExplained;
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -162,6 +162,8 @@ public final class SentientActivity extends Activity {
 
     void showSources(List<Sources.State> states) {
         body.removeAllViews();
+        accessButtonShown = false;
+        limitsExplained = false;
         searchNote.setVisibility(View.GONE);
         long lastSync = 0;
         for (Sources.State s : states) if (s.lastSyncAt != null) lastSync = Math.max(lastSync, s.lastSyncAt);
@@ -173,7 +175,7 @@ public final class SentientActivity extends Activity {
             // First launch: one explanation, then the sources so WhatsApp can be set up right away.
             body.addView(Ui.text(this, "Nothing synced yet.", 20, Ui.INK, true));
             TextView hint = Ui.text(this, "GMind copies your GVoice transcripts once a day and saves WhatsApp "
-                    + "messages as they arrive. Start the first sync now.", 15, Ui.MUTED, false);
+                    + "and Signal messages as they arrive. Start the first sync now.", 15, Ui.MUTED, false);
             hint.setPadding(0, dp(8), 0, dp(20));
             body.addView(hint);
         }
@@ -200,10 +202,12 @@ public final class SentientActivity extends Activity {
         LinearLayout top = Ui.row(this);
         top.addView(Ui.text(this, PluginRegistry.displayName(this, s.pluginId), 17, Ui.INK, true),
                 new LinearLayout.LayoutParams(0, -2, 1));
-        boolean whatsapp = WhatsAppMessages.ID.equals(s.pluginId);
-        // WhatsApp's state is live: access can be granted or revoked between syncs.
-        boolean needsAccess = whatsapp && !WhatsAppPlugin.accessGranted(this);
-        boolean problem = needsAccess || (!whatsapp && s.lastStatus != null && !s.lastStatus.startsWith(OK));
+        ChatMessages.App app = ChatMessages.App.forId(s.pluginId);
+        boolean chat = app != null;
+        // A chat app's state is live: access can be granted or revoked between syncs.
+        boolean needsAccess = chat && !ChatPlugin.accessGranted(this);
+        boolean problem = chat ? needsAccess || s.notice != null
+                : s.lastStatus != null && !s.lastStatus.startsWith(OK);
         if (problem) {
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, -2);
             cp.leftMargin = dp(10);
@@ -211,7 +215,7 @@ public final class SentientActivity extends Activity {
         }
         r.addView(top);
         String metaText;
-        if (whatsapp) metaText = s.lastItemAt == null ? "No messages yet"
+        if (chat) metaText = s.lastItemAt == null ? "No messages yet"
                 : count(s.itemCount, "message") + " · last one " + ago(s.lastItemAt);
         else metaText = count(s.itemCount, OmiTranscripts.ID.equals(s.pluginId) ? "recording" : "item") + " · "
                 + (s.lastSyncAt == null ? "Not synced yet" : "Synced " + ago(s.lastSyncAt));
@@ -219,23 +223,31 @@ public final class SentientActivity extends Activity {
         meta.setPadding(0, dp(6), 0, 0);
         r.addView(meta);
         if (problem) {
-            TextView reason = Ui.text(this, needsAccess ? WhatsAppPlugin.NEEDS_ACCESS + "." : problemText(s.lastStatus),
+            String why = needsAccess ? (accessButtonShown ? "Turns on with the same notification access."
+                    : ChatPlugin.needsAccess(app) + ".") : chat ? s.notice + "." : problemText(s.lastStatus);
+            TextView reason = Ui.text(this, why,
                     15, Ui.CORAL_TEXT, false);
             reason.setPadding(0, dp(8), 0, 0);
             r.addView(reason);
         }
-        if (whatsapp && (needsAccess || s.lastItemAt == null)) {
-            // Explain the limits while setting up; once messages arrive the row speaks for itself.
-            TextView hint = Ui.text(this, "Saves the messages you receive from now on, and the replies you send from a "
-                    + "notification. Older history and muted chats aren't included.", 13, Ui.MUTED, false);
+        if (chat && s.notice == null && (needsAccess || s.lastItemAt == null)) {
+            // Explain the limits once, on the first chat row being set up; later rows add only their own.
+            String limits = limitsExplained ? "" : "Saves the messages you receive from now on, and the replies you send "
+                    + "from a notification. Older history and muted chats aren't included.";
+            if (app == ChatMessages.App.SIGNAL_APP)
+                limits = (limits + " Signal's notifications must show the name and message.").trim();
+            limitsExplained = true;
+            TextView hint = Ui.text(this, limits, 13, Ui.MUTED, false);
             hint.setPadding(0, dp(8), 0, 0);
             r.addView(hint);
         }
-        if (needsAccess) {
+        if (needsAccess && !accessButtonShown) {
+            // One grant covers every chat app, so offer the button once.
+            accessButtonShown = true;
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
             bp.topMargin = dp(12);
             r.addView(Ui.button(this, "Allow notification access", Ui.Style.DARK,
-                    v -> startActivity(WhatsAppPlugin.accessSettings())), bp);
+                    v -> startActivity(ChatPlugin.accessSettings())), bp);
         }
         return r;
     }
@@ -370,7 +382,7 @@ public final class SentientActivity extends Activity {
                 .setMessage("Your knowledge base: everything GMind collects, searchable in one place.\n\n"
                         + "• Encrypted on this phone. Uninstalling or clearing the app's data deletes it.\n"
                         + "• Syncs once a day while the battery isn't low, or when you tap Sync now.\n"
-                        + "• It reads your GVoice transcripts, and WhatsApp messages from their notifications once you allow access. In this version nothing leaves the phone.\n"
+                        + "• It reads your GVoice transcripts, and WhatsApp and Signal messages from their notifications once you allow access. In this version nothing leaves the phone.\n"
                         + "• Read-only: GMind never sends messages or acts for you.")
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Licenses", (d, w) -> licenses())

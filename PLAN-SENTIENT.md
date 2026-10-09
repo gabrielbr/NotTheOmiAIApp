@@ -28,7 +28,8 @@ Decisions already made:
 | Signing both apps (`scripts/sign_release.py --modules`), `tests/sentient/verify_apk.py` (permission allow-list, no computer-control surface, pinned native libs, same signer), release workflow publishes both APKs | Done; verified locally with a throwaway key |
 | UX/UI audit and the Omi Tarefas design system: search first, highlighted matches, item screen, sync states, About (`docs/SENTIENT-DESIGN.md`) | Done; screenshots rendered with Robolectric |
 | **Phase 1, WhatsApp:** `WhatsAppListenerService` (notification listener, WhatsApp and WhatsApp Business only), `WhatsAppMessages` parser (DM/group, own replies from the notification, title suffixes, WhatsApp notices skipped, content-hash dedupe of re-posted history), live ingest, notification-access flow on the WhatsApp row, author in results, message shown in its conversation (`Items.around`) | Done; 20 new host checks + 4 Robolectric tests on real `MessagingStyle` notifications. **WhatsApp's real notification format still needs checking on your phone** |
-| On-device: install both, record, "Sync now", search; allow WhatsApp access, receive and reply, search | **Pending; needs your phone** |
+| **Signal:** the capture is generalized to chat apps (`ChatMessages.App`: WhatsApp, WhatsApp Business, Signal `org.thoughtcrime.securesms`); Signal is its own source. One notification-access grant covers both. When Signal hides content ("New message"), the Signal row shows which Signal setting to change, as a standing notice the daily sync doesn't overwrite | Done; 10 new host checks, 2 more Robolectric tests |
+| On-device: install both, record, "Sync now", search; allow notification access, receive and reply in WhatsApp and Signal, search | **Pending; needs your phone** |
 
 Phase 1 decisions:
 - Messages are written straight into the store when their notification arrives, so they're searchable at once. The Phase 0 `inbox_buffer` table stays unused; dedupe comes from content-hash ids instead.
@@ -195,7 +196,7 @@ GMind is the Android take on Sentient OS: collect what's new in your life every 
 
 | Sentient OS | GMind | Phase |
 |---|---|---|
-| Reads new messages, email, files and transcripts | Plugins: GVoice transcripts, WhatsApp, Composio (Gmail…), Matrix | 0 (done), 1, 3 |
+| Reads new messages, email, files and transcripts | Plugins: GVoice transcripts, WhatsApp, Signal, Composio (Gmail…), Matrix | 0, 1 (done), 3 |
 | Everything stays on the device | Encrypted SQLCipher store, Keystore-wrapped key | 0 (done) |
 | Distills into a knowledge base | People, identities, conversations, entities, relations, facts, all with evidence | 0 (schema), 4 |
 | Notes per person, project, place | People screen and merge suggestions; entity pages | 4 |

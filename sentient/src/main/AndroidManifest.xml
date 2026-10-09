@@ -14,8 +14,8 @@
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
   </activity>
   <activity android:name=".ItemActivity" android:exported="false"/>
-  <!-- WhatsApp capture: reads WhatsApp's notifications only; the user grants access in Settings. -->
-  <service android:name=".WhatsAppListenerService" android:label="GMind WhatsApp capture" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true">
+  <!-- Chat capture: reads WhatsApp and Signal notifications only; the user grants access in Settings. -->
+  <service android:name=".MessagesListenerService" android:label="GMind message capture" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true">
    <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>
   </service>
   <service android:name=".SyncJobService" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true"/>

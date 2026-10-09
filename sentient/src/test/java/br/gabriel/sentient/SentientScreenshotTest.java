@@ -38,25 +38,32 @@ public final class SentientScreenshotTest {
         settle();
         long now = System.currentTimeMillis();
         a.showSources(Arrays.asList(state(OmiTranscripts.ID, null, null, 0, null),
-                state(WhatsAppMessages.ID, null, null, 0, null)));
+                state(ChatMessages.WHATSAPP, null, null, 0, null), state(ChatMessages.SIGNAL, null, null, 0, null)));
         settle(); shot(a, "home-empty");
 
         grantWhatsApp(a, true);
         a.showSources(Arrays.asList(
                 state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
-                state(WhatsAppMessages.ID, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L)));
+                state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L),
+                state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 41, now - 40 * 60_000L)));
         settle(); shot(a, "home");
+
+        a.showSources(Arrays.asList(
+                state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
+                state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L),
+                noticed(state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 0, null), MessagesListenerService.HIDDEN)));
+        settle(); shot(a, "home-signal-hidden");
 
         grantWhatsApp(a, false);
         a.showSources(Arrays.asList(
                 state(OmiTranscripts.ID, now - 26 * HOUR, "Unavailable · Install GVoice to sync recordings", 142, now - 30 * HOUR),
-                state(WhatsAppMessages.ID, now - 26 * HOUR, "OK · live", 318, now - 26 * HOUR)));
+                state(ChatMessages.WHATSAPP, now - 26 * HOUR, "OK · live", 318, now - 26 * HOUR)));
         settle(); shot(a, "home-attention");
 
         List<Search.Hit> hits = new ArrayList<>();
-        hits.add(hit(4, WhatsAppMessages.ID, "message", "Família", "Mãe", false, 1, "Jantar no domingo? Faço aquele \u0002contrato\u0003 de sobremesa que vocês gostam"));
+        hits.add(hit(4, ChatMessages.WHATSAPP, "message", "Família", "Mãe", false, 1, "Jantar no domingo? Faço aquele \u0002contrato\u0003 de sobremesa que vocês gostam"));
         hits.add(hit(1, "Reunião com o João", 2, "…preciso ligar para o João sobre o \u0002contrato\u0003 amanhã. Ficou combinado de enviar a proposta dia 15…"));
-        hits.add(hit(5, WhatsAppMessages.ID, "message", "Rui", null, true, 30, "Mandei o \u0002contrato\u0003 assinado por email"));
+        hits.add(hit(5, ChatMessages.WHATSAPP, "message", "Rui", null, true, 30, "Mandei o \u0002contrato\u0003 assinado por email"));
         a.showResults("contrat", hits);
         settle(); shot(a, "search");
 
@@ -92,9 +99,16 @@ public final class SentientScreenshotTest {
         settle(); shot(t, "thread");
     }
 
+    /** Same state plus a standing notice (row column 7). */
+    static Sources.State noticed(Sources.State s, String notice) throws Exception {
+        Constructor<Sources.State> c = Sources.State.class.getDeclaredConstructor(Object[].class);
+        c.setAccessible(true);
+        return c.newInstance((Object) new Object[]{s.pluginId, 1L, null, s.lastSyncAt, s.lastStatus, s.itemCount, s.lastItemAt, notice});
+    }
+
     static void grantWhatsApp(Activity a, boolean granted) {
         org.robolectric.Shadows.shadowOf(a.getSystemService(android.app.NotificationManager.class))
-                .setNotificationListenerAccessGranted(new android.content.ComponentName(a, WhatsAppListenerService.class), granted);
+                .setNotificationListenerAccessGranted(new android.content.ComponentName(a, MessagesListenerService.class), granted);
     }
 
 
@@ -113,7 +127,7 @@ public final class SentientScreenshotTest {
     static Items.Item message(long id, String author, boolean me, long minutesAgo, String text) throws Exception {
         Constructor<Items.Item> c = Items.Item.class.getDeclaredConstructor(Object[].class);
         c.setAccessible(true);
-        return c.newInstance((Object) new Object[]{id, WhatsAppMessages.ID, "message",
+        return c.newInstance((Object) new Object[]{id, ChatMessages.WHATSAPP, "message",
                 System.currentTimeMillis() - minutesAgo * 60_000L, text, "Família", 7L, author, me ? 1L : 0L});
     }
 
