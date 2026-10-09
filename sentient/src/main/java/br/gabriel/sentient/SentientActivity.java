@@ -73,6 +73,10 @@ public final class SentientActivity extends Activity {
         content.addView(Ui.title(this, "Your knowledge", "knowledge"));
         Ui.gap(content, 16);
         content.addView(searchField(), new LinearLayout.LayoutParams(-1, dp(52)));
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, -2);
+        ap.topMargin = dp(10);
+        content.addView(Ui.button(this, "Ask a question", Ui.Style.DARK,
+                v -> startActivity(new Intent(this, AskActivity.class))), ap);
         searchNote = Ui.text(this, "", 14, Ui.MUTED, false);
         searchNote.setPadding(0, dp(8), 0, 0);
         searchNote.setVisibility(View.GONE);
@@ -382,7 +386,8 @@ public final class SentientActivity extends Activity {
                 .setMessage("Your knowledge base: everything GMind collects, searchable in one place.\n\n"
                         + "• Encrypted on this phone. Uninstalling or clearing the app's data deletes it.\n"
                         + "• Syncs once a day while the battery isn't low, or when you tap Sync now.\n"
-                        + "• It reads your GVoice transcripts, and WhatsApp and Signal messages from their notifications once you allow access. In this version nothing leaves the phone.\n"
+                        + "• It reads your GVoice transcripts, and WhatsApp and Signal messages from their notifications once you allow access.\n"
+                        + "• Nothing leaves the phone, except when you ask Claude a question: then your question and the messages Claude looks up are sent to Anthropic.\n"
                         + "• Read-only: GMind never sends messages or acts for you.")
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Licenses", (d, w) -> licenses())

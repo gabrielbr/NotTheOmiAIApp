@@ -58,6 +58,23 @@
       "coordinate": "androidx.sqlite:sqlite:2.2.0",
       "sha256": "6156d5d2c17bd8c5460f199142e4283053b1da750994f6b396c62c50fcc7270c",
       "license": "Apache-2.0"
+    },
+    {
+      "coordinate": "com.anthropic:anthropic-java:2.65.0",
+      "sha256": "4dee31cc59b58b5dcbffe7c29891ae13843655b371ec612fcf013d6c51d0b570",
+      "license": "MIT",
+      "note": "Official Claude SDK (Ask with Claude). Pinned to a release more than two weeks old."
+    },
+    {
+      "coordinate": "com.anthropic:anthropic-java-core:2.65.0",
+      "sha256": "7c6161b03d4c8a46aca4c59e8f02ba365522ae577b3540a51eadc4d0a561ff57",
+      "license": "MIT",
+      "note": "SHA-1 cross-checked against Maven Central."
+    },
+    {
+      "coordinate": "com.anthropic:anthropic-java-client-okhttp:2.65.0",
+      "sha256": "faf9d94b3756a8c1e51d2073810c612a1b803d9265a10cbad8612f9d9c02cad2",
+      "license": "MIT"
     }
   ],
   "sentient_test_only": [

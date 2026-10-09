@@ -37,6 +37,16 @@ GMind (built from the `sentient` module) uses the same design system as GVoice (
 - Message results show who wrote them (`WhatsApp · Mãe · …`, or `You`).
 - Opening a message shows the 10 messages before and after it as a chat log. The hit sits on a white panel with the search words highlighted, and your own messages are labelled *You*.
 
+## Phase 2: Ask
+
+![Ask](ui/gmind-ask.png)
+*Home with the Ask button, Ask before setup, an answer with citations, Ask settings.*
+
+- **Ask a question** (dark button) sits under search on the home screen.
+- Answers mark citations as mint `[n]` chips; tapping a chip or a source line opens that message in its conversation, or the recording, with the question's words highlighted.
+- The input stays pinned at the bottom, with a one-line footer saying who answers and what is sent. While Claude works, the button becomes **Stop** and a status line says what it's doing ("Searching messages and recordings…").
+- Settings: the API key is shown only as "…abcd" once saved; the model choice lists rough cost per question.
+
 ## Screenshots
 
 `sentient/src/test/java/br/gabriel/sentient/SentientScreenshotTest.java` renders the real screens with Robolectric native graphics and sample rows. No database or Keystore is needed:

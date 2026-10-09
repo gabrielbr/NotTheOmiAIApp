@@ -39,7 +39,7 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 
 **GMind** (package `br.gabriel.sentient`; the code still calls it Sentient) is a separate app: a personal knowledge base that collects content through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5).
 
-- **Now:** syncs GVoice transcripts once a day (or with **Sync now**), saves WhatsApp and Signal messages from their notifications once you allow notification access, and offers full-text search with each message shown in its conversation.
+- **Now:** syncs GVoice transcripts once a day (or with **Sync now**), saves WhatsApp and Signal messages from their notifications once you allow notification access, and offers full-text search with each message shown in its conversation. **Ask** answers questions about all of it with Claude (Haiku 5.5 by default; your own API key), citing the messages and recordings it used.
 - **Later phases:** task extraction to Todoist, Composio and Matrix sources, and asking questions with Claude or an on-device model. Read-only: it never acts on other services.
 - **Privacy split:** GVoice stays offline. It only exposes a read-only transcript provider behind a signature permission, so only an app signed with the same key can read it. GMind is the only one of the two apps with internet access.
 - Not yet tested on a phone. It uses the same design system as GVoice ([GMind audit](docs/SENTIENT-DESIGN.md)).
