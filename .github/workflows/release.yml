@@ -111,6 +111,10 @@ jobs:
           fi
           APK="dist/OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk"
           SENTIENT="dist/Sentient-$APP_VERSION_NAME.apk"
+          # Same bytes under a fixed name, so .../releases/latest/download/Sentient.apk always
+          # points at the newest Sentient. Obtainium tracks it as a "Direct APK Link" source,
+          # separately from Omi Tarefas, which uses this repository's URL.
+          cp "$SENTIENT" dist/Sentient.apk
           {
             echo "Omi Tarefas $APP_VERSION_NAME (versionCode $APP_VERSION_CODE), built from ${GITHUB_SHA::7}."
             echo
@@ -122,5 +126,5 @@ jobs:
             grep -E 'arm64-v8a|Sentient' dist/SHA256SUMS.txt
             echo '```'
           } > "$RUNNER_TEMP/notes.md"
-          gh release create "$TAG" "$APK" "$SENTIENT" dist/SHA256SUMS.txt \
+          gh release create "$TAG" "$APK" "$SENTIENT" dist/Sentient.apk dist/SHA256SUMS.txt \
             --target "$GITHUB_SHA" --title "Omi Tarefas $APP_VERSION_NAME" --notes-file "$RUNNER_TEMP/notes.md"
