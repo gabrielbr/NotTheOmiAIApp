@@ -231,6 +231,41 @@ GMind is the Android take on Sentient OS: collect what's new in your life every 
 | **Readable by Claude in any conversation** | Vault reachable outside the phone | 6 |
 | Computer control (Mac) | **Excluded on purpose.** GMind is read-only and has no accessibility service; `verify_apk.py` enforces this | — |
 
+## Backlog
+
+Brought in from branch `ccr-26809ef8-2v9adv`, with status as of 2026-10-09. Order agreed: updates → watched chats → Todoist sync → Phase 6. GVoice stays untouched throughout.
+
+### Update checker and in-app update for both APKs · *in progress*
+
+Both apps (GVoice and GMind) update from inside GMind instead of by hand or through Obtainium (`RELEASING.md`).
+
+- Source: the repository's latest GitHub release. A release is newer when its version (from the tag) is higher than the installed app's.
+- GMind does the network part for both apps, because GVoice has no INTERNET permission and `tests/hybrid/verify_apk.py` keeps it that way. GMind checks once a day (in the daily sync) and on "Check for updates". It downloads the APK, checks it against the release's `SHA256SUMS.txt` and checks that its signer matches the installed app, then installs it with `PackageInstaller`. Android still asks the user to confirm each install.
+- GVoice is not changed: GMind's update screen covers both apps. (The original note had an "Update" entry inside GVoice; dropped to keep GVoice untouched.)
+- The update screen shows each app's installed and latest version, the release notes, and an **Update** button per app.
+- `:sentient` gains `REQUEST_INSTALL_PACKAGES`, so the `tests/sentient/verify_apk.py` allow-list changes with it.
+- An update never uninstalls or changes the signing key, so recordings and the GMind store are kept (same rule as in `RELEASING.md`).
+
+### Task monitoring of chosen chats · *partly done (4A), rest in progress*
+
+The user picks, in GMind's UI, which groups or people in which apps GMind keeps watching for tasks. Messages from those chats are checked as they arrive, and a task is added when a message asks the user to do something.
+
+- Done in 4A: to-dos are found in recordings, your own messages and direct chats, each linking back to its message, on a To-dos screen.
+- Still to do: the per-chat on/off picker (groups off by default), requests addressed to you in watched groups (e.g. the company group says Gabriel needs to fill in his hours sheet), and due dates from the text ("by Friday", "end of month", "before the 15th"), resolved against the message's timestamp.
+
+### Ask for the user's name during onboarding · *in progress*
+
+Onboarding asks the user's name (and nicknames or other spellings, like "Gabriel" / "Gabi"). Task detection uses it to keep only tasks meant for the user: a request addressed to someone else in a group ("Ana, send the report") isn't added; a message with no name, sent in a direct chat, counts as addressed to the user.
+
+### Tasks live in GMind; opt-in Todoist sync through Composio · *partly done (4A), sync decided*
+
+- Done in 4A: tasks live in GMind's encrypted store, and "Send to Todoist" hands them to the Todoist app through Android's share sheet.
+- Decided: an opt-in sync through Composio (`composio.todoist`). Tasks you approve are created in Todoist (content, due date, where they came from); completing one in Todoist marks it done in GMind. Only `TODOIST_CREATE_TASK` is allow-listed as a write, only for this sync; GMind never edits, closes or deletes in Todoist. Everything else stays read-only. See *Out of scope*.
+
+### Phase 6: Claude anywhere · *decided*
+
+GMind writes the Markdown vault into a "GMind vault" folder in your Google Drive through the connected `composio.googledrive` account (create folder, create file, edit file, and delete only files GMind created), uploading only changed notes. Claude reads it with the Google Drive connector. Off until chosen; the notes are plain Markdown in Drive.
+
 ## Verification
 
 - **Host tests (no phone)**, in the same style as `tests/sentient/run_host_checks.py`: plugin contract and `RawItem` mapping per plugin using recorded JSON fixtures (Composio responses, a Matrix `/sync` page, MessagingStyle bundles), dedupe of re-posted WhatsApp history, cursor-advances-only-after-commit, the schema migration ladder, the SQL whitelist rejecting non-SELECT queries, and that Composio write tools are refused.
@@ -240,4 +275,4 @@ GMind is the Android take on Sentient OS: collect what's new in your life every 
 
 ## Out of scope
 
-Computer control or UI automation, Accessibility scraping, sending messages or any write action on Composio/Matrix, reading WhatsApp's encrypted backups, and cloud sync of the knowledge DB.
+Computer control or UI automation, Accessibility scraping, sending messages or any write action on Composio/Matrix, reading WhatsApp's encrypted backups, and cloud sync of the knowledge DB. Planned exceptions, each opt-in and allow-listed per tool: creating Todoist tasks you approve, and writing the vault into GMind's own Google Drive folder (see *Backlog*).

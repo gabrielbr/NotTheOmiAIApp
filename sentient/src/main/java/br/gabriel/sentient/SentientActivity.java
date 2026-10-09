@@ -185,6 +185,13 @@ public final class SentientActivity extends Activity {
 
         boolean empty = lastSync == 0 && !busy;
         Ui.gap(body, 28);
+        List<String> updates = UpdateInstaller.available(this);
+        if (!updates.isEmpty()) {
+            String apps = updates.size() == 2 ? "GMind and GVoice" : Updates.GMIND.equals(updates.get(0)) ? "GMind" : "GVoice";
+            body.addView(Ui.button(this, "Update available · " + apps + " " + UpdateInstaller.latest(this), Ui.Style.DARK,
+                    v -> startActivity(new Intent(this, UpdatesActivity.class))), new LinearLayout.LayoutParams(-1, -2));
+            Ui.gap(body, 20);
+        }
         if (empty) {
             // First launch: one explanation, then the sources so WhatsApp can be set up right away.
             body.addView(Ui.text(this, "Nothing synced yet.", 20, Ui.INK, true));
@@ -423,6 +430,7 @@ public final class SentientActivity extends Activity {
                         + "• Sources you connect are read from their servers: Matrix directly from your homeserver; Gmail, Calendar, Drive, Slack, Todoist and TickTick through Composio, whose servers fetch that data with your Composio key.\n"
                         + "• Nothing you collected is uploaded anywhere, except when you ask Claude a question (your question and the items Claude looks up are sent to Anthropic) or turn on AI enrichment in About you (new items are sent to Anthropic in batches after each sync). Ask can also answer on the phone, offline, with a downloaded model.\n"
                         + "• Read-only: GMind never sends messages or acts for you.")
+                .setNeutralButton("Updates", (d, w) -> startActivity(new Intent(this, UpdatesActivity.class)))
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Licenses", (d, w) -> licenses())
                 .show();
