@@ -105,9 +105,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v$APP_VERSION_NAME"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists"; exit 0
-          fi
           APK="dist/GVoice-$APP_VERSION_NAME-arm64-v8a.apk"
           GMIND="dist/GMind-$APP_VERSION_NAME.apk"
           {
@@ -121,5 +118,17 @@ jobs:
             grep -E 'arm64-v8a|GMind' dist/SHA256SUMS.txt
             echo '```'
           } > "$RUNNER_TEMP/notes.md"
-          gh release create "$TAG" "$APK" "$GMIND" dist/SHA256SUMS.txt \
-            --target "$GITHUB_SHA" --title "GVoice $APP_VERSION_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+          # GitHub intermittently answers 403 "Resource not accessible by integration" here
+          # (runs #8 and #11). Retry; if the release already exists (an earlier attempt or a
+          # re-run), attach any missing files instead of skipping it.
+          for attempt in 1 2 3 4; do
+            if gh release view "$TAG" > /dev/null 2>&1; then
+              gh release upload "$TAG" "$APK" "$GMIND" dist/SHA256SUMS.txt --clobber && exit 0
+            else
+              gh release create "$TAG" "$APK" "$GMIND" dist/SHA256SUMS.txt \
+                --target "$GITHUB_SHA" --title "GVoice $APP_VERSION_NAME" --notes-file "$RUNNER_TEMP/notes.md" && exit 0
+            fi
+            echo "::warning::Publishing $TAG failed (attempt $attempt of 4); retrying"
+            sleep $((attempt * 30))
+          done
+          exit 1
