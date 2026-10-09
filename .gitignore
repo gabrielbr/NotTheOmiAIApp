@@ -15,3 +15,4 @@ dist/
 /app/src/main/assets/ggml-*.bin
 /app/src/main/jniLibs/**/*.so
 __pycache__/
+/verification/whisper-native-build.json
