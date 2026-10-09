@@ -43,6 +43,13 @@ def pinned_native():
     return expected
 
 
+def llama_receipt():
+    """libgmind-llama.so as built and ELF-audited by scripts/build_llama.py."""
+    receipt = json.loads((ROOT/'verification/llama-native-build.json').read_text())
+    assert receipt['model_not_bundled'] and receipt['cpu_only'] and not receipt['network_backend']
+    return {f"lib/{abi}/libgmind-llama.so": entry['sha256'] for abi, entry in receipt['abis'].items()}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('apk', type=Path)
@@ -85,11 +92,12 @@ def main():
         abis = sorted({n.split('/')[1] for n in names if n.startswith('lib/') and n.endswith('.so')})
         assert abis == ['arm64-v8a', 'x86_64'], 'Unintended ABI set'
         actual = {n: sha(archive.read(n)) for n in names if n.startswith('lib/') and n.endswith('.so')}
-        assert actual == pinned_native(), 'APK native libraries differ from pinned AARs'
-        for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt', 'ubuntu-font-licence.txt', 'anthropic-sdk-java-MIT.txt', 'okhttp-jackson-kotlin-Apache-2.0.txt']:
+        assert actual == {**pinned_native(), **llama_receipt()}, 'APK native libraries differ from pinned AARs / llama receipt'
+        assert not any(n.endswith('.gguf') or n.endswith('.bin') for n in names), 'A model must not be bundled'
+        for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt', 'ubuntu-font-licence.txt', 'anthropic-sdk-java-MIT.txt', 'okhttp-jackson-kotlin-Apache-2.0.txt', 'llama.cpp-MIT.txt']:
             assert len(archive.read('assets/licenses/'+name)) > 100, 'Missing license ' + name
         dex = b'\n'.join(archive.read(n) for n in names if n.endswith('.dex'))
-        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;', 'Lbr/gabriel/sentient/MessagesListenerService;', 'Lbr/gabriel/sentient/AskActivity;', 'Lcom/anthropic/client/okhttp/AnthropicOkHttpClient;',
+        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;', 'Lbr/gabriel/sentient/MessagesListenerService;', 'Lbr/gabriel/sentient/AskActivity;', 'Lbr/gabriel/sentient/LlamaNative;', 'Lcom/anthropic/client/okhttp/AnthropicOkHttpClient;',
                            'Lnet/zetetic/database/sqlcipher/SQLiteDatabase;']:
             assert class_name.encode() in dex, 'Missing runtime class ' + class_name
     digest = hashlib.sha256(args.apk.read_bytes()).hexdigest()

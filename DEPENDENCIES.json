@@ -83,6 +83,29 @@
       "sha256": "a3f53a2aa15ae9425a9e793bbe9c8e5288febeb4b65ef5c1a4e80d4c2045cf08",
       "license": "Apache-2.0",
       "note": "Host tests only (tests/sentient); never packaged."
+    },
+    {
+      "url": "https://huggingface.co/ggml-org/models-moved/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/tinyllamas/stories260K.gguf",
+      "sha256": "270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d",
+      "license": "MIT (llama2.c tinyllamas)",
+      "note": "Host JNI tests only (tests/llama-native); never packaged."
     }
-  ]
+  ],
+  "sentient_llama": {
+    "repository": "https://github.com/ggml-org/llama.cpp",
+    "tag": "b10900",
+    "commit": "50182a53fa2c26bd2a7fc31d855231effdc2f4ad",
+    "tree": "49b684a22b6199a162e82dc29c42e37ee370109d",
+    "license": "MIT",
+    "backend": "CPU-only; arm64-v8a (armv8-a baseline) and x86_64; custom JNI (sentient/src/main/cpp)",
+    "note": "Fetched by git commit and verified by commit and tree id (scripts/prepare_llama.py)."
+  },
+  "sentient_downloaded_model": {
+    "name": "Qwen2.5-1.5B-Instruct Q4_K_M",
+    "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+    "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+    "bytes": 1117320736,
+    "license": "Apache-2.0",
+    "note": "Downloaded by GMind on request and verified before use; never bundled. Pins mirrored in LocalModel.java."
+  }
 }

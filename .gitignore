@@ -16,3 +16,6 @@ dist/
 /app/src/main/jniLibs/**/*.so
 __pycache__/
 /verification/whisper-native-build.json
+
+/sentient/src/main/jniLibs/**/*.so
+/verification/llama-native-build.json

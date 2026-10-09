@@ -39,7 +39,7 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 
 **GMind** (package `br.gabriel.sentient`; the code still calls it Sentient) is a separate app: a personal knowledge base that collects content through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5).
 
-- **Now:** syncs GVoice transcripts once a day (or with **Sync now**), saves WhatsApp and Signal messages from their notifications once you allow notification access, and offers full-text search with each message shown in its conversation. **Ask** answers questions about all of it with Claude (Haiku 5.5 by default; your own API key), citing the messages and recordings it used.
+- **Now:** syncs GVoice transcripts once a day (or with **Sync now**), saves WhatsApp and Signal messages from their notifications once you allow notification access, and offers full-text search with each message shown in its conversation. **Ask** answers questions about all of it, citing the messages and recordings it used: with Claude (Haiku 5.5 by default; your own API key), or privately on the phone with a downloaded model (Qwen2.5 1.5B, 1.1 GB).
 - **Later phases:** task extraction to Todoist, Composio and Matrix sources, and asking questions with Claude or an on-device model. Read-only: it never acts on other services.
 - **Privacy split:** GVoice stays offline. It only exposes a read-only transcript provider behind a signature permission, so only an app signed with the same key can read it. GMind is the only one of the two apps with internet access.
 - Not yet tested on a phone. It uses the same design system as GVoice ([GMind audit](docs/SENTIENT-DESIGN.md)).
@@ -82,6 +82,8 @@ Prerequisites: Java 17, Python 3, Android SDK/platform 34, Android build-tools 3
 ```sh
 python3 scripts/prepare_model.py
 python3 scripts/build_whisper.py --ndk "$ANDROID_SDK_ROOT/ndk/27.2.12479018"
+python3 scripts/prepare_llama.py
+python3 scripts/build_llama.py --ndk "$ANDROID_SDK_ROOT/ndk/27.2.12479018"
 ./gradlew --no-daemon assembleDebug assembleRelease assembleDebugAndroidTest lintDebug --console=plain
 ```
 
@@ -102,6 +104,7 @@ python3 tests/hybrid/run_host_checks.py
 python3 tests/hybrid/run_job_checks.py
 python3 tests/whisper-java/run_host_checks.py
 python3 tests/sentient/run_host_checks.py
+python3 tests/llama-native/run_host_checks.py
 ```
 
 UI screenshots (Robolectric, no device): `./gradlew testDebugUnitTest --tests '*UiScreenshotTest*'` writes PNGs of every GVoice screen to `app/build/ui-screenshots/`.

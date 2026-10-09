@@ -160,6 +160,20 @@ public final class SentientScreenshotTest {
         settle(); shot(a, "ask-answer");
     }
 
+    @Test public void askOnPhone() throws Exception {
+        android.app.Application app = org.robolectric.RuntimeEnvironment.getApplication();
+        AskSettings.setBackend(app, AskSettings.LOCAL);
+        AskSettingsActivity settings = Robolectric.buildActivity(AskSettingsActivity.class).setup().get();
+        settle();
+        settings.showLocal(new LocalModel.Status(LocalModel.State.NONE, 0, LocalModel.BYTES, null));
+        settle(); shot(settings, "ask-local-download");
+        settings.showLocal(new LocalModel.Status(LocalModel.State.DOWNLOADING, 412_000_000L, LocalModel.BYTES, null));
+        settle(); shot(settings, "ask-local-progress");
+        settings.showLocal(new LocalModel.Status(LocalModel.State.READY, LocalModel.BYTES, LocalModel.BYTES, null));
+        settle(); shot(settings, "ask-local-ready");
+        AskSettings.setBackend(app, AskSettings.CLAUDE);
+    }
+
     static Object field(Object o, String name) throws Exception {
         java.lang.reflect.Field f = o.getClass().getDeclaredField(name);
         f.setAccessible(true);
