@@ -219,7 +219,7 @@ The user picks, in GMind's UI, which groups or people in which apps (WhatsApp, S
 - The selection UI lists the conversations and people GMind has already seen, per app, each with an on/off toggle. Nothing is monitored until the user turns it on.
 - Each task links back to the message it came from, shown in its conversation (`Items.around`).
 - Tasks live in GMind: a task list stored in the encrypted store, which is the source of truth and works with no connection.
-- Todoist is one of the plugin connections. When it's enabled, GMind syncs its tasks with Todoist (as GVoice's task extraction does, `PLAN-PT-TODOIST.md`). When it's off, tasks stay only in GMind. This is the one write action GMind makes, it happens only after the user turns it on, and it touches only tasks GMind created. See *Out of scope*.
+- Todoist is one of the plugin connections, and like the other plugins it goes through Composio (`composio.todoist`, account connected on Composio's hosted link). When it's enabled, GMind syncs its tasks with Todoist (as GVoice's task extraction does, `PLAN-PT-TODOIST.md`). When it's off, tasks stay only in GMind. This is the one write action GMind makes, it happens only after the user turns it on, and it touches only tasks GMind created. The Composio write-tool block stays in place everywhere else: only the Todoist task tools the sync needs (create, update, complete) are allow-listed, and only for `composio.todoist`. See *Out of scope*.
 
 ### Ask for the user's name during onboarding
 
@@ -227,11 +227,11 @@ Onboarding asks the user's name (and nicknames or other spellings, like "Gabriel
 
 ## Verification
 
-- **Host tests (no phone)**, in the same style as `tests/sentient/run_host_checks.py`: plugin contract and `RawItem` mapping per plugin using recorded JSON fixtures (Composio responses, a Matrix `/sync` page, MessagingStyle bundles), dedupe of re-posted WhatsApp history, cursor-advances-only-after-commit, the schema migration ladder, the SQL whitelist rejecting non-SELECT queries, and that Composio write tools are refused.
+- **Host tests (no phone)**, in the same style as `tests/sentient/run_host_checks.py`: plugin contract and `RawItem` mapping per plugin using recorded JSON fixtures (Composio responses, a Matrix `/sync` page, MessagingStyle bundles), dedupe of re-posted WhatsApp history, cursor-advances-only-after-commit, the schema migration ladder, the SQL whitelist rejecting non-SELECT queries, and that Composio write tools are refused (except the allow-listed Todoist task tools, once the Todoist sync exists).
 - **Instrumentation** (`:sentient` androidTest): KnowledgeStore with real SQLCipher + FTS5 (PT diacritics search), TranscriptProvider refusing a caller without the signature permission, and SyncJobService idempotency.
 - **Gradle:** `./gradlew assembleDebug assembleRelease lintDebug` for both apps; `verify_apk.py` for both (`:app` has no INTERNET; `:sentient` matches the allow-list exactly).
 - **On device:** install both APKs, grant notification access, receive WhatsApp messages, then "Sync now". Check that they appear under the right person and conversation. Record with Omi and confirm the transcript is ingested. Connect Gmail through Composio. Ask "what did Ana and I talk about this week?" and confirm the answer cites the right items. Switch to the local backend and repeat.
 
 ## Out of scope
 
-Computer control or UI automation, Accessibility scraping, sending messages or any write action on Composio/Matrix, reading WhatsApp's encrypted backups, and cloud sync of the knowledge DB. The one planned exception is the opt-in Todoist task sync (see *Backlog*).
+Computer control or UI automation, Accessibility scraping, sending messages or any write action on Composio/Matrix, reading WhatsApp's encrypted backups, and cloud sync of the knowledge DB. The one planned exception is the opt-in Todoist task sync through Composio (see *Backlog*).
