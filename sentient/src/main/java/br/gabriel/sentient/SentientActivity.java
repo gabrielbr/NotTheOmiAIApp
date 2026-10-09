@@ -170,7 +170,7 @@ public final class SentientActivity extends Activity {
         if (lastSync == 0 && !busy) {
             Ui.gap(body, 28);
             body.addView(Ui.text(this, "Nothing synced yet.", 20, Ui.INK, true));
-            TextView hint = Ui.text(this, "GMind copies your Omi Tarefas transcripts once a day. Start the first sync now.",
+            TextView hint = Ui.text(this, "GMind copies your GVoice transcripts once a day. Start the first sync now.",
                     15, Ui.MUTED, false);
             hint.setPadding(0, dp(8), 0, dp(16));
             body.addView(hint);
@@ -344,7 +344,7 @@ public final class SentientActivity extends Activity {
                 .setMessage("Your knowledge base: everything GMind collects, searchable in one place.\n\n"
                         + "• Encrypted on this phone. Uninstalling or clearing the app's data deletes it.\n"
                         + "• Syncs once a day while the battery isn't low, or when you tap Sync now.\n"
-                        + "• Today it reads your Omi Tarefas transcripts. In this version nothing leaves the phone.\n"
+                        + "• Today it reads your GVoice transcripts. In this version nothing leaves the phone.\n"
                         + "• Read-only: GMind never sends messages or acts for you.")
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Licenses", (d, w) -> licenses())

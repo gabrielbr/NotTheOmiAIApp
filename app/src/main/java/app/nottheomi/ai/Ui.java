@@ -194,11 +194,11 @@ final class Ui {
         LinearLayout bar = row(c);
         bar.setBackgroundColor(SURFACE);
         bar.setPadding(dp(c, 16), dp(c, 10), dp(c, 4), dp(c, 10));
-        TextView mark = text(c, "OT_", 14, Color.WHITE, true);
+        TextView mark = text(c, "GV_", 14, Color.WHITE, true);
         mark.setGravity(Gravity.CENTER);
         mark.setBackgroundColor(INK);
         bar.addView(mark, new LinearLayout.LayoutParams(dp(c, 40), dp(c, 40)));
-        TextView name = text(c, "Omi Tarefas", 19, INK, true);
+        TextView name = text(c, "GVoice", 19, INK, true);
         name.setPadding(dp(c, 12), 0, 0, 0);
         bar.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
         if (trailing != null) bar.addView(trailing, new LinearLayout.LayoutParams(dp(c, 48), dp(c, 48)));

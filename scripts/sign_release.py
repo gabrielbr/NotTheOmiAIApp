@@ -18,9 +18,9 @@ def run(argv):
     result = subprocess.run([str(x) for x in argv], check=True, text=True, capture_output=True)
     return result.stdout + result.stderr
 
-# Omi Tarefas must stay offline; GMind (module sentient) is the companion that may use the network.
+# GVoice must stay offline; GMind (module sentient) is the companion that may use the network.
 MODULES = {
-    'app': {'dir': 'app', 'id': 'br.gabriel.omitarefas', 'label': 'Omi Tarefas', 'prefix': 'OmiTarefas',
+    'app': {'dir': 'app', 'id': 'br.gabriel.omitarefas', 'label': 'GVoice', 'prefix': 'GVoice',
             'input': r'app-[a-z0-9_-]+-release-unsigned\.apk', 'internet': False},
     # The companion app is named GMind; its module and package keep the name sentient.
     'sentient': {'dir': 'sentient', 'id': 'br.gabriel.sentient', 'label': 'GMind', 'prefix': 'GMind',
@@ -72,7 +72,7 @@ def main():
     p.add_argument('--key-dir', type=Path, required=True, help='Persistent private directory OUTSIDE repository; back it up securely')
     p.add_argument('--version', help='Expected versionName; defaults to the built release output metadata')
     p.add_argument('--modules', nargs='+', choices=sorted(MODULES), default=['app', 'sentient'],
-                   help='Apps to sign with the same key (GMind reads Omi Tarefas through a signature permission)')
+                   help='Apps to sign with the same key (GMind reads GVoice through a signature permission)')
     args = p.parse_args()
     keydir = args.key_dir.expanduser().resolve()
     if keydir == ROOT or ROOT in keydir.parents:
@@ -86,7 +86,7 @@ def main():
         fd = os.open(password, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600)
         with os.fdopen(fd, 'w') as out:
             out.write(secrets.token_urlsafe(36)+'\n')
-        run(['keytool','-genkeypair','-keystore',key,'-storetype','PKCS12','-alias','release','-keyalg','RSA','-keysize','3072','-validity','10000','-dname','CN=Omi Tarefas, O=Independent Android App','-storepass:file',password,'-keypass:file',password])
+        run(['keytool','-genkeypair','-keystore',key,'-storetype','PKCS12','-alias','release','-keyalg','RSA','-keysize','3072','-validity','10000','-dname','CN=GVoice, O=Independent Android App','-storepass:file',password,'-keypass:file',password])
         key.chmod(0o600)
     tools = args.sdk/'build-tools'/'34.0.0'
     dest=ROOT/'dist'

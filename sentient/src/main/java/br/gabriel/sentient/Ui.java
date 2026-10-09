@@ -19,8 +19,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * Copy of Omi Tarefas' design system (app/src/main/java/app/nottheomi/ai/Ui.java, documented in
- * docs/DESIGN.md), so both apps look like one family. Keep the two in step by hand: Omi Tarefas
+ * Copy of GVoice's design system (app/src/main/java/app/nottheomi/ai/Ui.java, documented in
+ * docs/DESIGN.md), so both apps look like one family. Keep the two in step by hand: GVoice
  * is frozen, so they are deliberately not shared through a module.
  *
  * Design system after gabriellopes.com: light grey page inside a mint frame, near-black ink,

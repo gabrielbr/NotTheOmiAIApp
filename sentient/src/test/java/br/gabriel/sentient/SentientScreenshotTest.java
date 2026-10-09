@@ -43,7 +43,7 @@ public final class SentientScreenshotTest {
         settle(); shot(a, "home");
 
         a.showSources(Collections.singletonList(state(OmiTranscripts.ID, System.currentTimeMillis() - 26 * HOUR,
-                "Unavailable · Install Omi Tarefas to sync recordings", 142)));
+                "Unavailable · Install GVoice to sync recordings", 142)));
         settle(); shot(a, "home-attention");
 
         List<Search.Hit> hits = new ArrayList<>();

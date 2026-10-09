@@ -1,4 +1,4 @@
-# Omi Tarefas design system and UI audit
+# GVoice design system and UI audit
 
 The look and feel follows [gabriellopes.com](https://gabriellopes.com): a light grey page inside a mint frame, near-black ink, Ubuntu Mono throughout, and a mint "highlighter" behind one key word.
 
@@ -23,7 +23,7 @@ The look and feel follows [gabriellopes.com](https://gabriellopes.com): a light 
 | 6 | The source picker and the Omi settings were separate full-width buttons below the recorder. | Both live in the recorder panel: the source name with ▾, and a settings icon. |
 | 7 | Every recording was a rounded card with a 3-part meta line and a raw status in capitals. | Rows with hairline dividers: a title, one meta line and a 2-line excerpt. A status chip appears only for real states: Recording, Refining, Interrupted, Error, Audio only, Cancelled. |
 | 8 | Unicode glyphs stood in for icons (● ≡ ▶ ■ ‹ ▾ ?). | A small set of consistent line icons in `res/drawable/ic_*.xml`. |
-| 9 | Tasks: the Send button scrolled away, and a 3-line explanation sat under it. | Send pinned at the bottom, one-line note. (Later removed from Omi Tarefas; tasks and Todoist now live in GMind.) |
+| 9 | Tasks: the Send button scrolled away, and a 3-line explanation sat under it. | Send pinned at the bottom, one-line note. (Later removed from GVoice; tasks and Todoist now live in GMind.) |
 | 10 | Omi device: five paragraphs (compatibility, firmware, readback). | One line per section: **Light**, **Button**. Forget is shown as a destructive text action. |
 | 11 | Beige/olive palette and default sans fonts, unrelated to the brand. | The design system below. |
 

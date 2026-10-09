@@ -24,14 +24,14 @@ final class OmiTranscriptsPlugin implements SourcePlugin {
     OmiTranscriptsPlugin(Context context) { this.context = context.getApplicationContext(); }
 
     @Override public String id() { return OmiTranscripts.ID; }
-    @Override public String displayName() { return "Omi Tarefas recordings"; }
+    @Override public String displayName() { return "GVoice recordings"; }
     @Override public Set<Mode> modes() { return EnumSet.of(Mode.PULL); }
 
     @Override public PullResult pull(PluginContext ctx, String cursor) throws Exception {
         Uri uri = cursor == null ? SESSIONS : SESSIONS.buildUpon().appendQueryParameter("since", cursor).build();
         List<OmiTranscripts.Row> rows = new ArrayList<>();
         try (Cursor c = context.getContentResolver().query(uri, null, null, null, null)) {
-            if (c == null) throw new SourceUnavailableException("Install Omi Tarefas to sync recordings");
+            if (c == null) throw new SourceUnavailableException("Install GVoice to sync recordings");
             while (c.moveToNext()) {
                 rows.add(new OmiTranscripts.Row(
                         c.getString(c.getColumnIndexOrThrow("id")),
@@ -43,7 +43,7 @@ final class OmiTranscriptsPlugin implements SourcePlugin {
                         c.getString(c.getColumnIndexOrThrow("text"))));
             }
         } catch (SecurityException denied) {
-            throw new SourceUnavailableException("No access: reinstall GMind after Omi Tarefas, from the same release");
+            throw new SourceUnavailableException("No access: reinstall GMind after GVoice, from the same release");
         }
         List<RawItem> items = new ArrayList<>();
         for (OmiTranscripts.Row row : rows) {
