@@ -1,10 +1,10 @@
 # Omi Tarefas
 
-Offline **Omi companion for Android 8+** that transcribes Portuguese and English and turns what you say into **Todoist tasks**. A fork of [NotTheOmiAIApp](https://github.com/five0nit/NotTheOmiAIApp), installed as `br.gabriel.omitarefas` so it sits beside the original. It comes with **Sentient**, an optional companion app that builds a searchable personal knowledge base.
+Offline **Omi companion for Android 8+** that transcribes Portuguese and English, and keeps everything encrypted on your phone. A fork of [NotTheOmiAIApp](https://github.com/five0nit/NotTheOmiAIApp), installed as `br.gabriel.omitarefas` so it sits beside the original. It comes with **Sentient**, an optional companion app that builds a searchable personal knowledge base and is where task extraction and Todoist live.
 
 Not affiliated with Omi or Based Hardware. Application license: [MIT](LICENSE); third-party components keep their [own notices](THIRD_PARTY_NOTICES.md).
 
-![Omi Tarefas: Home, Library and Tasks](docs/ui/after.png)
+![Omi Tarefas: Home, Library and Omi device](docs/ui/after.png)
 
 ## Install and update
 
@@ -28,7 +28,6 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 
 - Omi Bluetooth LE Opus audio → encrypted phone-local PCM and transcript history.
 - Bundled **Vosk** (Portuguese) for streaming drafts; CPU-only multilingual **Whisper small Q5_1** for post-save refinement, auto-detecting Portuguese or English per 30-second window.
-- **Find tasks for Todoist** on any saved recording: offline Portuguese/English to-do finder, review/edit, then share each task to the Todoist app (Quick Add → Inbox). No network permission.
 - Playback, searchable library and explicit WAV/text export.
 - No Omi account, PC relay, cloud transcription, runtime model download or `INTERNET` permission.
 - Capability-gated battery, brightness and button controls. Long-press/power behavior stays firmware-owned.
@@ -39,9 +38,9 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 `Sentient` (`br.gabriel.sentient`) is a separate app: a personal knowledge base that collects content through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5).
 
 - **Phase 0 (now):** syncs Omi Tarefas transcripts once a day (or with **Sync now**) and offers full-text search.
-- **Later phases:** WhatsApp notifications, Composio and Matrix sources, and asking questions with Claude or an on-device model. Read-only: it never acts on other services.
+- **Later phases:** task extraction to Todoist, WhatsApp notifications, Composio and Matrix sources, and asking questions with Claude or an on-device model. Read-only: it never acts on other services.
 - **Privacy split:** Omi Tarefas stays offline. It only exposes a read-only transcript provider behind a signature permission, so only an app signed with the same key can read it. Sentient is the only one of the two apps with internet access.
-- Not yet tested on a phone. It still uses the older palette, not the design system below.
+- Not yet tested on a phone. It is moving to the design system below.
 
 The full plan and status are in [PLAN-SENTIENT.md](PLAN-SENTIENT.md).
 
@@ -100,7 +99,6 @@ python3 tests/capture/run_host_checks.py
 python3 tests/hybrid/run_host_checks.py
 python3 tests/hybrid/run_job_checks.py
 python3 tests/whisper-java/run_host_checks.py
-python3 tests/tasks/run_host_checks.py
 python3 tests/sentient/run_host_checks.py
 ```
 

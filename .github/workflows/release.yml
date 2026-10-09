@@ -71,7 +71,6 @@ jobs:
 
       - name: Host checks
         run: |
-          python3 tests/tasks/run_host_checks.py
           python3 tests/sentient/run_host_checks.py
           python3 tests/capture/run_host_checks.py --sdk "$ANDROID_HOME"
           python3 tests/hybrid/run_host_checks.py
