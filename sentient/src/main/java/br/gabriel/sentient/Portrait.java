@@ -47,6 +47,27 @@ public final class Portrait {
         return out.toString().trim();
     }
 
+    /** Entities of these types most mentioned since {@code since}, from AI enrichment (empty without it). */
+    private static void graphSection(Db db, StringBuilder md, String title, long since, int limit, String... types) throws Exception {
+        String in = String.join(", ", java.util.Collections.nCopies(types.length, "?"));
+        Object[] args = new Object[types.length + 2];
+        args[0] = since;
+        System.arraycopy(types, 0, args, 1, types.length);
+        args[types.length + 1] = limit;
+        List<Object[]> rows = db.query("SELECT entities.name, COUNT(*), MAX(items.id),"
+                + " (SELECT group_concat(e2.name, ', ') FROM (SELECT DISTINCT dst.name AS name FROM relations"
+                + "   JOIN entities dst ON dst.id = relations.dst_entity WHERE relations.src_entity = entities.id LIMIT 3) e2)"
+                + " FROM mentions JOIN entities ON entities.id = mentions.entity_id JOIN items ON items.id = mentions.item_id"
+                + " WHERE items.ts >= ? AND entities.type IN (" + in + ") AND entities.canonical_key NOT LIKE 'person:%'"
+                + " GROUP BY entities.id ORDER BY COUNT(*) DESC LIMIT ?", args);
+        if (rows.isEmpty()) return;
+        md.append(title).append("\n\n");
+        for (Object[] r : rows)
+            md.append("- ").append(r[0]).append(" · ").append(Digest.count(((Number) r[1]).longValue(), "mention"))
+                    .append(r[3] == null ? "" : " · with " + r[3]).append(" [#").append(r[2]).append("]\n");
+        md.append('\n');
+    }
+
     static String build(Db db, long now, ZoneId zone) throws Exception {
         StringBuilder md = new StringBuilder("# About me\n\n_Built by GMind on ")
                 .append(Instant.ofEpochMilli(now).atZone(zone).toLocalDate())
@@ -72,7 +93,21 @@ public final class Portrait {
                 : "- Known as " + String.join(", ", who) + "\n");
         md.append('\n');
 
+        List<Object[]> facts = db.query("SELECT facts.key, facts.value, facts.evidence_item_id FROM facts"
+                + " JOIN entities ON entities.id = facts.entity_id JOIN people ON entities.canonical_key = 'person:' || people.id"
+                + " WHERE people.is_me = 1 ORDER BY facts.updated_at DESC LIMIT ?", TOP * 2);
+        if (!facts.isEmpty()) {
+            md.append("## Facts about me\n\n");
+            for (Object[] f : facts)
+                md.append("- ").append(((String) f[0]).replace('_', ' ')).append(": ").append(f[1])
+                        .append(f[2] == null ? "" : " [#" + f[2] + "]").append('\n');
+            md.append('\n');
+        }
+
         long since = now - WINDOW_MS;
+        graphSection(db, md, "## What I'm working on (last 30 days)", since, TOP, "project", "org");
+        graphSection(db, md, "## Places", since, 6, "place");
+        graphSection(db, md, "## Topics lately", since, TOP, "topic", "event");
         List<Object[]> people = db.query("SELECT people.display_name, COUNT(*), MAX(items.id), group_concat(DISTINCT items.source),"
                 + " MAX(items.ts) FROM items JOIN identities ON identities.id = items.author_identity_id"
                 + " JOIN people ON people.id = identities.person_id WHERE items.ts >= ? AND people.is_me = 0"

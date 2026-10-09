@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  */
 public final class Vault {
     static final String MANIFEST = ".gmind-vault.json";
-    static final int MAX_PEOPLE = 300, MAX_CHATS = 200, CHAT_MESSAGES = 50, PERSON_RECENT = 15, DAYS = 30, MAX_LINE = 400;
+    static final int MAX_PEOPLE = 300, MAX_CHATS = 200, MAX_ENTITIES = 300, CHAT_MESSAGES = 50, PERSON_RECENT = 15, DAYS = 30, MAX_LINE = 400;
     static final long CHAT_WINDOW_MS = 90L * 24 * 60 * 60 * 1000;
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT),
             DAY = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH);
@@ -45,7 +45,8 @@ public final class Vault {
     private final ZoneId zone;
     private final Map<Long, String> citeCache = new HashMap<>();
     /** Person id → note name, and conversation id → note name, so links match file names. */
-    private final Map<Long, String> personNotes = new LinkedHashMap<>(), chatNotes = new LinkedHashMap<>();
+    private final Map<Long, String> personNotes = new LinkedHashMap<>(), chatNotes = new LinkedHashMap<>(),
+            entityNotes = new LinkedHashMap<>(), entityFolders = new HashMap<>();
     private final Set<String> usedNames = new HashSet<>();
 
     private Vault(Db db, ZoneId zone) { this.db = db; this.zone = zone; }
@@ -68,7 +69,7 @@ public final class Vault {
         return files.size();
     }
 
-    private static final Pattern OWN = Pattern.compile("(?:README|Tasks)\\.md|(?:People|Chats|Days)/[^/\\\\]+\\.md");
+    private static final Pattern OWN = Pattern.compile("(?:README|Tasks)\\.md|(?:People|Chats|Days|Projects|Places|Topics)/[^/\\\\]+\\.md");
 
     /** Only the kinds of notes GMind writes, never anything that climbs out of the folder. */
     static boolean safe(String path) {
@@ -86,7 +87,8 @@ public final class Vault {
         // Names first, so every note can link to every other.
         for (Object[] p : db.query("SELECT people.id, people.display_name FROM people"
                 + " JOIN identities ON identities.person_id = people.id JOIN items ON items.author_identity_id = identities.id"
-                + " GROUP BY people.id HAVING SUM(items.kind = ?) > 0 OR COUNT(*) >= 3 OR MAX(people.is_me) = 1"
+                + " GROUP BY people.id HAVING SUM(items.kind = ?) > 0 OR COUNT(*) >= 2 OR MAX(people.is_me) = 1"
+                + " OR EXISTS (SELECT 1 FROM entities WHERE entities.canonical_key = 'person:' || people.id)"
                 + " ORDER BY MAX(people.is_me) DESC, COUNT(*) DESC LIMIT ?", RawItem.MESSAGE, MAX_PEOPLE))
             personNotes.put(((Number) p[0]).longValue(), unique((String) p[1]));
         for (Object[] c : db.query("SELECT conversations.id, conversations.title, conversations.source FROM conversations"
@@ -95,11 +97,21 @@ public final class Vault {
                 + " ORDER BY MAX(items.ts) DESC LIMIT ?", now - CHAT_WINDOW_MS, MAX_CHATS))
             chatNotes.put(((Number) c[0]).longValue(), unique(c[1] + " (" + People.sourceName((String) c[2]) + ")"));
 
+        for (Object[] e : db.query("SELECT entities.id, entities.name, entities.type FROM entities"
+                + " JOIN mentions ON mentions.entity_id = entities.id WHERE entities.canonical_key NOT LIKE 'person:%'"
+                + " GROUP BY entities.id HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC LIMIT ?", MAX_ENTITIES)) {
+            long id = ((Number) e[0]).longValue();
+            entityNotes.put(id, unique((String) e[1]));
+            entityFolders.put(id, folder((String) e[2]));
+        }
+
         String portrait = Portrait.read(db);
         if (portrait == null) portrait = Portrait.build(db, now, zone);
         files.put("README.md", linkPeople(cite(portrait)));
         for (Map.Entry<Long, String> p : personNotes.entrySet()) files.put("People/" + p.getValue() + ".md", person(p.getKey(), p.getValue()));
         for (Map.Entry<Long, String> c : chatNotes.entrySet()) files.put("Chats/" + c.getValue() + ".md", chat(c.getKey(), c.getValue()));
+        for (Map.Entry<Long, String> e : entityNotes.entrySet())
+            files.put(entityFolders.get(e.getKey()) + "/" + e.getValue() + ".md", entity(e.getKey(), e.getValue()));
         LocalDate today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
         for (Object[] d : db.query("SELECT date, markdown FROM daily_digests WHERE date >= ? ORDER BY date DESC",
                 today.minusDays(DAYS).toString()))
@@ -127,6 +139,8 @@ public final class Vault {
             if (p.lastTs != null) md.append(", last ").append(STAMP.format(Instant.ofEpochMilli(p.lastTs).atZone(zone)));
             md.append("\n\n");
         }
+        List<Object[]> personEntity = db.query("SELECT id FROM entities WHERE canonical_key = ?", "person:" + id);
+        if (!personEntity.isEmpty()) graph(md, ((Number) personEntity.get(0)[0]).longValue());
         List<Object[]> chats = People.conversations(db, id, 12);
         if (!chats.isEmpty()) {
             md.append("## Where we talk\n\n");
@@ -150,6 +164,70 @@ public final class Vault {
             }
         }
         return md.toString().trim() + "\n";
+    }
+
+    private String entity(long id, String note) throws Exception {
+        Object[] e = db.query("SELECT name, type FROM entities WHERE id = ?", id).get(0);
+        List<String> aliases = new ArrayList<>();
+        for (Object[] a : db.query("SELECT alias FROM entity_aliases WHERE entity_id = ? ORDER BY alias", id))
+            if (!note.equals(a[0])) aliases.add((String) a[0]);
+        StringBuilder md = new StringBuilder("---\naliases: ").append(yamlList(aliases)).append("\ntype: ").append(e[1])
+                .append("\n---\n\n# ").append(note).append("\n\n");
+        graph(md, id);
+        List<Object[]> mentions = db.query("SELECT items.id FROM mentions JOIN items ON items.id = mentions.item_id"
+                + " WHERE mentions.entity_id = ? ORDER BY items.ts DESC LIMIT ?", id, PERSON_RECENT);
+        if (!mentions.isEmpty()) {
+            md.append("## Mentioned in\n\n");
+            for (Object[] m : mentions) {
+                Items.Item item = Items.get(db, ((Number) m[0]).longValue());
+                if (item == null) continue;
+                md.append("- ").append(STAMP.format(Instant.ofEpochMilli(item.ts).atZone(zone))).append(" · ")
+                        .append(People.sourceName(item.source));
+                if (item.conversation != null) md.append(" · ").append(item.conversation);
+                md.append(": ").append(oneLine(item.text)).append('\n');
+            }
+        }
+        return md.toString().trim() + "\n";
+    }
+
+    /** Facts and relations of an entity, linking to the notes of related people and things. */
+    private void graph(StringBuilder md, long entity) throws Exception {
+        List<Object[]> facts = db.query("SELECT key, value FROM facts WHERE entity_id = ? ORDER BY key", entity);
+        if (!facts.isEmpty()) {
+            md.append("## Facts\n\n");
+            for (Object[] f : facts) md.append("- ").append(((String) f[0]).replace('_', ' ')).append(": ").append(oneLine((String) f[1])).append('\n');
+            md.append('\n');
+        }
+        List<Object[]> related = db.query("SELECT relations.type, other.id, other.name, other.canonical_key, relations.src_entity = ?"
+                + " FROM relations JOIN entities other ON other.id = CASE WHEN relations.src_entity = ? THEN relations.dst_entity"
+                + " ELSE relations.src_entity END WHERE relations.src_entity = ? OR relations.dst_entity = ?"
+                + " ORDER BY relations.last_seen DESC LIMIT 30", entity, entity, entity, entity);
+        if (!related.isEmpty()) {
+            md.append("## Related\n\n");
+            for (Object[] r : related) {
+                String type = ((String) r[0]).replace('_', ' ');
+                boolean outgoing = ((Number) r[4]).intValue() != 0;
+                md.append("- ").append(outgoing ? type + " " : "").append(link(((Number) r[1]).longValue(), (String) r[2], (String) r[3]))
+                        .append(outgoing ? "" : " (" + type + ")").append('\n');
+            }
+            md.append('\n');
+        }
+    }
+
+    private String link(long entity, String name, String canonical) {
+        String note = entityNotes.get(entity);
+        if (note == null && canonical != null && canonical.startsWith("person:")) {
+            try { note = personNotes.get(Long.parseLong(canonical.substring(7))); } catch (NumberFormatException ignored) { }
+        }
+        return note != null ? "[[" + note + "]]" : name;
+    }
+
+    private static String folder(String type) {
+        switch (type) {
+            case "place": return "Places";
+            case "project": case "org": return "Projects";
+            default: return "Topics";
+        }
     }
 
     private String chat(long conversation, String note) throws Exception {

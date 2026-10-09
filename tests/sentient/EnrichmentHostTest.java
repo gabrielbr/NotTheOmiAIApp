@@ -29,6 +29,7 @@ public final class EnrichmentHostTest {
         portrait(db);
         vault(db);
         forget(db);
+        extraction();
         System.out.println("PASS_ENRICHMENT_HOST_CHECKS " + checks);
     }
 
@@ -237,6 +238,79 @@ public final class EnrichmentHostTest {
         check(count(db, "SELECT COUNT(*) FROM found_tasks") == before - 2, "forgetting a source removes its to-dos");
         check(count(db, "SELECT COUNT(*) FROM not_same_person WHERE a NOT IN (SELECT id FROM people) OR b NOT IN (SELECT id FROM people)") == 0,
                 "no dangling kept-apart pairs");
+    }
+
+    static long item(Db db, String externalId) throws Exception {
+        return ((Number) db.query("SELECT id FROM items WHERE external_id = ?", externalId).get(0)[0]).longValue();
+    }
+
+    private static void extraction() throws Exception {
+        Db db = fixture();
+        Enrichment.run(db, NOW, ZONE);
+        long g1 = item(db, "g1"), g2 = item(db, "g2"), r1 = item(db, "r1");
+        String reply = "{\"entities\":["
+                + "{\"key\":\"ana\",\"type\":\"person\",\"name\":\"Ana Souza\",\"aliases\":[\"Ana S.\"],\"evidence\":[" + g1 + "]},"
+                + "{\"key\":\"acme\",\"type\":\"org\",\"name\":\"Acme\",\"aliases\":[\"ACME Ltda\"],\"evidence\":[" + g1 + "," + r1 + "]},"
+                + "{\"key\":\"rel\",\"type\":\"project\",\"name\":\"Relatório trimestral\",\"aliases\":[],\"evidence\":[" + r1 + ",999999]},"
+                + "{\"key\":\"ghost\",\"type\":\"person\",\"name\":\"Ghost\",\"aliases\":[],\"evidence\":[999999]},"
+                + "{\"key\":\"me\",\"type\":\"person\",\"name\":\"Gabriel\",\"aliases\":[],\"evidence\":[" + g2 + "]}],"
+                + "\"relations\":[{\"from\":\"ana\",\"type\":\"Works At\",\"to\":\"acme\",\"evidence\":[" + g1 + "]},"
+                + "{\"from\":\"me\",\"type\":\"works_on\",\"to\":\"rel\",\"evidence\":[" + r1 + "]},"
+                + "{\"from\":\"ana\",\"type\":\"knows\",\"to\":\"ghost\",\"evidence\":[" + g1 + "]}],"
+                + "\"facts\":[{\"about\":\"me\",\"key\":\"role\",\"value\":\"Designer\",\"evidence\":[" + r1 + "]},"
+                + "{\"about\":\"ana\",\"key\":\"lives in\",\"value\":\"Recife\",\"evidence\":[999999]}]}";
+        List<String> sent = new ArrayList<>();
+        Extraction.Run run = Extraction.run(db, batch -> { sent.add(batch); return reply; }, NOW, ZONE, 10, () -> false);
+        check(run.batches == 1 && sent.size() == 1, "one batch for a small day: " + run.batches);
+        check(sent.get(0).contains("[#" + g1 + "]") && sent.get(0).contains("· me: Contrato") && sent.get(0).contains("## Gmail · Contrato"),
+                "batch lists items with ids, authors and conversation headers");
+        check(run.counts.entities == 3 && run.counts.relations == 2 && run.counts.facts == 1 && run.counts.dropped == 3,
+                "uncited or unknown things are dropped: " + run.counts.entities + "/" + run.counts.relations + "/" + run.counts.facts + "/" + run.counts.dropped);
+        long ana = person(db, "composio.gmail", "email:ana@x.com");
+        check(count(db, "SELECT COUNT(*) FROM entities WHERE canonical_key = ?", "person:" + ana) == 1, "a named person links to the GMind person");
+        check(count(db, "SELECT COUNT(*) FROM entities WHERE name = 'Ghost'") == 0, "nothing without evidence");
+        check(count(db, "SELECT COUNT(*) FROM relations WHERE type = 'works_at'") == 1, "relation types normalized");
+        check(count(db, "SELECT COUNT(*) FROM mentions WHERE item_id = 999999") == 0, "foreign ids never stored");
+        check(count(db, "SELECT COUNT(*) FROM entity_aliases WHERE alias = 'ACME Ltda'") == 1, "aliases kept");
+
+        check(Extraction.run(db, b -> { throw new AssertionError("nothing new to send"); }, NOW, ZONE, 10, () -> false).batches == 0,
+                "nothing is sent twice");
+        Ingest.upsert(db, Arrays.asList(msg("whatsapp", "w9", NOW, "Acme fechou o contrato!").conversation("c:ana", "Ana", "dm")
+                .author("name:Ana", "Ana", false).build()), NOW + HOUR);
+        long w9 = item(db, "w9");
+        List<String> second = new ArrayList<>();
+        Extraction.Run refused = Extraction.run(db, b -> { second.add(b); return null; }, NOW + HOUR, ZONE, 10, () -> false);
+        check(refused.refused == 1 && second.get(0).contains("[#" + w9 + "]") && !second.get(0).contains("[#" + g1 + "]"),
+                "only new items are sent; a declined batch is skipped");
+        Ingest.upsert(db, Arrays.asList(msg("whatsapp", "w10", NOW, "ok").conversation("c:ana", "Ana", "dm")
+                .author("name:Ana", "Ana", false).build()), NOW + 2 * HOUR);
+        Extraction.Run broken = Extraction.run(db, b -> "{not json", NOW + 2 * HOUR, ZONE, 10, () -> false);
+        check(broken.batches == 1 && broken.counts.dropped == 1, "a malformed reply is dropped, not retried forever");
+        check(Extraction.batches(db, NOW + 3 * HOUR, ZONE, 10).isEmpty(), "cursor moved past it");
+
+        String portrait = Portrait.write(db, NOW + HOUR, ZONE);
+        check(portrait.contains("## Facts about me\n\n- role: Designer [#" + r1 + "]"), "facts about you in the portrait");
+        check(portrait.contains("## What I'm working on (last 30 days)") && portrait.contains("- Acme · 2 mentions [#"), "work from the graph: " + portrait);
+
+        String about = new KnowledgeTools(db, ZONE).about("acme");
+        check(about.startsWith("Acme (org)") && about.contains("Ana Souza works_at Acme [#" + g1 + "]"), "about tool: " + about);
+        check(new KnowledgeTools(db, ZONE).run(KnowledgeTools.ABOUT, java.util.Collections.singletonMap("name", (Object) "Ltda")).startsWith("Acme"),
+                "about finds aliases");
+
+        MapWriter w = new MapWriter();
+        Vault.export(db, w, NOW + HOUR, ZONE);
+        check(w.files.containsKey("Projects/Acme.md") && !w.files.containsKey("Projects/Relatório trimestral.md"), "notes for things mentioned twice or more");
+        String acme = w.files.get("Projects/Acme.md");
+        check(acme.contains("aliases: [\"ACME Ltda\"]") && acme.contains("type: org") && acme.contains("[[Ana Souza]] (works at)")
+                && acme.contains("## Mentioned in"), "entity note: " + acme);
+        check(w.files.get("People/Ana Souza.md").contains("- works at [[Acme]]"), "person note links what they relate to");
+        check(w.files.get("People/Me.md").contains("- role: Designer") && w.files.get("People/Me.md").contains("works on Relatório trimestral"),
+                "your note has your facts");
+        Object schema = Extraction.SCHEMA;
+        check(Boolean.FALSE.equals(br.gabriel.sentient.plugin.Json.at(schema, "additionalProperties"))
+                && br.gabriel.sentient.plugin.Json.list(br.gabriel.sentient.plugin.Json.at(schema, "required")).size() == 3
+                && Boolean.FALSE.equals(br.gabriel.sentient.plugin.Json.at(schema, "properties", "facts", "items", "additionalProperties")),
+                "strict schema");
     }
 
     static void check(boolean ok, String what) {
