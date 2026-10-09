@@ -72,6 +72,7 @@ python3 tests/capture/run_host_checks.py
 python3 tests/hybrid/run_host_checks.py
 python3 tests/hybrid/run_job_checks.py
 python3 tests/whisper-java/run_host_checks.py
+python3 tests/tasks/run_host_checks.py
 ```
 
 Device/instrumentation tests require their explicitly selected Android target and prepared artifacts. For the optional `tests/whisper-device/run_probe.py` helper with Windows `adb.exe`, pass `--windows-temp` with an existing Windows-accessible WSL directory; no developer-specific user path is embedded.

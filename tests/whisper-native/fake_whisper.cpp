@@ -27,6 +27,7 @@ whisper_context *whisper_init_from_file_with_params(const char *path, whisper_co
     return ctx;
 }
 void whisper_free(whisper_context *ctx) { --live; delete ctx; }
+int whisper_is_multilingual(whisper_context *) { return 0; }
 whisper_full_params whisper_full_default_params(whisper_sampling_strategy) { return {}; }
 int whisper_full(whisper_context *ctx, whisper_full_params p, const float *samples, int count) {
     if (p.n_threads < 1 || p.n_threads > 4 || !p.no_context || !p.no_timestamps ||

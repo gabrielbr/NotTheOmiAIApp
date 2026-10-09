@@ -1,6 +1,22 @@
 # Plan: Portuguese transcription + task extraction to Todoist Inbox
 
-Status: draft for review. Nothing below is implemented yet.
+## Decisions (2026-10-09)
+
+- **Todoist: Option A**, share each task to the Todoist app. The app stays without INTERNET permission.
+- **Language: mixed Portuguese/English.** Whisper auto-detects the language per 30-second window. Vosk can only load one language, so the live draft uses the Portuguese model, and the final Whisper transcript handles both languages.
+
+## Status
+
+| Item | State |
+|---|---|
+| Whisper `language="auto"` when the loaded model is multilingual (`whisper_jni.cpp`). The current `.en` model keeps `"en"` | Done; syntax-checked against pinned whisper.cpp headers. Not built for Android yet |
+| `TaskExtractor`: offline PT+EN cue-phrase finder, plus `tests/tasks/run_host_checks.py` | Done; host checks pass |
+| `TasksActivity`: review/edit/select, then share each task to `com.todoist`, plus a "Find tasks for Todoist" button on each saved recording | Done; type-checked against the Android 14 API. Not run on a device yet |
+| Swap Whisper to multilingual `ggml-small-q5_1.bin` and Vosk to `vosk-model-small-pt-0.3` (URLs + SHA-256 pins) | **Blocked**: this cloud environment's network denies `huggingface.co`, `alphacephei.com` and `dl.google.com`. Do it where these hosts are reachable |
+| Gradle build, lint, APK | **Blocked**: Android SDK/NDK download denied here |
+| New applicationId / app name (Phase 0) | Pending |
+| Notification after refinement ("N tarefas encontradas") | Deferred. The per-recording button covers v1 |
+| Portuguese UI strings | Deferred |
 
 ## Feasibility: yes
 

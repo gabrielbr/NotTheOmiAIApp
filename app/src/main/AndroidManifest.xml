@@ -19,6 +19,7 @@
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
   </activity>
   <activity android:name=".OmiSettingsActivity" android:exported="false"/>
+  <activity android:name=".TasksActivity" android:exported="false"/>
   <service android:name=".OmiCaptureService" android:exported="false" android:foregroundServiceType="connectedDevice" android:stopWithTask="false"/>
   <service android:name=".CaptureService" android:exported="false" android:foregroundServiceType="microphone" android:stopWithTask="false"/>
   <service android:name=".RefinementJobService" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true"/>

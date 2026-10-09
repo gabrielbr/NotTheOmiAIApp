@@ -263,7 +263,7 @@ public final class MainActivity extends Activity {
         else {
             Button play=button("▶  Play recording",true,null);play.setOnClickListener(v->{if(playback.playing){playback.stop();play.setText("▶  Play recording");}else {if(captureActive()){error("Stop recording before playback to prevent feedback.");return;}play.setText("■  Stop playback");playback.play(s.id,()->{if(!destroyed)play.setText("▶  Play recording");},this::error);}});addButton(content,play);
             LinearLayout actions=new LinearLayout(this);Button txt=button("Export text",false,v->confirmExport(s.id,"text"));Button wav=button("Export audio",false,v->confirmExport(s.id,"wav"));LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,dp(52),1);half.rightMargin=dp(6);actions.addView(txt,half);actions.addView(wav,new LinearLayout.LayoutParams(0,dp(52),1));gap(content,10);content.addView(actions);
-            addButton(content,button("Rename",false,v->rename(s)));addButton(content,button("Delete recording",false,v->delete(s)));
+            addButton(content,button("Find tasks for Todoist",false,v->startActivity(new Intent(this,TasksActivity.class).putExtra(TasksActivity.EXTRA_SESSION_ID,s.id))));addButton(content,button("Rename",false,v->rename(s)));addButton(content,button("Delete recording",false,v->delete(s)));
         }
         gap(content,20);content.addView(text("TRANSCRIPT",11,MUTED,true));
         detailRefinement=text(refinementLabel(s),12,ACCENT,true);content.addView(detailRefinement);
