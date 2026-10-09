@@ -25,6 +25,7 @@ public final class Enrichment {
         long last = Meta.getLong(db, LAST_RUN, 0);
         int merged = db.transaction(() -> People.mergeSameAddresses(db));
         int tasks = db.transaction(() -> FoundTasks.scan(db, now, zone));
+        db.transaction(() -> TodoistSync.reconcile(db));
         LocalDate today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
         List<Object[]> oldest = db.query("SELECT MIN(ts) FROM items WHERE ingested_at > ?", last);
         LocalDate from = oldest.get(0)[0] == null ? today

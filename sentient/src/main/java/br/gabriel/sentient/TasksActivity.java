@@ -92,6 +92,22 @@ public final class TasksActivity extends Activity {
         wp.topMargin = dp(8);
         content.addView(Ui.button(this, "Choose chats to watch", Ui.Style.QUIET,
                 v -> startActivity(new Intent(this, WatchedChatsActivity.class))), wp);
+        if (Connections.todoistReady(this) != null) {
+            android.widget.CheckBox direct = new android.widget.CheckBox(this);
+            direct.setText("Create in Todoist directly, with due dates (through Composio)");
+            direct.setTypeface(Ui.font(this, false));
+            direct.setTextColor(Ui.INK);
+            direct.setButtonTintList(ColorStateList.valueOf(Ui.INK));
+            direct.setChecked(Connections.todoistSync(this));
+            direct.setOnCheckedChangeListener((b, on) -> Connections.setTodoistSync(this, on));
+            LinearLayout.LayoutParams dpp = new LinearLayout.LayoutParams(-1, -2);
+            dpp.topMargin = dp(6);
+            content.addView(direct, dpp);
+            TextView note = Ui.text(this, "GMind only creates the tasks you send; it never edits or deletes in Todoist. "
+                    + "Tasks you complete there show as done here after the next sync.", 12, Ui.MUTED, false);
+            note.setPadding(0, dp(2), 0, 0);
+            content.addView(note);
+        }
         Ui.gap(content, 4);
         if (open.isEmpty()) {
             TextView none = Ui.text(this, "Nothing open.", 17, Ui.INK, true);
@@ -158,6 +174,8 @@ public final class TasksActivity extends Activity {
 
     private void sendSelected() {
         if (selected.isEmpty()) return;
+        ComposioToolkit todoist = Connections.todoistReady(this);
+        if (todoist != null && Connections.todoistSync(this)) { sendDirect(todoist); return; }
         io.execute(() -> {
             List<FoundTasks.Task> picked = new ArrayList<>();
             try {
@@ -165,6 +183,38 @@ public final class TasksActivity extends Activity {
                     if (selected.contains(t.id)) picked.add(t);
             } catch (Exception failure) { /* nothing to send */ }
             main.post(() -> { if (!destroyed) { queue.clear(); queue.addAll(picked); shareNext(); } });
+        });
+    }
+
+    /** Creates the picked tasks in Todoist through Composio. */
+    private void sendDirect(ComposioToolkit todoist) {
+        List<Long> ids = new ArrayList<>(selected);
+        send.setEnabled(false);
+        send.setText("Sending…");
+        String user = Connections.composioUser(this), account = Connections.account(this, todoist);
+        io.execute(() -> {
+            String result;
+            try {
+                String key = SecretStore.COMPOSIO.read(this);
+                if (key == null) throw new ComposioClient.ComposioException(0, "Save your Composio key again in Connect sources.");
+                Db db = KnowledgeStore.get(this);
+                int n = TodoistSync.send(db, new ComposioClient(new UrlHttp(), key, ComposioClient.BASE), user, account, ids,
+                        java.time.ZoneId.systemDefault());
+                result = n == 1 ? "1 task created in Todoist." : n + " tasks created in Todoist.";
+            } catch (ComposioClient.ComposioException refused) {
+                result = refused.getMessage();
+            } catch (java.io.IOException offline) {
+                result = "Couldn't reach Composio. Nothing else was sent.";
+            } catch (Exception failure) {
+                result = "Sending failed (" + failure.getClass().getSimpleName() + ").";
+            }
+            final String message = result;
+            main.post(() -> {
+                if (destroyed) return;
+                selected.clear();
+                load();
+                android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
+            });
         });
     }
 
