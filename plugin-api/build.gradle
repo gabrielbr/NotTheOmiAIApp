@@ -1,0 +1,4 @@
+// Plain Java plugin contracts for Sentient sources. No Android dependency, so host tests
+// compile and run them directly.
+plugins { id 'java-library' }
+java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

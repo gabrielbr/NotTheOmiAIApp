@@ -72,6 +72,7 @@ jobs:
       - name: Host checks
         run: |
           python3 tests/tasks/run_host_checks.py
+          python3 tests/sentient/run_host_checks.py
           python3 tests/capture/run_host_checks.py --sdk "$ANDROID_HOME"
           python3 tests/hybrid/run_host_checks.py
           python3 tests/hybrid/run_job_checks.py
@@ -98,6 +99,7 @@ jobs:
           python3 scripts/sign_release.py --sdk "$ANDROID_HOME" --key-dir "$KEY_DIR" --version "$APP_VERSION_NAME"
           rm -rf "$KEY_DIR"
           python3 tests/hybrid/verify_apk.py --sdk "$ANDROID_HOME" --version-code "$APP_VERSION_CODE" --version-name "$APP_VERSION_NAME" "dist/OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk"
+          python3 tests/sentient/verify_apk.py --sdk "$ANDROID_HOME" --version-code "$APP_VERSION_CODE" --version-name "$APP_VERSION_NAME" --omi-apk "dist/OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk" "dist/Sentient-$APP_VERSION_NAME.apk"
 
       - name: Publish GitHub Release
         env:
@@ -108,14 +110,17 @@ jobs:
             echo "Release $TAG already exists"; exit 0
           fi
           APK="dist/OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk"
+          SENTIENT="dist/Sentient-$APP_VERSION_NAME.apk"
           {
             echo "Omi Tarefas $APP_VERSION_NAME (versionCode $APP_VERSION_CODE), built from ${GITHUB_SHA::7}."
             echo
             echo "Install \`OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk\` on your phone. It updates the previous Omi Tarefas release in place and keeps your recordings."
             echo
+            echo "Optional: \`Sentient-$APP_VERSION_NAME.apk\` is the companion knowledge base. It reads Omi Tarefas transcripts (same signing key) and is the only one of the two apps with internet access."
+            echo
             echo '```'
-            grep arm64-v8a dist/SHA256SUMS.txt
+            grep -E 'arm64-v8a|Sentient' dist/SHA256SUMS.txt
             echo '```'
           } > "$RUNNER_TEMP/notes.md"
-          gh release create "$TAG" "$APK" dist/SHA256SUMS.txt \
+          gh release create "$TAG" "$APK" "$SENTIENT" dist/SHA256SUMS.txt \
             --target "$GITHUB_SHA" --title "Omi Tarefas $APP_VERSION_NAME" --notes-file "$RUNNER_TEMP/notes.md"

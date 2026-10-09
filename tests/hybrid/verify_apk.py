@@ -86,6 +86,11 @@ def main():
     assert 'application-debuggable' not in badging
     assert 'android.permission.INTERNET' not in permissions
     assert 'android.permission.BIND_JOB_SERVICE' in manifest and 'RefinementJobService' in manifest
+    # The only exported data surface: transcripts for same-signer apps (Sentient), read-only.
+    assert 'br.gabriel.omitarefas.permission.READ_TRANSCRIPTS' in permissions
+    provider = manifest[manifest.index('TranscriptProvider'):][:600]
+    assert 'android:permission' in provider and 'READ_TRANSCRIPTS' in provider, 'Transcript provider unguarded'
+    assert re.search(r'protectionLevel\(0x01010009\)=\(type 0x11\)0x2', manifest), 'Permission must be signature-level'
     assert 'Verified using v2 scheme' in signature
     with args.apk.open('rb') as source:
         digest = hashlib.file_digest(source,'sha256').hexdigest()

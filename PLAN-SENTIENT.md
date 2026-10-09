@@ -14,6 +14,25 @@ Decisions already made:
 2. **WhatsApp** is captured with a **NotificationListenerService** (incoming messages only, no root).
 3. **AI backend is pluggable**: Claude API and an on-device LLM; the user picks one.
 
+## Status
+
+| Item | State |
+|---|---|
+| `:plugin-api` (plain Java): `SourcePlugin`, `RawItem`, `PullResult`, `PluginContext`, `SourceUnavailableException` | Done |
+| `TranscriptProvider` in Omi Tarefas, signature permission `READ_TRANSCRIPTS`; still no INTERNET (`tests/hybrid/verify_apk.py` now also checks the provider guard) | Done; builds and lints |
+| `:sentient` app: SQLCipher store (Keystore-wrapped raw key), schema v1 with FTS5, `Ingest`, `Sources`, `SyncRunner`, `Search`, Omi transcripts plugin, daily `SyncJobService` + "Sync now", home screen with sources and search, licenses | Done; `assembleDebug/Release`, `lintDebug` pass |
+| Host tests `tests/sentient/run_host_checks.py`: real SQL through SQLite/JDBC, 46 checks (migrations, idempotent ingest, FTS accents, identities, page-by-page cursor commits, failure isolation, foreign-item rejection, Omi cursor rewind) | Pass |
+| Device test `SqlCipherStoreTest` (real SQLCipher FTS5, no plaintext on disk, wrong key refused) | Compiles; **not run yet: no emulator here** |
+| Signing both apps (`scripts/sign_release.py --modules`), `tests/sentient/verify_apk.py` (permission allow-list, no computer-control surface, pinned native libs, same signer), release workflow publishes both APKs | Done; verified locally with a throwaway key |
+| On-device: install both, record, "Sync now", search | **Pending; needs your phone** |
+
+Phase 0 decisions that differ from the sketch below:
+- The sync job uses `NETWORK_TYPE_NONE` for now, because the only source is local. Network-bound plugins will add their own constraint.
+- Plugin config is a `source_config(plugin_id, key, value)` table instead of a JSON column. This keeps the store code plain Java (no `org.json`), so host tests run it.
+- Both apps declare the same signature permission, so the grant works whichever app is installed first. Installing two builds with *different* signers then fails with a duplicate-permission error. That's intended: the provider couldn't be read in that case anyway.
+- SQLCipher is pinned at 4.12.0, the newest release whose `androidx.sqlite` builds with compileSdk 34. This also sets `android.useAndroidX=true`; `:app` has no AndroidX dependencies.
+- The provider uses `Recordings.list("")`, which decrypts every transcript's text (not audio) on each sync. That's fine once a day; a metadata-only `since` filter in `Recordings` can come later if libraries get large.
+
 ## Architecture
 
 ```

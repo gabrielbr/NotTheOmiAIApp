@@ -5,8 +5,10 @@ Every push to `main` (each merged PR) runs `.github/workflows/release.yml`. It:
 1. downloads and hash-checks the pinned models and whisper.cpp source,
 2. builds the native Whisper library and runs the host checks,
 3. builds the release APKs with versionCode `100 + run number` and versionName `0.5.<run number>`,
-4. signs them with the persistent release key and runs `tests/hybrid/verify_apk.py`,
-5. publishes GitHub Release `v0.5.<run number>` with `OmiTarefas-<version>-arm64-v8a.apk` and `SHA256SUMS.txt`.
+4. signs both apps with the persistent release key and runs `tests/hybrid/verify_apk.py` (Omi Tarefas: no INTERNET) and `tests/sentient/verify_apk.py` (Sentient: exact permission allow-list, same signer),
+5. publishes GitHub Release `v0.5.<run number>` with `OmiTarefas-<version>-arm64-v8a.apk`, `Sentient-<version>.apk` and `SHA256SUMS.txt`.
+
+Both apps must share the signing key: Sentient reads Omi Tarefas transcripts through a signature-level permission.
 
 Install the newest release's arm64 APK on the phone. Because the versionCode always grows and the signing key never changes, it installs as an update and keeps your recordings.
 
@@ -35,4 +37,4 @@ After adding the secrets, re-run the latest "Release APK" workflow from the Acti
 
 ## Local signed build
 
-`scripts/sign_release.py --key-dir <dir with release.p12 and password>` signs the outputs of `./gradlew assembleRelease` into `dist/`.
+`scripts/sign_release.py --key-dir <dir with release.p12 and password>` signs the outputs of `./gradlew assembleRelease` into `dist/` (both apps by default; `--modules app` or `--modules sentient` for one).

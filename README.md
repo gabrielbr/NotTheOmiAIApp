@@ -21,6 +21,10 @@ Independent **offline Omi companion for Android 8+**. Public Android application
 - Capability-gated battery, brightness and button controls. Long-press/power behavior stays firmware-owned.
 - Explicit phone-microphone fallback; no automatic substitution when the wearable is absent.
 
+## Sentient companion (optional, in development)
+
+`Sentient` (`br.gabriel.sentient`) is a separate companion app: a personal knowledge base that collects content daily through plugins and stores it in an encrypted, searchable database (SQLCipher + FTS5). Omi Tarefas itself stays offline. It only exposes a read-only transcript provider, guarded by a signature permission, so only an app signed with the same key can read it. Sentient is the only one of the two apps with INTERNET, which later phases need for Composio, Matrix and Claude. Phase 0 syncs Omi Tarefas transcripts once a day and offers full-text search. See [PLAN-SENTIENT.md](PLAN-SENTIENT.md).
+
 ## Connect and record
 
 1. Disconnect other Omi apps, wake/charge the wearable and enable Bluetooth.
@@ -74,6 +78,7 @@ python3 tests/hybrid/run_host_checks.py
 python3 tests/hybrid/run_job_checks.py
 python3 tests/whisper-java/run_host_checks.py
 python3 tests/tasks/run_host_checks.py
+python3 tests/sentient/run_host_checks.py
 ```
 
 Device/instrumentation tests require their explicitly selected Android target and prepared artifacts. For the optional `tests/whisper-device/run_probe.py` helper with Windows `adb.exe`, pass `--windows-temp` with an existing Windows-accessible WSL directory; no developer-specific user path is embedded.
