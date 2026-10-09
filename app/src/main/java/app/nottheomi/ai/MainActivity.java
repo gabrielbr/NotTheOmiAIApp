@@ -70,11 +70,18 @@ public final class MainActivity extends Activity {
         io.execute(() -> {
             try { if(!captureActive())Recordings.get(this).recoverInterrupted();
                 RefinementJobService.schedule(this);
-                main.post(() -> {if(destroyed)return;ready=true;if(library)loadLibrary();else{refreshCapture();loadHomeHistory();}resumeStart();});
+                main.post(() -> {if(destroyed)return;ready=true;if(library)loadLibrary();else{refreshCapture();loadHomeHistory();}resumeStart();openFromIntent();});
             } catch(Exception error){main.post(() -> error("Private library could not be opened. No files were deleted. Close and reopen the app."));}
         });
     }
-    @Override protected void onResume(){super.onResume();resumed=true;main.removeCallbacks(ticker);main.post(ticker);if(ready){if(library)loadLibrary();else loadHomeHistory();}main.post(this::resumeStart);}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(ready)openFromIntent();}
+    /** From the "Transcript ready" notification: open that recording, or the library for several. */
+    private void openFromIntent(){
+        Intent intent=getIntent();String id=intent.getStringExtra(ReadyNotifier.EXTRA_OPEN);boolean all=intent.getBooleanExtra(ReadyNotifier.EXTRA_LIBRARY,false);
+        intent.removeExtra(ReadyNotifier.EXTRA_OPEN);intent.removeExtra(ReadyNotifier.EXTRA_LIBRARY);
+        if(id!=null)detail(id);else if(all){library=true;draw();}
+    }
+    @Override protected void onResume(){super.onResume();resumed=true;ReadyNotifier.clear(this);main.removeCallbacks(ticker);main.post(ticker);if(ready){if(library)loadLibrary();else loadHomeHistory();}main.post(this::resumeStart);}
     @Override protected void onPause(){resumed=false;main.removeCallbacks(ticker);playback.stop();super.onPause();}
     @Override protected void onDestroy(){destroyed=true;viewGeneration++;playback.stop();io.shutdown();main.removeCallbacks(ticker);super.onDestroy();}
     @Override protected void onSaveInstanceState(Bundle out){out.putBoolean("library",library);out.putString("query",query);out.putString("exportId",exportId);out.putString("exportKind",exportKind);super.onSaveInstanceState(out);}

@@ -57,6 +57,7 @@ public class Recordings {
  public void completeRefinement(String id){completes++;ENTRY.state="complete";}
  public void failRefinement(String id){failures++;ENTRY.state="failed";}
 }''',
+    'app/nottheomi/ai/ReadyNotifier.java': '''package app.nottheomi.ai; public class ReadyNotifier { static volatile int ready; static void refined(android.content.Context c,java.util.List<String> ids){ready+=ids.size();} }''',
     'app/nottheomi/ai/WhisperModel.java': '''package app.nottheomi.ai;
 import java.util.concurrent.*;
 public class WhisperModel {
@@ -88,7 +89,7 @@ public class RefinementJobHostTest {
    WhisperModel.RELEASE.countDown();check(WhisperModel.CLOSED.await(5,TimeUnit.SECONDS),"worker closes native model");settled();
    check(WhisperModel.maxOwners==1&&WhisperModel.owners==0,"serialized native ownership");check(WhisperModel.inferenceThread==WhisperModel.closeThread,"inference thread owns close");
    boolean cancelled=mode.equals("stop")||mode.equals("destroy")||mode.equals("capture-preempt");
-   check(Recordings.commits==(cancelled?0:1),"cancelled inference never publishes checkpoint");check(Recordings.completes==(cancelled?0:1),"cancelled inference never completes");check(Recordings.failures==0,"cancellation is not durable failure");
+   check(Recordings.commits==(cancelled?0:1),"cancelled inference never publishes checkpoint");check(Recordings.completes==(cancelled?0:1),"cancelled inference never completes");check(Recordings.failures==0,"cancellation is not durable failure");check(ReadyNotifier.ready==(cancelled?0:1),"ready notification only for completed refinement");
    if(mode.equals("stop")||mode.equals("destroy"))check(!service.finished.contains(start),"no jobFinished after platform stop");
    else {check(service.finished.contains(start),"live job finishes");check(service.retry.get(service.finished.indexOf(start))==mode.equals("capture-preempt"),"correct retry disposition");}
   }
