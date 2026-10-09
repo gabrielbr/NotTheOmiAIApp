@@ -1,0 +1,37 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "ok": true,
+  "messages": [
+   {
+    "type": "message",
+    "user": "U1",
+    "text": "Oi <@U2>, viu o <#C9|deploy>? <https://x.dev/doc|o doc> &amp; tal",
+    "ts": "1791543600.000200"
+   },
+   {
+    "type": "message",
+    "subtype": "channel_join",
+    "user": "U2",
+    "text": "<@U2> has joined",
+    "ts": "1791540000.000100"
+   },
+   {
+    "type": "message",
+    "user": "UME",
+    "text": "Vi sim",
+    "ts": "1791545400.000300",
+    "files": [
+     {
+      "name": "plano.pdf"
+     }
+    ]
+   }
+  ],
+  "has_more": true,
+  "response_metadata": {
+   "next_cursor": "h2"
+  }
+ }
+}

@@ -1,0 +1,26 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "results": [
+   {
+    "id": "T1",
+    "content": "Pagar luz",
+    "description": "Boleto no email",
+    "project_id": "P1",
+    "due": {
+     "date": "2026-10-10",
+     "string": "amanhã"
+    },
+    "labels": [
+     "contas"
+    ],
+    "added_at": "2026-10-01T10:00:00Z",
+    "updated_at": "2026-10-05T10:00:00Z",
+    "checked": false,
+    "priority": 4
+   }
+  ],
+  "next_cursor": "c2"
+ }
+}

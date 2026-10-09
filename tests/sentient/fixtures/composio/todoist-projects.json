@@ -1,0 +1,17 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "results": [
+   {
+    "id": "P1",
+    "name": "Casa"
+   },
+   {
+    "id": "P2",
+    "name": "Trabalho"
+   }
+  ],
+  "next_cursor": null
+ }
+}

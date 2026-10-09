@@ -1,0 +1,37 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "ok": true,
+  "channels": [
+   {
+    "id": "C1",
+    "name": "geral",
+    "is_channel": true,
+    "is_member": true
+   },
+   {
+    "id": "C2",
+    "name": "random",
+    "is_channel": true,
+    "is_member": false
+   },
+   {
+    "id": "D1",
+    "is_im": true,
+    "user": "U1"
+   },
+   {
+    "id": "G1",
+    "name": "mpdm-ana--bob-1",
+    "is_mpim": true,
+    "purpose": {
+     "value": "Group messaging with: @ana @bob"
+    }
+   }
+  ],
+  "response_metadata": {
+   "next_cursor": ""
+  }
+ }
+}

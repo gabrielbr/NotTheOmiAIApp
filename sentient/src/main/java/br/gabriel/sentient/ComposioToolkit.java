@@ -32,7 +32,8 @@ abstract class ComposioToolkit {
     }
 
     static final List<ComposioToolkit> ALL = Collections.unmodifiableList(Arrays.asList(
-            new ComposioGmail(), new ComposioCalendar(), new ComposioDrive()));
+            new ComposioGmail(), new ComposioCalendar(), new ComposioDrive(), new ComposioSlack(),
+            new ComposioTodoist(), new ComposioTickTick()));
 
     static ComposioToolkit forSlug(String slug) {
         for (ComposioToolkit toolkit : ALL) if (toolkit.slug().equals(slug)) return toolkit;
@@ -62,6 +63,7 @@ abstract class ComposioToolkit {
 
     /** The first array found under any of {@code keys}, at the top level or one wrapper down. */
     static List<Object> array(Object data, String... keys) {
+        if (data instanceof List) return Json.list(data);
         for (Object scope : new Object[]{data, Json.at(data, "response_data"), Json.at(data, "data")}) {
             for (String key : keys) {
                 Object found = Json.at(scope, key);
@@ -69,6 +71,16 @@ abstract class ComposioToolkit {
             }
         }
         return Collections.emptyList();
+    }
+
+    /** The next-page cursor in Slack/Todoist style replies: next_cursor, top level or in response_metadata. */
+    static String nextCursor(Object data) {
+        for (Object scope : new Object[]{data, Json.at(data, "response_data"), Json.at(data, "data")}) {
+            String s = Json.str(Json.at(scope, "response_metadata", "next_cursor"));
+            if (s == null) s = Json.firstStr(scope, "next_cursor", "nextCursor");
+            if (s != null) return s;
+        }
+        return null;
     }
 
     /** Like {@link #array} for a single string field, e.g. a next-page token. */
@@ -89,6 +101,8 @@ abstract class ComposioToolkit {
         if (s == null) return 0;
         s = s.trim();
         if (s.matches("\\d{9,}")) return millis(Long.parseLong(s));
+        if (s.matches("\\d{9,}\\.\\d+")) return millis(Long.parseLong(s.substring(0, s.indexOf('.')))); // Slack "1712.0001"
+        s = s.replaceFirst("([+-]\\d{2})(\\d{2})$", "$1:$2"); // "+0000" → "+00:00" (TickTick)
         try { return OffsetDateTime.parse(s).toInstant().toEpochMilli(); } catch (DateTimeParseException ignored) { }
         try { return Instant.parse(s).toEpochMilli(); } catch (DateTimeParseException ignored) { }
         try { return LocalDate.parse(s).atStartOfDay(zone).toInstant().toEpochMilli(); } catch (DateTimeParseException ignored) { }

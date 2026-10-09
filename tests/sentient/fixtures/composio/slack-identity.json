@@ -1,0 +1,14 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "ok": true,
+  "user": {
+   "id": "UME",
+   "name": "Gabriel"
+  },
+  "team": {
+   "id": "T1"
+  }
+ }
+}

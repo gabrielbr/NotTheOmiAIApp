@@ -15,7 +15,7 @@ JAR_URL = 'https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.50.3.0/sqlite
 JAR_SHA256 = 'a3f53a2aa15ae9425a9e793bbe9c8e5288febeb4b65ef5c1a4e80d4c2045cf08'
 JAR = ROOT/'.cache/host/sqlite-jdbc-3.50.3.0.jar'
 PURE = ['Db', 'Schema', 'Ingest', 'Sources', 'SyncRunner', 'Search', 'Items', 'OmiTranscripts', 'ChatMessages', 'KnowledgeTools', 'Citations', 'LlmBackend', 'AskPrompts', 'LocalPrompt',
-        'ComposioClient', 'ComposioToolkit', 'ComposioGmail', 'ComposioCalendar', 'ComposioDrive', 'ComposioPlugin',
+        'ComposioClient', 'ComposioToolkit', 'ComposioGmail', 'ComposioCalendar', 'ComposioDrive', 'ComposioSlack', 'ComposioTodoist', 'ComposioTickTick', 'ComposioPlugin',
         'MatrixClient', 'MatrixPlugin']
 
 

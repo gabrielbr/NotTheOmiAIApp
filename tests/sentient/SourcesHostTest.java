@@ -37,6 +37,9 @@ public final class SourcesHostTest {
         calendar();
         drive();
         composioFailures();
+        slack();
+        todoist();
+        tickTick();
         matrix();
         matrixFailuresAndNames();
         telegram();
@@ -290,6 +293,88 @@ public final class SourcesHostTest {
         check(unsuccessful.contains("failed at Composio") && !unsuccessful.contains("PRIVATE"), "composio: tool failure without its text");
         check(row(db, "SELECT cursor FROM sources WHERE plugin_id = 'composio.gmail'")[0] == null, "composio: failures never advance the cursor");
         check(ComposioToolkit.state("not json") == null, "composio: a corrupt cursor starts over");
+    }
+
+    private static void slack() throws Exception {
+        Db db = fresh();
+        FakeHttp http = new FakeHttp()
+                .on("POST", "/tools/execute/SLACK_LIST_ALL_USERS", 200, fixture("composio/slack-users.json"))
+                .on("POST", "/tools/execute/SLACK_LIST_ALL_CHANNELS", 200, fixture("composio/slack-channels.json"))
+                .on("POST", "/tools/execute/SLACK_RETRIEVE_A_USER_S_IDENTITY_DETAILS", 200, fixture("composio/slack-identity.json"))
+                .on("POST", "/tools/execute/SLACK_FETCH_CONVERSATION_HISTORY", 200, fixture("composio/slack-history-c1.json"))
+                .on("POST", "/tools/execute/SLACK_FETCH_CONVERSATION_HISTORY", 200, fixture("composio/slack-history-c1-page2.json"))
+                .on("POST", "/tools/execute/SLACK_FETCH_CONVERSATION_HISTORY", 200, fixture("composio/slack-history-d1.json"))
+                .on("POST", "/tools/execute/SLACK_FETCH_CONVERSATION_HISTORY", 403, "{\"error\":{\"message\":\"not_in_channel\"}}");
+        List<SyncRunner.Outcome> out = sync(db, plugin(new ComposioSlack()), http, "ck", null, NOW);
+        check(!out.get(0).failed && out.get(0).added == 4 && http.done(), "slack: four messages, join skipped, unreadable channel skipped: " + out.get(0).status);
+        Map<String, Object> channels = args(http.requests.get(1));
+        check("public_channel,private_channel,mpim,im".equals(channels.get("types")) && Boolean.TRUE.equals(channels.get("exclude_archived")),
+                "slack: lists channels, DMs and group DMs");
+        Map<String, Object> history = args(http.requests.get(3));
+        check("C1".equals(history.get("channel")) && Long.toString((NOW - ComposioToolkit.FIRST_SYNC_MS) / 1000).equals(history.get("oldest")),
+                "slack: first sync reads 30 days");
+        check("h2".equals(args(http.requests.get(4)).get("cursor")) && "D1".equals(args(http.requests.get(5)).get("channel"))
+                && "G1".equals(args(http.requests.get(6)).get("channel")), "slack: pages history; skips channels you're not in");
+        String first = (String) row(db, "SELECT text FROM items WHERE items.external_id = 'C1:" + (NOW / 1000 - 3600) + ".000200'")[0];
+        check("Oi @Bob Lima, viu o #deploy? o doc & tal".equals(first), "slack: mentions, channels, links unescaped: " + first);
+        Object[] mine = row(db, "SELECT items.text, items.from_me, conversations.title, conversations.kind FROM items"
+                + " JOIN conversations ON conversations.id = items.conversation_id WHERE items.external_id LIKE 'C1:%.000300'");
+        check("Vi sim\n[file] plano.pdf".equals(mine[0]) && ((Number) mine[1]).intValue() == 1, "slack: your own message, files listed");
+        check("#geral".equals(mine[2]) && "group".equals(mine[3]), "slack: channel title");
+        Object[] dm = row(db, "SELECT conversations.title, conversations.kind, identities.display_name FROM items"
+                + " JOIN conversations ON conversations.id = items.conversation_id"
+                + " JOIN identities ON identities.id = items.author_identity_id WHERE items.external_id LIKE 'D1:%'");
+        check("Ana".equals(dm[0]) && "dm".equals(dm[1]) && "Ana".equals(dm[2]), "slack: DM titled after the other person");
+        check("@here build ok".equals(row(db, "SELECT text FROM items WHERE items.external_id LIKE 'C1:%.000100' AND text LIKE '%build%'")[0]),
+                "slack: bot messages kept");
+        Object cursor = Json.parse((String) row(db, "SELECT cursor FROM sources WHERE plugin_id = 'composio.slack'")[0]);
+        check(Json.at(cursor, "round") == null && Json.at(cursor, "pending") == null && "UME".equals(Json.str(Json.at(cursor, "me"))),
+                "slack: round state dropped once every channel is read");
+        check((NOW / 1000 - 1800 + ".000300").equals(Json.str(Json.at(cursor, "latest", "C1"))), "slack: next sync starts after the newest message");
+    }
+
+    private static void todoist() throws Exception {
+        Db db = fresh();
+        FakeHttp http = new FakeHttp()
+                .on("POST", "/tools/execute/TODOIST_GET_ALL_PROJECTS", 200, fixture("composio/todoist-projects.json"))
+                .on("POST", "/tools/execute/TODOIST_GET_ALL_TASKS", 200, fixture("composio/todoist-tasks.json"))
+                .on("POST", "/tools/execute/TODOIST_GET_ALL_TASKS", 200, fixture("composio/todoist-tasks-page2.json"))
+                .on("POST", "/tools/execute/TODOIST_GET_COMPLETED_TASKS_BY_COMPLETION_DATE", 200, fixture("composio/todoist-completed.json"));
+        List<SyncRunner.Outcome> out = sync(db, plugin(new ComposioTodoist()), http, "ck", null, NOW);
+        check(out.get(0).added == 3 && http.done(), "todoist: two open tasks over two pages, one completed: " + out.get(0).status);
+        check("c2".equals(args(http.requests.get(2)).get("cursor")), "todoist: pages with the cursor");
+        Map<String, Object> completed = args(http.requests.get(3));
+        check(ComposioToolkit.iso(NOW - ComposioToolkit.FIRST_SYNC_MS).equals(completed.get("since"))
+                && ComposioToolkit.iso(NOW).equals(completed.get("until")), "todoist: completed in the last 30 days");
+        Object[] t1 = row(db, "SELECT items.text, items.kind, items.from_me, conversations.title FROM items"
+                + " JOIN conversations ON conversations.id = items.conversation_id WHERE items.external_id = 'T1'");
+        check("Pagar luz\nDue: amanhã\nProject: Casa\nLabels: contas\n\nBoleto no email".equals(t1[0]), "todoist: task text: " + t1[0]);
+        check(RawItem.TASK.equals(t1[1]) && ((Number) t1[2]).intValue() == 1 && "Casa".equals(t1[3]), "todoist: your task in its project");
+        check("Done: Marcar dentista\nProject: Casa".equals(row(db, "SELECT text FROM items WHERE items.external_id = 'T3'")[0]), "todoist: completed task");
+
+        FakeHttp next = new FakeHttp()
+                .on("POST", "/tools/execute/TODOIST_GET_ALL_PROJECTS", 200, fixture("composio/todoist-projects.json"))
+                .on("POST", "/tools/execute/TODOIST_GET_ALL_TASKS", 200, fixture("composio/todoist-tasks-page2.json"))
+                .on("POST", "/tools/execute/TODOIST_GET_COMPLETED_TASKS_BY_COMPLETION_DATE", 200, fixture("composio/todoist-completed-t1.json"));
+        List<SyncRunner.Outcome> second = sync(db, plugin(new ComposioTodoist()), next, "ck", null, NOW + 3_600_000);
+        check(ComposioToolkit.iso(NOW - 3_600_000).equals(args(next.requests.get(2)).get("since")), "todoist: later syncs from the last one");
+        check(second.get(0).updated == 1 && ((String) row(db, "SELECT text FROM items WHERE items.external_id = 'T1'")[0]).startsWith("Done: Pagar luz"),
+                "todoist: completing a task updates it in place");
+        check(count(db, "SELECT COUNT(*) FROM items") == 3, "todoist: no duplicates");
+    }
+
+    private static void tickTick() throws Exception {
+        Db db = fresh();
+        FakeHttp http = new FakeHttp()
+                .on("POST", "/tools/execute/TICKTICK_GET_USER_PROJECT", 200, fixture("composio/ticktick-projects.json"))
+                .on("POST", "/tools/execute/TICKTICK_LIST_ALL_TASKS", 200, fixture("composio/ticktick-tasks.json"));
+        List<SyncRunner.Outcome> out = sync(db, plugin(new ComposioTickTick()), http, "ck", null, NOW);
+        check(out.get(0).added == 2, "ticktick: two open tasks: " + out.get(0).status);
+        Object[] k1 = row(db, "SELECT text, ts FROM items WHERE items.external_id = 'k1'");
+        check("Reservar hotel\nDue: 2026-10-20\nProject: Viagem\n\nPerto da praia\n- [x] Comparar preços\n- [ ] Pagar sinal".equals(k1[0]),
+                "ticktick: task with due date, project, checklist: " + k1[0]);
+        check(((Number) k1[1]).longValue() == 1_791_374_400_000L, "ticktick: +0000 offsets parsed");
+        check(((String) row(db, "SELECT text FROM items WHERE items.external_id = 'k2'")[0]).contains("Project: Inbox"), "ticktick: inbox named");
     }
 
     // ---- Matrix -------------------------------------------------------------------------------

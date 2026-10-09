@@ -1,0 +1,35 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "tasks": [
+   {
+    "id": "k1",
+    "projectId": "proj1",
+    "title": "Reservar hotel",
+    "content": "Perto da praia",
+    "dueDate": "2026-10-20T03:00:00.000+0000",
+    "modifiedTime": "2026-10-07T12:00:00.000+0000",
+    "status": 0,
+    "priority": 3,
+    "items": [
+     {
+      "title": "Comparar preços",
+      "status": 1
+     },
+     {
+      "title": "Pagar sinal",
+      "status": 0
+     }
+    ]
+   },
+   {
+    "id": "k2",
+    "projectId": "inbox123",
+    "title": "Comprar pilhas",
+    "createdTime": "2026-10-06T09:00:00.000+0000",
+    "status": 0
+   }
+  ]
+ }
+}

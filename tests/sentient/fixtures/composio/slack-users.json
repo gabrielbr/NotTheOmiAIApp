@@ -1,0 +1,36 @@
+{
+ "successful": true,
+ "error": null,
+ "data": {
+  "ok": true,
+  "members": [
+   {
+    "id": "U1",
+    "name": "ana",
+    "real_name": "Ana Souza",
+    "profile": {
+     "display_name": "Ana",
+     "real_name": "Ana Souza"
+    }
+   },
+   {
+    "id": "U2",
+    "name": "bob",
+    "profile": {
+     "display_name": "",
+     "real_name": "Bob Lima"
+    }
+   },
+   {
+    "id": "UME",
+    "name": "me",
+    "profile": {
+     "display_name": "Gabriel"
+    }
+   }
+  ],
+  "response_metadata": {
+   "next_cursor": ""
+  }
+ }
+}

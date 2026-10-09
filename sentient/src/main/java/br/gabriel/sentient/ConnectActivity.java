@@ -67,9 +67,9 @@ public final class ConnectActivity extends Activity {
     // --- Composio ------------------------------------------------------------------------------
 
     private void drawComposio() {
-        section("Gmail, Calendar and Drive");
-        content.addView(Ui.text(this, "Through Composio (composio.dev), with your own Composio API key. Composio's "
-                + "servers fetch this data from Google and hand it to GMind, so Composio sees it. GMind keeps the key "
+        section("Through Composio");
+        content.addView(Ui.text(this, "Gmail, Calendar, Drive, Slack, Todoist and TickTick, through Composio (composio.dev) with your own "
+                + "Composio API key. Composio's servers fetch this data and hand it to GMind, so Composio sees it. GMind keeps the key "
                 + "encrypted on this phone.", 14, Ui.MUTED, false));
         Ui.gap(content, 14);
         boolean hasKey = SecretStore.COMPOSIO.has(this);
