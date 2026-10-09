@@ -62,6 +62,13 @@ public final class ModelInstallerHostTest {
         Files.write(new File(legacy, "keep").toPath(), new byte[]{4,5,6});
         ModelInstaller.prepare(base, source, () -> false);
         check(new File(legacy, "keep").length() == 3, "Migration does not delete old data");
+        File upgrade = new File(temporary, "upgrade");
+        check(upgrade.mkdirs(), "Upgrade fixture");
+        for (String old : ModelInstaller.SUPERSEDED) Files.write(new File(upgrade, old).toPath(), new byte[]{1, 2});
+        Files.write(new File(upgrade, "unrelated.bin").toPath(), new byte[]{7});
+        ModelInstaller.prepare(upgrade, source, () -> false);
+        for (String old : ModelInstaller.SUPERSEDED) check(!new File(upgrade, old).exists(), "Superseded model removed: " + old);
+        check(new File(upgrade, "unrelated.bin").length() == 1, "Unrelated files kept");
         System.out.println("ModelInstallerHostTest PASS: " + assertions + " assertions, real pinned Whisper model");
     }
     private interface Checked { void run() throws Exception; }
