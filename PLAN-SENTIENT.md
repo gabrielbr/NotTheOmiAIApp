@@ -218,7 +218,8 @@ The user picks, in GMind's UI, which groups or people in which apps (WhatsApp, S
 - The text is interpreted for timelines and deadlines ("by Friday", "end of month", "before the 15th"), which become the task's due date. Relative dates resolve against the message's timestamp.
 - The selection UI lists the conversations and people GMind has already seen, per app, each with an on/off toggle. Nothing is monitored until the user turns it on.
 - Each task links back to the message it came from, shown in its conversation (`Items.around`).
-- Open question: where tasks live. They could be a GMind list, or be sent to Todoist like GVoice's task extraction (`PLAN-PT-TODOIST.md`). Sending them to Todoist is a write action, so it needs an exception to the read-only rule under *Out of scope*.
+- Tasks live in GMind: a task list stored in the encrypted store, which is the source of truth and works with no connection.
+- Todoist is one of the plugin connections. When it's enabled, GMind syncs its tasks with Todoist (as GVoice's task extraction does, `PLAN-PT-TODOIST.md`). When it's off, tasks stay only in GMind. This is the one write action GMind makes, it happens only after the user turns it on, and it touches only tasks GMind created. See *Out of scope*.
 
 ### Ask for the user's name during onboarding
 
@@ -233,4 +234,4 @@ Onboarding asks the user's name (and nicknames or other spellings, like "Gabriel
 
 ## Out of scope
 
-Computer control or UI automation, Accessibility scraping, sending messages or any write action on Composio/Matrix, reading WhatsApp's encrypted backups, and cloud sync of the knowledge DB.
+Computer control or UI automation, Accessibility scraping, sending messages or any write action on Composio/Matrix, reading WhatsApp's encrypted backups, and cloud sync of the knowledge DB. The one planned exception is the opt-in Todoist task sync (see *Backlog*).
