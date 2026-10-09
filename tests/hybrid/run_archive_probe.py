@@ -17,7 +17,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = 'app.nottheomi.archiveprobe'
-PRODUCTION = 'app.nottheomi.ai'
+PRODUCTION = 'br.gabriel.omitarefas'
 SOURCES = ['app/src/main/java/app/nottheomi/ai/Recordings.java',
            'app/src/main/java/app/nottheomi/ai/OmiPcmQueue.java',
            'app/src/androidTest/java/app/nottheomi/ai/ArchiveThroughputTest.java']

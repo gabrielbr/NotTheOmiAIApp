@@ -1,0 +1,121 @@
+name: Release APK
+
+# Every push to main (each merged PR) builds, tests, signs and publishes a GitHub
+# Release with a strictly higher versionCode, so the phone installs it as an update.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-apk
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NDK_VERSION: 27.2.12479018
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute release version
+        run: |
+          # versionCode must only grow; run_number grows with every run of this workflow.
+          echo "APP_VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "APP_VERSION_NAME=0.5.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+
+      - name: Require the persistent signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          # A new random key would make the APK impossible to install as an update.
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::Add repository secrets RELEASE_KEYSTORE_BASE64 and RELEASE_KEYSTORE_PASSWORD (see RELEASING.md), then re-run this workflow."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android platform, build-tools and NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" "ndk;$NDK_VERSION" > /dev/null
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Cache pinned models and whisper.cpp source
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: pinned-${{ hashFiles('DEPENDENCIES.json', 'scripts/prepare_whisper.py', 'scripts/prepare_preview.py') }}
+
+      - name: Prepare pinned models (hash-verified)
+        run: python3 scripts/prepare_model.py
+
+      - name: Build native Whisper library
+        run: python3 scripts/build_whisper.py --ndk "$ANDROID_HOME/ndk/$NDK_VERSION"
+
+      - name: Host checks
+        run: |
+          python3 tests/tasks/run_host_checks.py
+          python3 tests/capture/run_host_checks.py --sdk "$ANDROID_HOME"
+          python3 tests/hybrid/run_host_checks.py
+          python3 tests/hybrid/run_job_checks.py
+          python3 tests/whisper-java/run_host_checks.py
+          python3 tests/omi/run_ble_tests.py
+          python3 tests/omi-capture/run_host_checks.py
+          python3 tests/omi-composition/run_host_checks.py
+
+      - name: Build release APKs and lint
+        run: >
+          ./gradlew --no-daemon --console=plain assembleRelease lintDebug
+          -PappVersionCode="$APP_VERSION_CODE" -PappVersionName="$APP_VERSION_NAME"
+
+      - name: Sign and verify
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          KEY_DIR="$RUNNER_TEMP/release-key"
+          mkdir -m 700 "$KEY_DIR"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$KEY_DIR/release.p12"
+          printf '%s\n' "$KEYSTORE_PASSWORD" > "$KEY_DIR/password"
+          chmod 600 "$KEY_DIR"/*
+          python3 scripts/sign_release.py --sdk "$ANDROID_HOME" --key-dir "$KEY_DIR" --version "$APP_VERSION_NAME"
+          rm -rf "$KEY_DIR"
+          python3 tests/hybrid/verify_apk.py --sdk "$ANDROID_HOME" --version-code "$APP_VERSION_CODE" --version-name "$APP_VERSION_NAME" "dist/OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$APP_VERSION_NAME"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists"; exit 0
+          fi
+          APK="dist/OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk"
+          {
+            echo "Omi Tarefas $APP_VERSION_NAME (versionCode $APP_VERSION_CODE), built from ${GITHUB_SHA::7}."
+            echo
+            echo "Install \`OmiTarefas-$APP_VERSION_NAME-arm64-v8a.apk\` on your phone. It updates the previous Omi Tarefas release in place and keeps your recordings."
+            echo
+            echo '```'
+            grep arm64-v8a dist/SHA256SUMS.txt
+            echo '```'
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" "$APK" dist/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --title "Omi Tarefas $APP_VERSION_NAME" --notes-file "$RUNNER_TEMP/notes.md"

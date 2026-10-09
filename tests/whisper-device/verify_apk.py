@@ -52,7 +52,7 @@ def main():
     aapt = args.sdk / 'build-tools/34.0.0/aapt'
     badging = subprocess.check_output([str(aapt), 'dump', 'badging', str(args.apk)], text=True)
     permissions = subprocess.check_output([str(aapt), 'dump', 'permissions', str(args.apk)], text=True)
-    assert "package: name='app.nottheomi.ai'" in badging
+    assert "package: name='br.gabriel.omitarefas'" in badging
     assert "versionCode='7'" in badging and "versionName='0.4.0'" in badging
     assert 'application-debuggable' not in badging
     assert 'android.permission.INTERNET' not in permissions

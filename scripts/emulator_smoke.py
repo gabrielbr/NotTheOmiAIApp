@@ -22,7 +22,7 @@ assert a.port!=5037, 'Refuse shared ADB server'
 assert a.serial.startswith('emulator-'), 'Refuse physical device'
 a.output.mkdir(parents=True,exist_ok=True)
 base=[a.adb,'-P',str(a.port),'-s',a.serial]
-pkg='app.nottheomi.ai'
+pkg='br.gabriel.omitarefas'
 events=[]
 def adb(*args,timeout=40,binary=False):
     r=subprocess.run(base+list(args),capture_output=True,text=not binary,timeout=timeout)
@@ -72,7 +72,7 @@ adb('shell','am','force-stop',pkg)
 adb('shell','pm','grant',pkg,'android.permission.RECORD_AUDIO')
 adb('shell','pm','grant',pkg,'android.permission.POST_NOTIFICATIONS')
 adb('shell','am','start','-W','-n',pkg+'/.MainActivity')
-wait_node('NotTheOmiAIApp')
+wait_node('Omi Tarefas')
 event('launch',screenshot=shot('01-home'))
 scroll_tap('Source:',partial=True)
 tap('Omi wearable')
@@ -89,7 +89,7 @@ if read is not None:assert read.attrib.get('enabled')=='false'
 event('omi-no-device-gate',screenshot=shot('01a-omi-controls'))
 # Permission remains ungranted. Explicit back cancels the connect request.
 tap('‹  Back to home')
-wait_node('NotTheOmiAIApp')
+wait_node('Omi Tarefas')
 scroll_tap('Source:',partial=True)
 tap('Phone microphone')
 event('explicit-phone-fallback',screenshot=shot('01b-phone-fallback'))

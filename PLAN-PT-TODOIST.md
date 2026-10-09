@@ -18,7 +18,8 @@
 | `./gradlew assembleDebug assembleRelease assembleDebugAndroidTest lintDebug` | Pass. Lint shows only translation warnings, the same kind the existing screens have |
 | `tests/hybrid/verify_apk.py` on a signed arm64 release APK | Pass: both models pinned, native libs present, `internet_permission: false` |
 | On-device check: PT/EN accuracy with your Omi, and the Todoist share flow | **Pending; needs your phone** |
-| New applicationId / app name (Phase 0) | Pending |
+| New applicationId `br.gabriel.omitarefas`, app name "Omi Tarefas" (Phase 0) | Done |
+| Release on every merge to `main`: signed APK in GitHub Releases, versionCode `100 + run number` (`.github/workflows/release.yml`, `RELEASING.md`) | Done; needs the two signing-key secrets once |
 | Notification after refinement ("N tarefas encontradas") | Deferred. The per-recording button covers v1 |
 | Portuguese UI strings | Deferred |
 

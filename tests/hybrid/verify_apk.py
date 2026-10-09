@@ -17,6 +17,8 @@ def sha(data):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('apk', type=Path)
+    parser.add_argument('--version-code', help='Expected versionCode; defaults to app/build.gradle')
+    parser.add_argument('--version-name', help='Expected versionName; defaults to app/build.gradle')
     parser.add_argument('--sdk', type=Path, required=True)
     args = parser.parse_args()
     metadata = json.loads((ROOT/'DEPENDENCIES.json').read_text())
@@ -73,12 +75,14 @@ def main():
     manifest = run(tools/'aapt','dump','xmltree',args.apk,'AndroidManifest.xml')
     signature = run(tools/'apksigner','verify','--verbose','--print-certs',args.apk)
     run(tools/'zipalign','-c','-p','4',args.apk)
-    assert "package: name='app.nottheomi.ai'" in badging
+    assert "package: name='br.gabriel.omitarefas'" in badging
     gradle = (ROOT/'app/build.gradle').read_text()
-    code_match = re.search(r'\bversionCode\s+(\d+)', gradle)
-    name_match = re.search(r"\bversionName\s+['\"]([^'\"]+)['\"]", gradle)
+    code_match = re.search(r"appVersionCode'\) \?: '(\d+)'", gradle)
+    name_match = re.search(r"appVersionName'\) \?: '([^']+)'", gradle)
     assert code_match and name_match, 'Missing canonical Gradle release version'
-    assert f"versionCode='{code_match.group(1)}'" in badging and f"versionName='{name_match.group(1)}'" in badging
+    code = args.version_code or code_match.group(1)
+    name = args.version_name or name_match.group(1)
+    assert f"versionCode='{code}'" in badging and f"versionName='{name}'" in badging
     assert 'application-debuggable' not in badging
     assert 'android.permission.INTERNET' not in permissions
     assert 'android.permission.BIND_JOB_SERVICE' in manifest and 'RefinementJobService' in manifest

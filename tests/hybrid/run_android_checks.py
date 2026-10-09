@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = 'app.nottheomi.ai'
+PACKAGE = 'br.gabriel.omitarefas'
 
 
 def run(*argv, timeout=180):
@@ -52,8 +52,8 @@ def main():
     services = shell('dumpsys', 'activity', 'services', PACKAGE)
     if any(name in services for name in ('CaptureService', 'OmiCaptureService', 'RefinementJobService')):
         raise SystemExit('App service active; not interrupting it')
-    version = field(r'versionName\s+[\"\']([^\"\']+)', (ROOT/'app/build.gradle').read_text())
-    apk = ROOT/'dist'/f'NotTheOmiAIApp-{version}-x86_64.apk'
+    version = field(r"appVersionName'\) \?: '([^']+)'", (ROOT/'app/build.gradle').read_text())
+    apk = ROOT/'dist'/f'OmiTarefas-{version}-x86_64.apk'
     original_test = ROOT/'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
     tools = sdk/'build-tools/34.0.0'
     key, password = args.key_dir/'release.p12', args.key_dir/'password'

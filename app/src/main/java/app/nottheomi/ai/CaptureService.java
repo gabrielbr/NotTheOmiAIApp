@@ -459,7 +459,7 @@ public final class CaptureService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder builder = new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_wave)
-                .setContentTitle("NotTheOmiAIApp")
+                .setContentTitle("Omi Tarefas")
                 .setContentText(state)
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_SECRET)

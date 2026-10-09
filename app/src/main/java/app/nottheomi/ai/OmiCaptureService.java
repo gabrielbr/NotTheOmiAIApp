@@ -587,7 +587,7 @@ public final class OmiCaptureService extends Service {
         PendingIntent stopAction = PendingIntent.getService(this, 3, stop,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder builder = new Notification.Builder(this, CHANNEL)
-                .setSmallIcon(R.drawable.ic_wave).setContentTitle("NotTheOmiAIApp · Omi")
+                .setSmallIcon(R.drawable.ic_wave).setContentTitle("Omi Tarefas · Omi")
                 .setContentText(state).setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_SECRET).setOnlyAlertOnce(true).setOngoing(true)
                 .addAction(new Notification.Action.Builder(null, "Stop", stopAction).build());
