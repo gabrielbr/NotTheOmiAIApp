@@ -10,6 +10,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** Android-scheduled, local-only saved-audio work. Never starts microphone or Bluetooth. */
@@ -103,6 +104,7 @@ public final class RefinementJobService extends JobService {
             if (work.shouldPause()) { retry = true; return; }
             work.model = new WhisperModel(path);
             if (work.shouldPause()) { work.cancel(); retry = true; return; }
+            List<String> done = new ArrayList<>();
             for (Recordings.Refinement entry : pending) {
                 if (work.shouldPause()) { retry = true; break; }
                 try {
@@ -110,6 +112,7 @@ public final class RefinementJobService extends JobService {
                     if (fresh == null || !"pending".equals(fresh.state)) continue;
                     setState("Refining saved transcript · live draft and audio available");
                     refine(store, fresh, work.model, work::shouldPause);
+                    done.add(fresh.id);
                     revision++;
                 } catch (Exception | LinkageError failure) {
                     if (work.shouldPause() || failure instanceof RefinementEngine.Paused) {
@@ -122,6 +125,8 @@ public final class RefinementJobService extends JobService {
                     setState("Whisper refinement failed · live draft and audio kept; retry in Library");
                 }
             }
+            try { ReadyNotifier.refined(this, done); }
+            catch (RuntimeException notificationUnavailable) { /* Transcripts are saved either way. */ }
             if (!work.shouldPause() && !store.pendingRefinements().isEmpty()) retry = true;
             if (!retry && !work.shouldPause())
                 setState("Whisper pass finished · check each recording's transcript status");
