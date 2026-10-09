@@ -9,7 +9,7 @@ Independent **offline Omi companion for Android 8+**. Public Android application
 - This branch contains the **0.4.4 source**.
 - [Published APK releases](https://github.com/five0nit/NotTheOmiAIApp/releases) remain separate. The existing [v0.3.1 download](https://github.com/five0nit/NotTheOmiAIApp/releases/tag/v0.3.1), root `SHA256SUMS.txt`, `release-manifest.json` and `RELEASE-NOTES-0.3.1.md` describe the **older 0.3.1 binaries**, not the 0.4.4 source.
 - This source push does not publish a new 0.4.4 binary release. Do not confuse a GitHub source ZIP with an installable APK.
-- Package: `app.nottheomi.ai`. Install an update over the existing app only with the same signer; **do not uninstall or clear data** to preserve the local encryption key and recordings. Your own signing key cannot update an existing differently signed installation.
+- **This fork installs as `br.gabriel.omitarefas` ("Omi Tarefas")**, beside the original `app.nottheomi.ai`. Every merge to `main` publishes a signed APK under [Releases](https://github.com/gabrielbr/NotTheOmiAIApp/releases); see [RELEASING.md](RELEASING.md). Upstream note for the original package `app.nottheomi.ai`: Install an update over the existing app only with the same signer; **do not uninstall or clear data** to preserve the local encryption key and recordings. Your own signing key cannot update an existing differently signed installation.
 
 ## What it does
 

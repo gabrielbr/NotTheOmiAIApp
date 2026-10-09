@@ -22,12 +22,8 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--sdk', type=Path, default=Path(os.environ.get('ANDROID_HOME', str(Path.home() / 'Android/Sdk'))))
     p.add_argument('--key-dir', type=Path, required=True, help='Persistent private directory OUTSIDE repository; back it up securely')
-    p.add_argument('--version', help='Must match app/build.gradle; defaults to its versionName')
+    p.add_argument('--version', help='Expected versionName; defaults to the built release output metadata')
     args = p.parse_args()
-    match = re.search(r"versionName\s+[\"\']([0-9]+\.[0-9]+\.[0-9]+)[\"\']", (ROOT/"app/build.gradle").read_text())
-    if not match or (args.version is not None and args.version != match.group(1)):
-        raise SystemExit("Release version must match app/build.gradle")
-    args.version = match.group(1)
     keydir = args.key_dir.expanduser().resolve()
     if keydir == ROOT or ROOT in keydir.parents:
         raise SystemExit('Signing key must remain outside repository')
@@ -40,13 +36,17 @@ def main():
         fd = os.open(password, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600)
         with os.fdopen(fd, 'w') as out:
             out.write(secrets.token_urlsafe(36)+'\n')
-        run(['keytool','-genkeypair','-keystore',key,'-storetype','PKCS12','-alias','release','-keyalg','RSA','-keysize','3072','-validity','10000','-dname','CN=NotTheOmiAIApp, O=Independent Android App','-storepass:file',password,'-keypass:file',password])
+        run(['keytool','-genkeypair','-keystore',key,'-storetype','PKCS12','-alias','release','-keyalg','RSA','-keysize','3072','-validity','10000','-dname','CN=Omi Tarefas, O=Independent Android App','-storepass:file',password,'-keypass:file',password])
         key.chmod(0o600)
     tools = args.sdk/'build-tools'/'34.0.0'
     output = ROOT/'app/build/outputs/apk/release'
     metadata = json.loads((output/'output-metadata.json').read_text())
-    if metadata.get('applicationId') != 'app.nottheomi.ai' or metadata.get('variantName') != 'release':
+    if metadata.get('applicationId') != 'br.gabriel.omitarefas' or metadata.get('variantName') != 'release':
         raise SystemExit('Unexpected release output metadata')
+    if args.version is None:
+        args.version = next(iter(metadata.get('elements', [])), {}).get('versionName')
+    if not args.version or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', args.version):
+        raise SystemExit('Release versionName must be MAJOR.MINOR.PATCH')
     inputs = []
     for item in metadata.get('elements', []):
         name = item.get('outputFile', '')
@@ -61,7 +61,7 @@ def main():
     receipts=[]
     for src in inputs:
         abi=src.name.removeprefix('app-').removesuffix('-release-unsigned.apk')
-        target=dest/f'NotTheOmiAIApp-{args.version}-{abi}.apk'
+        target=dest/f'OmiTarefas-{args.version}-{abi}.apk'
         with tempfile.TemporaryDirectory(prefix='nottheomi-sign-') as td:
             aligned=Path(td)/'aligned.apk'
             run([tools/'zipalign','-f','-p','4',src,aligned])
@@ -70,9 +70,9 @@ def main():
         run([tools/'zipalign','-c','-p','4',target])
         badging=run([tools/'aapt','dump','badging',target])
         perms=run([tools/'aapt','dump','permissions',target])
-        assert "package: name='app.nottheomi.ai'" in badging
+        assert "package: name='br.gabriel.omitarefas'" in badging
         assert f"versionName='{args.version}'" in badging
-        assert "application-label:'NotTheOmiAIApp'" in badging
+        assert "application-label:'Omi Tarefas'" in badging
         assert "android.permission.INTERNET" not in perms
         assert 'application-debuggable' not in badging
         receipt={'file':target.name,'bytes':target.stat().st_size,'sha256':hashlib.sha256(target.read_bytes()).hexdigest(),'signature':signature,'badging':badging,'permissions':perms,'alignment':'passed'}

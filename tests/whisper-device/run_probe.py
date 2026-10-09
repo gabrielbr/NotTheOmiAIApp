@@ -42,7 +42,7 @@ def main():
     properties = {key: shell('getprop', key) for key in ['ro.product.model', 'ro.product.cpu.abi', 'ro.build.version.release', 'ro.kernel.qemu']}
     if properties['ro.product.cpu.abi'] != args.abi:
         raise RuntimeError('Device ABI differs from requested artifact')
-    services = shell('dumpsys', 'activity', 'services', 'app.nottheomi.ai')
+    services = shell('dumpsys', 'activity', 'services', 'br.gabriel.omitarefas')
     if 'CaptureService' in services:
         raise RuntimeError('Active app capture service: postpone CPU benchmark')
     remote = '/data/local/tmp/nottheomi-whisper-probe-' + uuid.uuid4().hex

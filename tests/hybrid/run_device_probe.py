@@ -209,7 +209,7 @@ def recheck(inputs):
 
 
 def assert_idle(shell):
-    services = shell('dumpsys', 'activity', 'services', 'app.nottheomi.ai')
+    services = shell('dumpsys', 'activity', 'services', 'br.gabriel.omitarefas')
     if not services or 'ACTIVITY MANAGER SERVICES' not in services:
         raise RuntimeError('Cannot establish app service state; no benchmark started')
     if any(name in services for name in ('CaptureService', 'RefinementJobService')):
