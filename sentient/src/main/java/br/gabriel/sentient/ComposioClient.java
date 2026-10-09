@@ -60,6 +60,16 @@ public final class ComposioClient {
         }
     }
 
+    /** Checks that the key works (a one-item read); throws with a message for the person when it doesn't. */
+    public void verify() throws IOException, ComposioException {
+        call("GET", "/connected_accounts?limit=1", null);
+    }
+
+    /** True when {@code text} could be a Composio API key: one token, no spaces, a sensible length. */
+    static boolean looksLikeKey(String text) {
+        return text != null && text.matches("[A-Za-z0-9_\\-.]{16,200}");
+    }
+
     /** An existing Composio-managed auth config for the toolkit, or a new one. */
     public String authConfig(String toolkit) throws IOException, ComposioException {
         Object list = call("GET", "/auth_configs?toolkit_slug=" + enc(toolkit), null);

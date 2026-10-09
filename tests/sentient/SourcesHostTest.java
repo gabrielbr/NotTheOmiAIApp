@@ -174,6 +174,14 @@ public final class SourcesHostTest {
         check(client.status("ca_gone") == null, "deleted account reads as gone");
         client.disconnect("ca_1");
         check(http.done(), "every scripted call made");
+        check(ComposioClient.looksLikeKey("ak_AbC123-xyz.7890QW") && !ComposioClient.looksLikeKey("my key with spaces in it")
+                && !ComposioClient.looksLikeKey("short") && !ComposioClient.looksLikeKey(null), "pasted key shape");
+        SourcesHostTest.FakeHttp verify = new SourcesHostTest.FakeHttp()
+                .on("GET", "/connected_accounts?limit=1", 200, "{\"items\":[]}")
+                .on("GET", "/connected_accounts?limit=1", 401, "{\"error\":{\"message\":\"PRIVATE\"}}");
+        new ComposioClient(verify, "ak_good", "https://composio.test").verify();
+        try { new ComposioClient(verify, "ak_bad", "https://composio.test").verify(); check(false, "bad key refused"); }
+        catch (ComposioClient.ComposioException e) { check(e.status == 401 && !e.getMessage().contains("PRIVATE"), "bad key refused on check"); }
         boolean keyed = true;
         for (Request r : http.requests) keyed &= "ck_secret".equals(r.headers.get("x-api-key")) && r.url.startsWith("https://");
         check(keyed, "every call is HTTPS with the key header");

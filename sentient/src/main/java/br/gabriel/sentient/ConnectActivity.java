@@ -57,7 +57,8 @@ public final class ConnectActivity extends Activity {
         content.removeAllViews();
         content.addView(Ui.title(this, "Connect sources", "Connect"));
         Ui.gap(content, 6);
-        content.addView(Ui.text(this, "GMind only reads. It never sends, edits or deletes anything in these accounts.",
+        content.addView(Ui.text(this, "GMind reads these accounts. It never sends messages or changes anything there, except two things you "
+                + "can turn on: creating the Todoist tasks you send, and keeping its own \"GMind vault\" folder in Google Drive.",
                 14, Ui.MUTED, false));
         drawComposio();
         drawMatrix();
@@ -74,16 +75,22 @@ public final class ConnectActivity extends Activity {
         Ui.gap(content, 14);
         boolean hasKey = SecretStore.COMPOSIO.has(this);
         if (!hasKey) {
+            content.addView(Ui.text(this, "1. Open Composio, sign in, and copy your API key (Settings › API Keys).\n"
+                    + "2. Come back and tap Paste key. GMind checks it, saves it encrypted and clears the clipboard.",
+                    14, Ui.INK, false));
+            content.addView(Ui.button(this, "Get my key on composio.dev", Ui.Style.DARK, v -> {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(COMPOSIO_KEYS))); }
+                catch (android.content.ActivityNotFoundException noBrowser) { composioError = "No browser on this phone to open Composio."; draw(); }
+            }), buttonParams());
+            error(composioError);
+            content.addView(Ui.button(this, working ? "Checking the key…" : "Paste key", Ui.Style.PRIMARY,
+                    v -> saveKey(clipboard(), true)), buttonParams());
+            TextView or = Ui.text(this, "Or type it:", 13, Ui.MUTED, false);
+            or.setPadding(0, dp(14), 0, dp(6));
+            content.addView(or);
             EditText key = field("Composio API key", true);
             content.addView(key, new LinearLayout.LayoutParams(-1, dp(52)));
-            error(composioError);
-            content.addView(Ui.button(this, "Save key", Ui.Style.PRIMARY, v -> {
-                String value = key.getText().toString().trim();
-                if (value.length() < 16 || value.contains(" ")) { composioError = "That doesn't look like a Composio API key."; draw(); return; }
-                try { SecretStore.COMPOSIO.save(this, value); composioError = null; }
-                catch (Exception failed) { composioError = "The key couldn't be saved on this phone."; }
-                draw();
-            }), buttonParams());
+            content.addView(Ui.button(this, "Save key", Ui.Style.QUIET, v -> saveKey(key.getText().toString(), false)), buttonParams());
             return;
         }
         String hint = SecretStore.COMPOSIO.hint(this);
@@ -200,6 +207,59 @@ public final class ConnectActivity extends Activity {
             final String message = note;
             main.post(() -> { if (!destroyed) { composioError = message; draw(); } });
         });
+    }
+
+    static final String COMPOSIO_KEYS = "https://platform.composio.dev/";
+
+    /** The clipboard's text, or null. */
+    private String clipboard() {
+        android.content.ClipboardManager cm = getSystemService(android.content.ClipboardManager.class);
+        if (cm == null || !cm.hasPrimaryClip() || cm.getPrimaryClip() == null || cm.getPrimaryClip().getItemCount() == 0) return null;
+        CharSequence text = cm.getPrimaryClip().getItemAt(0).coerceToText(this);
+        return text == null ? null : text.toString();
+    }
+
+    /** Checks the key with Composio, then saves it; a pasted key is cleared from the clipboard. */
+    private void saveKey(String raw, boolean fromClipboard) {
+        if (working) return;
+        String value = raw == null ? "" : raw.trim();
+        if (!ComposioClient.looksLikeKey(value)) {
+            composioError = fromClipboard ? "The clipboard doesn't hold a Composio API key. Copy it on composio.dev first."
+                    : "That doesn't look like a Composio API key.";
+            draw();
+            return;
+        }
+        working = true;
+        composioError = null;
+        draw();
+        io.execute(() -> {
+            String failure = null;
+            try {
+                new ComposioClient(new UrlHttp(), value, ComposioClient.BASE).verify();
+                SecretStore.COMPOSIO.save(this, value);
+            } catch (ComposioClient.ComposioException refused) {
+                failure = refused.status == 401 || refused.status == 403 ? "Composio didn't accept that key. Copy it again." : refused.getMessage();
+            } catch (java.io.IOException offline) {
+                failure = "Couldn't reach Composio to check the key. Check your internet connection.";
+            } catch (Exception cantSave) {
+                failure = "The key couldn't be saved on this phone.";
+            }
+            final String error = failure;
+            main.post(() -> {
+                if (destroyed) return;
+                working = false;
+                composioError = error;
+                if (error == null && fromClipboard) clearClipboard();
+                draw();
+            });
+        });
+    }
+
+    private void clearClipboard() {
+        android.content.ClipboardManager cm = getSystemService(android.content.ClipboardManager.class);
+        if (cm == null) return;
+        if (android.os.Build.VERSION.SDK_INT >= 28) cm.clearPrimaryClip();
+        else cm.setPrimaryClip(android.content.ClipData.newPlainText("", ""));
     }
 
     private ComposioClient composio() throws ComposioClient.ComposioException {
