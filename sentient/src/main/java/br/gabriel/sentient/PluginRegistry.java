@@ -14,7 +14,7 @@ final class PluginRegistry {
     static List<SourcePlugin> plugins(Context context) {
         List<SourcePlugin> plugins = new ArrayList<>();
         plugins.add(new OmiTranscriptsPlugin(context));
-        plugins.add(new WhatsAppPlugin(context));
+        for (ChatMessages.App app : ChatMessages.App.values()) plugins.add(new ChatPlugin(context, app));
         return plugins;
     }
 

@@ -72,8 +72,8 @@ def main():
         assert forbidden not in manifest, 'Computer-control surface present: ' + forbidden
     assert 'E: provider' not in manifest, 'Sentient must not export a provider'
     assert 'SyncJobService' in manifest and 'android.permission.BIND_JOB_SERVICE' in manifest
-    # WhatsApp capture: a notification listener the user enables in Settings; no extra permission.
-    assert 'WhatsAppListenerService' in manifest and 'android.permission.BIND_NOTIFICATION_LISTENER_SERVICE' in manifest
+    # WhatsApp and Signal capture: one notification listener the user enables in Settings; no extra permission.
+    assert 'MessagesListenerService' in manifest and 'android.permission.BIND_NOTIFICATION_LISTENER_SERVICE' in manifest
     assert 'Verified using v2 scheme' in signature
     signer = re.search(r'Signer #1 certificate SHA-256 digest: ([0-9a-f]+)', signature).group(1)
     if args.omi_apk:
@@ -88,7 +88,7 @@ def main():
         for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt', 'ubuntu-font-licence.txt']:
             assert len(archive.read('assets/licenses/'+name)) > 100, 'Missing license ' + name
         dex = b'\n'.join(archive.read(n) for n in names if n.endswith('.dex'))
-        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;', 'Lbr/gabriel/sentient/WhatsAppListenerService;',
+        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;', 'Lbr/gabriel/sentient/MessagesListenerService;',
                            'Lnet/zetetic/database/sqlcipher/SQLiteDatabase;']:
             assert class_name.encode() in dex, 'Missing runtime class ' + class_name
     digest = hashlib.sha256(args.apk.read_bytes()).hexdigest()

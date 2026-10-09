@@ -17,24 +17,29 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 
-/** WhatsApp, captured live by WhatsAppListenerService. The daily sync only checks access. */
-final class WhatsAppPlugin implements SourcePlugin {
-    static final String NEEDS_ACCESS = "Allow notification access to save WhatsApp messages";
+/** A chat app (WhatsApp, Signal), captured live by MessagesListenerService. The daily sync only
+ * checks that notification access is still on. One access grant covers every chat app. */
+final class ChatPlugin implements SourcePlugin {
     private final Context context;
+    private final ChatMessages.App app;
 
-    WhatsAppPlugin(Context context) { this.context = context.getApplicationContext(); }
+    ChatPlugin(Context context, ChatMessages.App app) { this.context = context.getApplicationContext(); this.app = app; }
 
-    @Override public String id() { return WhatsAppMessages.ID; }
-    @Override public String displayName() { return "WhatsApp"; }
+    static String needsAccess(ChatMessages.App app) {
+        return "Allow notification access to save " + app.displayName + " messages";
+    }
+
+    @Override public String id() { return app.id; }
+    @Override public String displayName() { return app.displayName; }
     @Override public Set<Mode> modes() { return EnumSet.of(Mode.PUSH); }
 
     @Override public PullResult pull(PluginContext ctx, String cursor) throws Exception {
-        if (!accessGranted(context)) throw new SourceUnavailableException(NEEDS_ACCESS);
+        if (!accessGranted(context)) throw new SourceUnavailableException(needsAccess(app));
         return new PullResult(Collections.emptyList(), cursor, false);
     }
 
     static boolean accessGranted(Context context) {
-        ComponentName listener = new ComponentName(context, WhatsAppListenerService.class);
+        ComponentName listener = new ComponentName(context, MessagesListenerService.class);
         if (Build.VERSION.SDK_INT >= 27) {
             NotificationManager manager = context.getSystemService(NotificationManager.class);
             return manager != null && manager.isNotificationListenerAccessGranted(listener);

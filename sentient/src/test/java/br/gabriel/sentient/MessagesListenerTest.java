@@ -23,7 +23,7 @@ import org.robolectric.annotation.Config;
 /** Real MessagingStyle notifications, as WhatsApp posts them, through the listener's extraction. */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 34)
-public final class WhatsAppListenerTest {
+public final class MessagesListenerTest {
     private final Context context = RuntimeEnvironment.getApplication();
     private final Person me = new Person.Builder().setName("Gabriel").build();
 
@@ -43,14 +43,14 @@ public final class WhatsAppListenerTest {
                         .addMessage("Vamos almoçar amanhã?", 1000, ana)
                         .addMessage("Bora, 12h?", 2000, (Person) null))
                 .build();
-        WhatsAppMessages.Snapshot s = WhatsAppListenerService.snapshot(posted("com.whatsapp", n));
+        ChatMessages.Snapshot s = MessagesListenerService.snapshot(posted("com.whatsapp", n));
         assertEquals("5511999@s.whatsapp.net", s.shortcutId);
         assertEquals("Gabriel", s.selfName);
         assertFalse(s.group);
         assertEquals(2, s.messages.size());
         assertEquals("Ana", s.messages.get(0).sender);
         assertNull(s.messages.get(1).sender);
-        List<RawItem> items = WhatsAppMessages.parse(s);
+        List<RawItem> items = ChatMessages.parse(s);
         assertEquals(2, items.size());
         assertTrue(items.get(1).fromMe);
         assertEquals(1000, items.get(0).timestamp);
@@ -63,7 +63,7 @@ public final class WhatsAppListenerTest {
                         .addMessage("Jantar domingo?", 1000, mae)
                         .addMessage("📷 Foto", 1100, mae))
                 .build();
-        List<RawItem> items = WhatsAppMessages.parse(WhatsAppListenerService.snapshot(posted("com.whatsapp", n)));
+        List<RawItem> items = ChatMessages.parse(MessagesListenerService.snapshot(posted("com.whatsapp", n)));
         assertEquals(2, items.size());
         assertEquals("Família", items.get(0).conversationTitle);
         assertEquals("group", items.get(0).conversationKind);
@@ -73,14 +73,32 @@ public final class WhatsAppListenerTest {
     @Test public void summaryAndOtherAppsIgnored() {
         Notification summary = builder().setGroup("chats").setGroupSummary(true)
                 .setContentTitle("WhatsApp").setContentText("5 messages from 3 chats").build();
-        assertTrue(WhatsAppMessages.parse(WhatsAppListenerService.snapshot(posted("com.whatsapp", summary))).isEmpty());
-        assertTrue(WhatsAppListenerService.isWhatsApp("com.whatsapp.w4b"));
-        assertFalse(WhatsAppListenerService.isWhatsApp("org.telegram.messenger"));
+        assertTrue(ChatMessages.parse(MessagesListenerService.snapshot(posted("com.whatsapp", summary))).isEmpty());
+        assertEquals(ChatMessages.App.WHATSAPP_APP, ChatMessages.App.forPackage("com.whatsapp.w4b"));
+        assertNull(ChatMessages.App.forPackage("org.telegram.messenger"));
+    }
+
+    @Test public void signalConversation() {
+        Person rui = new Person.Builder().setName("Rui").build();
+        Notification n = builder().setShortcutId("recipient-7")
+                .setStyle(new Notification.MessagingStyle(me).addMessage("Chego às 9", 1000, rui))
+                .build();
+        List<RawItem> items = ChatMessages.parse(MessagesListenerService.snapshot(posted("org.thoughtcrime.securesms", n)));
+        assertEquals(1, items.size());
+        assertEquals(ChatMessages.SIGNAL, items.get(0).source);
+        assertEquals("name:Rui", items.get(0).authorHandle);
+    }
+
+    @Test public void signalHidingContent() {
+        Notification n = builder().setContentTitle("Signal").setContentText("New message").build();
+        ChatMessages.Snapshot s = MessagesListenerService.snapshot(posted("org.thoughtcrime.securesms", n));
+        assertTrue(ChatMessages.parse(s).isEmpty());
+        assertTrue(ChatMessages.contentHidden(s));
     }
 
     @Test public void plainTextFallback() {
         Notification n = builder().setContentTitle("Rui").setContentText("Chego às 9").build();
-        List<RawItem> items = WhatsAppMessages.parse(WhatsAppListenerService.snapshot(posted("com.whatsapp", n)));
+        List<RawItem> items = ChatMessages.parse(MessagesListenerService.snapshot(posted("com.whatsapp", n)));
         assertEquals(1, items.size());
         assertEquals("name:Rui", items.get(0).authorHandle);
         assertEquals(99_000L, items.get(0).timestamp);
