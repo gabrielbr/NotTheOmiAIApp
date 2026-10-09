@@ -4,14 +4,10 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputFilter;
-import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -32,7 +28,6 @@ public final class TasksActivity extends Activity {
     public static final String EXTRA_SESSION_ID = "session_id";
     static final String TODOIST_PACKAGE = "com.todoist";
     private static final int SHARE_REQUEST = 40;
-    private static final int PAPER = 0xfff5f2eb, INK = 0xff191c18, MUTED = 0xff646a61;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -47,21 +42,36 @@ public final class TasksActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        LinearLayout root = Ui.page(this);
+        setContentView(root);
+        root.addView(Ui.backBar(this, null));
+        root.addView(Ui.divider(this));
         ScrollView scroll = new ScrollView(this);
-        page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(22), dp(18), dp(22), dp(24)); page.setBackgroundColor(PAPER);
-        scroll.addView(page); setContentView(scroll);
-        add(button("‹  Back to recording", false, v -> finish()));
-        page.addView(text("Tasks for Todoist", 26, INK, true));
-        status = text("Looking for tasks in the transcript…", 13, MUTED, false);
+        page = Ui.column(this);
+        page.setPadding(dp(20), dp(20), dp(20), dp(24));
+        scroll.addView(page);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        page.addView(Ui.title(this, "Tasks for Todoist", "Tasks"));
+        status = Ui.text(this, "Looking for tasks…", 15, Ui.MUTED, false);
+        status.setPadding(0, dp(10), 0, dp(12));
         page.addView(status);
-        rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL); page.addView(rows);
-        add(button("+  Add a task", false, v -> row("", true)));
-        send = button("Send selected to Todoist", true, v -> sendSelected());
-        add(send);
-        page.addView(text("Each task opens Todoist's Quick Add, which files it in your Inbox and "
-                + "reads dates like \"amanhã\" or \"tomorrow\" in your Todoist language. "
-                + "Confirm or cancel each one there.", 12, MUTED, false));
+        rows = Ui.column(this); page.addView(rows);
+        Button addTask = Ui.button(this, "Add a task", Ui.Style.QUIET, v -> row("", true));
+        Ui.icon(this, addTask, R.drawable.ic_plus, Ui.INK);
+        addTask.setPadding(0, 0, dp(8), 0);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, dp(48)); ap.topMargin = dp(8);
+        page.addView(addTask, ap);
+        root.addView(Ui.divider(this));
+        LinearLayout bar = Ui.column(this);
+        bar.setBackgroundColor(Ui.SURFACE);
+        bar.setPadding(dp(16), dp(12), dp(16), dp(12));
+        send = Ui.button(this, "Send to Todoist", Ui.Style.PRIMARY, v -> sendSelected());
+        bar.addView(send, new LinearLayout.LayoutParams(-1, dp(52)));
+        TextView note = Ui.text(this, "Todoist opens once per task so you can confirm it.", 13, Ui.MUTED, false);
+        note.setGravity(android.view.Gravity.CENTER);
+        note.setPadding(0, dp(10), 0, 0);
+        bar.addView(note);
+        root.addView(bar);
 
         if (state != null) {
             ArrayList<String> texts = state.getStringArrayList("texts");
@@ -110,14 +120,22 @@ public final class TasksActivity extends Activity {
     @Override protected void onDestroy() { destroyed = true; io.shutdown(); super.onDestroy(); }
 
     private void row(String value, boolean selected) {
-        LinearLayout line = new LinearLayout(this); line.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout line = Ui.row(this);
+        line.setPadding(0, dp(6), 0, dp(6));
         CheckBox check = new CheckBox(this); check.setChecked(selected);
+        check.setButtonTintList(android.content.res.ColorStateList.valueOf(Ui.INK));
+        check.setContentDescription("Include task");
         check.setOnCheckedChangeListener((b, on) -> updateStatus());
-        EditText field = new EditText(this); field.setText(value); field.setTextColor(INK); field.setTextSize(16);
+        EditText field = new EditText(this); field.setText(value); field.setTextColor(Ui.INK); field.setTextSize(17);
+        field.setTypeface(Ui.font(this, false));
+        field.setBackground(null);
+        field.setPadding(dp(6), dp(8), 0, dp(8));
         field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(TaskExtractor.MAX_TASK_CHARS)});
-        field.setHint("Task");
+        field.setHint("New task");
+        field.setHintTextColor(Ui.MUTED);
         line.addView(check, new LinearLayout.LayoutParams(-2, -2));
         line.addView(field, new LinearLayout.LayoutParams(0, -2, 1));
+        rows.addView(Ui.divider(this));
         rows.addView(line);
         checks.add(check); fields.add(field);
         updateStatus();
@@ -125,11 +143,11 @@ public final class TasksActivity extends Activity {
 
     private void updateStatus() {
         int selected = selectedTasks().size();
-        if (!queue.isEmpty()) status.setText("Sending to Todoist · " + queue.size() + " left");
-        else if (fields.isEmpty()) status.setText("No tasks found. Add one below, or check the transcript first.");
-        else status.setText(fields.size() + " found · " + selected + " selected. Edit before sending.");
+        if (!queue.isEmpty()) status.setText("Sending… " + queue.size() + " left");
+        else if (fields.isEmpty()) status.setText("No tasks found. Add one yourself.");
+        else status.setText(fields.size() == 1 ? "1 task found. Edit it before sending." : fields.size() + " tasks found. Edit or untick before sending.");
         send.setEnabled(selected > 0 && queue.isEmpty());
-        send.setText(selected > 0 ? "Send " + selected + " to Todoist" : "Send selected to Todoist");
+        send.setText(selected > 0 ? "Send " + selected + " to Todoist" : "Send to Todoist");
     }
 
     private List<String> selectedTasks() {
@@ -178,26 +196,5 @@ public final class TasksActivity extends Activity {
         sendNext();
     }
 
-    private int dp(float value) { return (int) (getResources().getDisplayMetrics().density * value + .5f); }
-
-    private TextView text(String value, int size, int color, boolean bold) {
-        TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(color);
-        if (bold) v.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        v.setPadding(0, dp(4), 0, dp(4));
-        return v;
-    }
-
-    private Button button(String label, boolean primary, View.OnClickListener click) {
-        Button b = new Button(this); b.setText(label); b.setTextSize(15); b.setAllCaps(false);
-        b.setTextColor(primary ? Color.WHITE : INK);
-        GradientDrawable bg = new GradientDrawable(); bg.setColor(primary ? INK : 0xffe5e8df); bg.setCornerRadius(dp(14));
-        b.setBackground(bg); b.setMinHeight(dp(52)); b.setPadding(dp(16), dp(8), dp(16), dp(8));
-        b.setOnClickListener(click);
-        return b;
-    }
-
-    private void add(View view) {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.topMargin = dp(10);
-        page.addView(view, p);
-    }
+    private int dp(float value) { return Ui.dp(this, value); }
 }
