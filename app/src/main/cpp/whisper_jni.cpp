@@ -122,7 +122,9 @@ jlong open_file(JNIEnv *env, jstring name, jstring vad) {
     state->vad_path = std::move(vad_path);
     auto options = whisper_context_default_params();
     options.use_gpu = false;
-    options.flash_attn = false;
+    // Flash attention: about 2x faster on CPU. Measured on the noisy Portuguese set: small 18.5% -> 19.0%
+    // word errors (quick pass, replaced later), medium 11.2% -> 11.5%.
+    options.flash_attn = true;
     state->ctx = whisper_init_from_file_with_params(path.value.c_str(), options);
     if (!state->ctx) { fail(env, "Whisper model initialization failed"); return 0; }
     std::lock_guard<std::mutex> lock(registry_mutex);

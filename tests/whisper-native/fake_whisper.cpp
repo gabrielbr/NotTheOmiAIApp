@@ -20,7 +20,8 @@ void whisper_log_set(ggml_log_callback, void *) {}
 void ggml_log_set(ggml_log_callback, void *) {}
 whisper_context_params whisper_context_default_params() { return {}; }
 whisper_context *whisper_init_from_file_with_params(const char *path, whisper_context_params p) {
-    if (p.use_gpu || p.flash_attn) throw std::runtime_error("GPU enabled");
+    if (p.use_gpu) throw std::runtime_error("GPU enabled");
+    if (!p.flash_attn) throw std::runtime_error("CPU flash attention expected");
     if (std::string(path) == "bad-model") return nullptr;
     if (std::string(path) == "oom") throw std::bad_alloc();
     if (std::string(path) != "test-model-\xf0\x9f\x98\x80.bin") throw std::runtime_error("Wrong UTF-8 path");
