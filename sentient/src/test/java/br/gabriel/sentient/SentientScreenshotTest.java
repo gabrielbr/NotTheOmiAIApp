@@ -37,27 +37,23 @@ public final class SentientScreenshotTest {
         SentientActivity a = Robolectric.buildActivity(SentientActivity.class).setup().get();
         settle();
         long now = System.currentTimeMillis();
-        a.showSources(Arrays.asList(state(OmiTranscripts.ID, null, null, 0, null),
+        grantWhatsApp(a, false);
+        a.showAttention(Arrays.asList(state(OmiTranscripts.ID, null, null, 0, null),
                 state(ChatMessages.WHATSAPP, null, null, 0, null), state(ChatMessages.SIGNAL, null, null, 0, null)));
+        a.showHome(Collections.emptyList());
         settle(); shot(a, "home-empty");
 
         grantWhatsApp(a, true);
-        a.showSources(Arrays.asList(
+        List<Sources.State> fine = Arrays.asList(
                 state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
                 state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L),
-                state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 41, now - 40 * 60_000L)));
+                state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 41, now - 40 * 60_000L));
+        a.showAttention(fine);
+        a.showHome(recent());
         settle(); shot(a, "home");
 
-        a.showSources(Arrays.asList(
-                state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
-                state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L),
+        a.showAttention(Arrays.asList(fine.get(0), fine.get(1),
                 noticed(state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 0, null), MessagesListenerService.HIDDEN)));
-        settle(); shot(a, "home-signal-hidden");
-
-        grantWhatsApp(a, false);
-        a.showSources(Arrays.asList(
-                state(OmiTranscripts.ID, now - 26 * HOUR, "Unavailable · Install GVoice to sync recordings", 142, now - 30 * HOUR),
-                state(ChatMessages.WHATSAPP, now - 26 * HOUR, "OK · live", 318, now - 26 * HOUR)));
         settle(); shot(a, "home-attention");
 
         List<Search.Hit> hits = new ArrayList<>();
@@ -69,6 +65,52 @@ public final class SentientScreenshotTest {
 
         a.showResults("zzz", Collections.emptyList());
         settle(); shot(a, "search-empty");
+    }
+
+    @Test public void settings() throws Exception {
+        SettingsActivity a = Robolectric.buildActivity(SettingsActivity.class).setup().get();
+        settle();
+        long now = System.currentTimeMillis();
+        grantWhatsApp(a, false);
+        a.showRows(Arrays.asList(
+                state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
+                state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L),
+                state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 41, now - 40 * 60_000L)));
+        settle(); shot(a, "settings");
+    }
+
+    @Test public void about() throws Exception {
+        shot(Robolectric.buildActivity(AboutActivity.class).setup().get(), "about");
+        shot(Robolectric.buildActivity(LicensesActivity.class).setup().get(), "licenses");
+    }
+
+    @Test public void sources() throws Exception {
+        long now = System.currentTimeMillis();
+        SourceActivity omi = source(OmiTranscripts.ID);
+        omi.show(state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR));
+        settle(); shot(omi, "source-gvoice");
+        omi.show(state(OmiTranscripts.ID, now - 26 * HOUR, "Unavailable · Install GVoice to sync recordings", 142, now - 30 * HOUR));
+        settle(); shot(omi, "source-gvoice-unavailable");
+
+        SourceActivity whatsApp = source(ChatMessages.WHATSAPP);
+        grantWhatsApp(whatsApp, false);
+        whatsApp.show(state(ChatMessages.WHATSAPP, null, null, 0, null));
+        settle(); shot(whatsApp, "source-whatsapp-access");
+        grantWhatsApp(whatsApp, true);
+        whatsApp.show(state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L));
+        settle(); shot(whatsApp, "source-whatsapp");
+
+        SourceActivity signal = source(ChatMessages.SIGNAL);
+        grantWhatsApp(signal, true);
+        signal.show(noticed(state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 0, null), MessagesListenerService.HIDDEN));
+        settle(); shot(signal, "source-signal-hidden");
+    }
+
+    static SourceActivity source(String pluginId) throws Exception {
+        SourceActivity a = Robolectric.buildActivity(SourceActivity.class,
+                new Intent().putExtra(SourceActivity.EXTRA_PLUGIN_ID, pluginId)).setup().get();
+        settle();
+        return a;
     }
 
     @Test public void item() throws Exception {
@@ -120,16 +162,21 @@ public final class SentientScreenshotTest {
         SentientActivity home = Robolectric.buildActivity(SentientActivity.class).setup().get();
         settle();
         home.askName = true;
-        grantWhatsApp(home, true);
+        home.showHome(recent());
+        settle(); shot(home, "home-name");
+
+        SettingsActivity settings = Robolectric.buildActivity(SettingsActivity.class).setup().get();
+        settle();
+        grantWhatsApp(settings, true);
         long now = System.currentTimeMillis();
-        home.showSources(Arrays.asList(
+        settings.showRows(Arrays.asList(
                 state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
                 state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L),
                 state(ChatMessages.TELEGRAM, now - 2 * HOUR, "OK · live", 12, now - 50 * 60_000L),
                 state("composio.gmail", now - 2 * HOUR, "OK · 25 new, 0 updated", 214, now - 4 * HOUR),
                 noticed(state(MatrixPlugin.ID, now - 2 * HOUR, "OK · 9 new, 0 updated", 87, now - 6 * HOUR),
                         "2 rooms are end-to-end encrypted. GMind can't read those yet; unencrypted rooms are saved.")));
-        settle(); shot(home, "home-connected");
+        settle(); shot(settings, "settings-connected");
     }
 
     @Test public void you() throws Exception {
@@ -197,6 +244,20 @@ public final class SentientScreenshotTest {
         org.robolectric.Shadows.shadowOf(app.getPackageManager()).installPackage(gvoice);
         UpdatesActivity a = Robolectric.buildActivity(UpdatesActivity.class).setup().get();
         settle(); a.draw(); settle(); shot(a, "updates");
+    }
+
+    static List<Items.Item> recent() throws Exception {
+        Constructor<Items.Item> c = Items.Item.class.getDeclaredConstructor(Object[].class);
+        c.setAccessible(true);
+        long now = System.currentTimeMillis();
+        return Arrays.asList(
+                message(4, "Mãe", false, 5, "Jantar no domingo? Faço aquele pudim de sobremesa que vocês gostam"),
+                message(3, null, true, 40, "Abre sim, até o meio-dia"),
+                c.newInstance((Object) new Object[]{1L, OmiTranscripts.ID, "transcript", now - 3 * HOUR,
+                        "Bom dia pessoal. Preciso ligar para o João sobre o contrato amanhã. Ficou combinado de enviar a proposta dia 15.",
+                        "Reunião com o João", null, null, 0L}),
+                c.newInstance((Object) new Object[]{8L, ChatMessages.SIGNAL, "message", now - 5 * HOUR,
+                        "Te mando o endereço amanhã cedo", "Rui", 9L, "Rui", 0L}));
     }
 
     /** Same state plus a standing notice (row column 7). */
