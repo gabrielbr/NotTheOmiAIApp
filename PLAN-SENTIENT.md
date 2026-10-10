@@ -238,6 +238,8 @@ Both apps (GVoice and GMind) check for a newer release and update themselves fro
 
 ### UI update: less text, real navigation
 
+Planned in detail in [`PLAN-GMIND-UI.md`](PLAN-GMIND-UI.md).
+
 GMind's screens (`SentientActivity`) put everything on one page: the title, search, every source row with its status and setup text (notification-access reasons, what WhatsApp capture can't see, Signal's hidden-content notice, the access button), the last-sync line and **Sync now**. About and licenses are dialogs. The backlog items above (Ask, tasks, chats to monitor, your name, Todoist through Composio, updates) would all end up on that same page. The work: audit the UI again (as in `docs/SENTIENT-DESIGN.md`), cut the text, and split the app into screens.
 
 Audit findings so far:
