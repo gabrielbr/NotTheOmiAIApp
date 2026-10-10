@@ -40,6 +40,9 @@ public final class AskActivity extends Activity implements AskSession.Observer {
     private TextView live;
     private int shownCount = -1;
 
+    /** A question typed elsewhere (the home search box): asked as soon as the screen opens. */
+    static final String EXTRA_QUESTION = "question";
+
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
@@ -97,6 +100,12 @@ public final class AskActivity extends Activity implements AskSession.Observer {
         bottom.addView(footer);
         page.addView(bottom);
         session = AskSession.get(this);
+        String carried = state == null ? getIntent().getStringExtra(EXTRA_QUESTION) : null; // not again on rotation
+        if (carried != null && !carried.trim().isEmpty()) {
+            question.setText(carried.trim());
+            question.setSelection(question.length());
+            submit(); // when Ask isn't set up yet, the question stays in the field
+        }
     }
 
     @Override protected void onResume() {

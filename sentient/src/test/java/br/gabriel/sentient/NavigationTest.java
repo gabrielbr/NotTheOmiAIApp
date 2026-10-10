@@ -83,6 +83,40 @@ public final class NavigationTest {
         assertNull(next.getStringExtra(ItemActivity.EXTRA_QUERY));
     }
 
+    @Test public void enterInSearchAsksWhatWasTyped() throws Exception {
+        SentientActivity home = home();
+        android.widget.EditText search = (android.widget.EditText) only(home, "Search everything synced",
+                View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION);
+        search.setText("O que combinei com a Ana?");
+        search.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        Intent next = Shadows.shadowOf(home).getNextStartedActivity();
+        assertEquals(AskActivity.class.getName(), next.getComponent().getClassName());
+        assertEquals("O que combinei com a Ana?", next.getStringExtra(AskActivity.EXTRA_QUESTION));
+        // The Ask button carries it too.
+        only(home, "Ask a question", View.FIND_VIEWS_WITH_TEXT).performClick();
+        assertEquals("O que combinei com a Ana?",
+                Shadows.shadowOf(home).getNextStartedActivity().getStringExtra(AskActivity.EXTRA_QUESTION));
+    }
+
+    @Test public void askOpensWithTheCarriedQuestion() {
+        Intent intent = new Intent(org.robolectric.RuntimeEnvironment.getApplication(), AskActivity.class).putExtra(AskActivity.EXTRA_QUESTION, " Ana? ");
+        AskActivity ask = Robolectric.buildActivity(AskActivity.class, intent).setup().get();
+        // Not set up in tests (no key or model), so the question waits in the field, ready to send.
+        boolean found = false;
+        for (View v : allViews(ask.getWindow().getDecorView()))
+            if (v instanceof android.widget.EditText && "Ana?".equals(((android.widget.EditText) v).getText().toString())) found = true;
+        assertEquals(true, found);
+    }
+
+    private static java.util.List<View> allViews(View root) {
+        java.util.List<View> out = new ArrayList<>();
+        out.add(root);
+        if (root instanceof android.view.ViewGroup)
+            for (int i = 0; i < ((android.view.ViewGroup) root).getChildCount(); i++)
+                out.addAll(allViews(((android.view.ViewGroup) root).getChildAt(i)));
+        return out;
+    }
+
     private static SentientActivity home() throws Exception {
         SentientActivity home = Robolectric.buildActivity(SentientActivity.class).setup().get();
         SentientScreenshotTest.settle(); // let the store error from the real (absent) Keystore land first
