@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify actual hybrid APK weights, native bytes, offline permissions and signing."""
+"""Verify actual hybrid APK weights, native bytes, permissions and signing."""
 import argparse
 import hashlib
 import json
@@ -40,7 +40,18 @@ def main():
         names = archive.namelist()
         assert len(names) == len(set(names)), 'Duplicate APK members'
         assert not any(n.endswith('/jfk.wav') or n.endswith('/test.wav') for n in names), 'Test fixture in release'
-        for key in ['model', 'small_model', 'vad_model', 'preview_model']:
+        # Whisper medium and small are downloaded by the app at runtime: never bundled, and the
+        # app's pinned URL, size and SHA-256 must match DEPENDENCIES.json exactly.
+        installer = (ROOT/'app/src/main/java/app/nottheomi/ai/ModelInstaller.java').read_text()
+        for key, prefix in [('model', 'MODEL'), ('small_model', 'SMALL')]:
+            model = metadata[key]
+            assert 'assets/'+model['filename'] not in names, 'Downloaded model bundled in the APK: '+model['filename']
+            assert re.search(prefix + r'_SHA256 =\s*"' + model['sha256'] + '"', installer), 'App SHA-256 differs from pin: '+key
+            assert f"{prefix}_BYTES = {model['bytes']}L" in installer, 'App size differs from pin: '+key
+            assert model['url'].endswith('/'+model['filename']) and f'BASE_URL + "{model["filename"]}"' in installer, 'App URL differs: '+key
+            assert f'REVISION = "{model["revision"]}"' in installer and '/resolve/" + REVISION' in installer, 'App revision differs: '+key
+        assert args.apk.stat().st_size < 120 * 1024 * 1024, 'GVoice APK unexpectedly large (bundled models?)'
+        for key in ['vad_model', 'preview_model']:
             model = metadata[key]
             member = 'assets/'+model['filename']
             info = archive.getinfo(member)
@@ -50,7 +61,7 @@ def main():
                 for block in iter(lambda: source.read(1024 * 1024), b''):
                     digest.update(block)
                 assert digest.hexdigest() == model['sha256'], 'Wrong model bytes'
-            if key in ('model', 'small_model', 'vad_model'):
+            if key == 'vad_model':
                 assert info.compress_type == zipfile.ZIP_STORED, 'Whisper model compressed'
         for name in ['whisper.cpp-MIT.txt','whisper-model-MIT.txt','whisper-silero-vad-MIT.txt','vosk-license.txt','jna-license.txt','concentus-license.txt','omi-license.txt']:
             assert len(archive.read('assets/licenses/'+name)) > 100, 'Missing license'
@@ -87,7 +98,9 @@ def main():
     name = args.version_name or name_match.group(1)
     assert f"versionCode='{code}'" in badging and f"versionName='{name}'" in badging
     assert 'application-debuggable' not in badging
-    assert 'android.permission.INTERNET' not in permissions
+    # Network is only for the two pinned model downloads, over HTTPS.
+    assert 'android.permission.INTERNET' in permissions
+    assert 'networkSecurityConfig' in manifest, 'Network security config missing'
     assert 'android.permission.BIND_JOB_SERVICE' in manifest and 'RefinementJobService' in manifest
     assert 'RefinementService' in manifest, 'Foreground transcription service missing'
     # The only exported data surface: transcripts for same-signer apps (Sentient), read-only.
@@ -98,7 +111,7 @@ def main():
     assert 'Verified using v2 scheme' in signature
     with args.apk.open('rb') as source:
         digest = hashlib.file_digest(source,'sha256').hexdigest()
-    print(json.dumps({'result':'PASS_HYBRID_RELEASE_PACKAGE','artifact':str(args.apk.resolve()),'sha256':digest,'bytes':args.apk.stat().st_size,'abis':abis,'native_sha256':actual_native,'model_sha256':{key:metadata[key]['sha256'] for key in ['model','preview_model']},'internet_permission':False,'signature_verified':True,'alignment_verified':True}))
+    print(json.dumps({'result':'PASS_HYBRID_RELEASE_PACKAGE','artifact':str(args.apk.resolve()),'sha256':digest,'bytes':args.apk.stat().st_size,'abis':abis,'native_sha256':actual_native,'model_sha256':{key:metadata[key]['sha256'] for key in ['model','preview_model']},'internet_permission':True,'whisper_models':'downloaded at runtime, pinned','signature_verified':True,'alignment_verified':True}))
 
 
 if __name__ == '__main__':

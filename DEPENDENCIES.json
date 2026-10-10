@@ -6,7 +6,8 @@
     "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-medium-q5_0.bin",
     "sha256": "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f",
     "bytes": 539212467,
-    "license": "MIT"
+    "license": "MIT",
+    "delivery": "Downloaded by GVoice at runtime (HTTPS, this pinned URL, size and SHA-256 verified); not in the APK"
   },
   "small_model": {
     "name": "Whisper small Q5_1 (multilingual), quick pass while recording",
@@ -15,7 +16,8 @@
     "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q5_1.bin",
     "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
     "bytes": 190085487,
-    "license": "MIT"
+    "license": "MIT",
+    "delivery": "Downloaded by GVoice at runtime (HTTPS, this pinned URL, size and SHA-256 verified); not in the APK"
   },
   "vad_model": {
     "name": "Silero VAD v5.1.2 (ggml, for whisper.cpp)",

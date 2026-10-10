@@ -19,6 +19,10 @@ final class RefinementProgress {
     static volatile String build;
     /** Fast cores Whisper is pinned to (0: not pinned). */
     static volatile int cores;
+    /** Battery usage is unrestricted: the service can start from the background. Set by the UI. */
+    static volatile boolean background;
+    /** A model download in progress ("Downloading Whisper small · 45% · …"), else null. */
+    private static volatile String download;
 
     private static String id;
     private static long saved, total, windowStart, windowBytes, windowStartedAt, lastChangeAt;
@@ -75,6 +79,9 @@ final class RefinementProgress {
         saved = afterBytes; windowBytes = 0; lastChangeAt = now; lastPercent = -1;
     }
 
+    /** A model download's progress line, or null when none runs. Any thread; cheap to call often. */
+    static void download(String line) { download = line; }
+
     /** Nothing is being refined: why (null when the queue is simply empty). */
     static synchronized void idle(String reason) {
         id = null; windowBytes = 0; windowPercent = () -> 0; waiting = reason;
@@ -90,7 +97,8 @@ final class RefinementProgress {
             lastPercent = percent;
         }
         long done = saved + windowBytes * percent / 100;
-        return new Snapshot(id, waiting, saved, total, done, lastChangeAt, speed, accurate);
+        String note = download;
+        return new Snapshot(id, note != null ? note : waiting, saved, total, done, lastChangeAt, speed, accurate);
     }
 
     /** "Refining · 34% · 12:30 of 41:00 · about 25 min left · updated 20 s ago". */
@@ -105,14 +113,14 @@ final class RefinementProgress {
         return line.toString();
     }
 
-    /** "fast build, 4 fast cores, 3.1× real time" for the home line; null before Whisper loads. */
+    /** "fast build, 4 fast cores, background allowed, 3.1× real time" for the home line; null when nothing is known. */
     static String engine(Snapshot s) {
-        if (build == null) return null;
-        StringBuilder line = new StringBuilder(build);
-        if (cores > 0) line.append(", ").append(cores).append(" fast cores");
-        if (s.id != null && s.speed > 0)
-            line.append(", ").append(String.format(Locale.ROOT, "%.1f", s.speed)).append("× real time");
-        return line.toString();
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        if (build != null) parts.add(build);
+        if (cores > 0) parts.add(cores + " fast cores");
+        if (background) parts.add("background allowed");
+        if (s.id != null && s.speed > 0) parts.add(String.format(Locale.ROOT, "%.1f", s.speed) + "× real time");
+        return parts.isEmpty() ? null : String.join(", ", parts);
     }
 
     /** True when nothing has moved for STALL_MS. */
@@ -137,6 +145,6 @@ final class RefinementProgress {
     static synchronized void reset() {
         id = null; saved = total = windowStart = windowBytes = windowStartedAt = lastChangeAt = 0;
         lastPercent = -1; speed = 0; windowPercent = () -> 0; waiting = null; accurate = false;
-        build = null; cores = 0;
+        build = null; cores = 0; background = false; download = null;
     }
 }

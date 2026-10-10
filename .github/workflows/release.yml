@@ -119,7 +119,9 @@ jobs:
             echo
             echo "Install \`GVoice-$APP_VERSION_NAME-arm64-v8a.apk\` on your phone. It updates the previous GVoice release in place and keeps your recordings."
             echo
-            echo "Optional: \`GMind-$APP_VERSION_NAME.apk\` is the companion knowledge base. It reads GVoice transcripts (same signing key) and is the only one of the two apps with internet access."
+            echo "GVoice downloads its Whisper models (small 190 MB, medium 539 MB) once, over Wi-Fi by default, from a pinned Hugging Face revision checked by SHA-256. Models already on the phone are kept across updates. Audio and transcripts never leave the phone."
+            echo
+            echo "Optional: \`GMind-$APP_VERSION_NAME.apk\` is the companion knowledge base. It reads GVoice transcripts (same signing key) and is the app that talks to online services."
             echo
             echo '```'
             grep -E 'arm64-v8a|GMind' dist/SHA256SUMS.txt
