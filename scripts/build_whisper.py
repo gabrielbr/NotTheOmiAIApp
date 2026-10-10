@@ -62,7 +62,7 @@ def audit_elf(library, abi, tools):
     symbols = run([tools / "llvm-nm", "--dynamic", "--defined-only", library])
     names = {line.split()[-1] for line in symbols.splitlines() if line.strip()}
     exports = {f"Java_app_nottheomi_ai_WhisperNative_{method}"
-               for method in ("openFile", "transcribe", "progress", "cancel", "close")}
+               for method in ("openFile", "transcribe", "progress", "pinFastCores", "cancel", "close")}
     if names != exports:
         raise ValueError(f"Unexpected exported symbols: {names}")
     imports = run([tools / "llvm-nm", "--dynamic", "--undefined-only", library])

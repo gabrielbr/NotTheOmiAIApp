@@ -20,7 +20,7 @@ public class Handler {
  public void removeCallbacks(Runnable r){QUEUE.remove(r);}
  public static void drain(){Runnable r; while((r=QUEUE.poll())!=null)r.run();}
 }''',
-    'android/os/Process.java': '''package android.os; public class Process { public static final int THREAD_PRIORITY_BACKGROUND=10;
+    'android/os/Process.java': '''package android.os; public class Process { public static final int THREAD_PRIORITY_BACKGROUND=10,THREAD_PRIORITY_DEFAULT=0;
  public static volatile int priority; public static void setThreadPriority(int p){priority=p;} }''',
     'android/os/SystemClock.java': '''package android.os; public class SystemClock { public static long elapsedRealtime(){return System.nanoTime()/1000000;} }''',
     'android/app/job/JobParameters.java': '''package android.app.job; public class JobParameters {
@@ -73,7 +73,11 @@ public class Recordings {
  public void completeRefinement(String id,String model){completes++;completedModel=model;ENTRY.state="complete";if(SMALL.equals(model)){FINAL.state="pending";FINAL.offsetBytes=0;}}
  public void failRefinement(String id){failures++;ENTRY.state="failed";}
 }''',
-    'app/nottheomi/ai/WhisperNative.java': '''package app.nottheomi.ai; public class WhisperNative { public static final String BUILD="fast"; }''',
+    'app/nottheomi/ai/WhisperNative.java': '''package app.nottheomi.ai; public class WhisperNative { public static final String BUILD="fast"; static volatile int pins; public static int pinFastCores(){pins++;return 4;} }''',
+    'app/nottheomi/ai/RefinementService.java': '''package app.nottheomi.ai; public class RefinementService extends android.content.Context {
+ static volatile boolean allowed; static volatile int starts; volatile int dones;
+ static boolean start(android.content.Context c){starts++;return allowed;}
+ void done(){dones++;} }''',
     'app/nottheomi/ai/ReadyNotifier.java': '''package app.nottheomi.ai; public class ReadyNotifier { static volatile int ready; static void refined(android.content.Context c,java.util.List<String> ids){ready+=ids.size();} }''',
     'app/nottheomi/ai/WhisperModel.java': '''package app.nottheomi.ai;
 import java.util.concurrent.*;
@@ -105,6 +109,36 @@ public class RefinementJobHostTest {
    WhisperModel.RELEASE.countDown();check(WhisperModel.CLOSED.await(5,TimeUnit.SECONDS),"worker closes native model");settled();
    check(Recordings.commits==1&&Recordings.completes==1&&WhisperModel.cancels==0,"window finished after the capture ended, never discarded");
    check(service.finished.isEmpty(),"no job to finish");
+   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
+  }
+  if(mode.equals("service")){
+   // The foreground service hosts the worker: no job, normal priority, pinned to the fast cores, no time limit.
+   RefinementService.allowed=true;RefinementJobService.schedule(service);
+   check(RefinementService.starts==1&&JobScheduler.INSTANCE.schedules==0&&WhisperModel.opens==0,"asks for the service, no job, no worker yet");
+   RefinementService host=new RefinementService();check(RefinementJobService.host(host),"service takes the work");
+   check(WhisperModel.ENTERED.await(5,TimeUnit.SECONDS),"hosted worker entered");
+   check(android.os.Process.priority==android.os.Process.THREAD_PRIORITY_DEFAULT,"normal priority in the foreground");
+   check(WhisperNative.pins==1&&RefinementProgress.cores==4&&RefinementJobService.fastCores==4,"pinned to the fast cores");
+   check(RefinementJobService.threads(8,false,4)==4&&RefinementJobService.threads(8,false,2)==2&&RefinementJobService.threads(8,true,4)==4&&RefinementJobService.threads(4,true,2)==2,"one thread per fast core");
+   check(RefinementProgress.engine(RefinementProgress.get()).startsWith("fast build, 4 fast cores"),RefinementProgress.engine(RefinementProgress.get()));
+   WhisperModel.RELEASE.countDown();check(WhisperModel.CLOSED.await(5,TimeUnit.SECONDS),"closed");settled();
+   check(Recordings.completes==1&&host.dones==1&&service.finished.isEmpty(),"finishes, then the service stops itself");
+   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
+  }
+  if(mode.equals("job-promotes")){
+   // Android starts the job: it moves the work to the service (big cores) instead of running it.
+   RefinementService.allowed=true;check(service.onStartJob(start),"async start");Handler.drain();
+   check(RefinementService.starts==1&&WhisperModel.opens==0,"no Whisper in the job");
+   check(service.finished.contains(start)&&!service.retry.get(0),"job done without retry");
+   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
+  }
+  if(mode.equals("handoff")){
+   // A plain-thread worker (service refused) hands over to the service after its window.
+   CaptureService.active=true;RefinementJobService.schedule(service);check(WhisperModel.ENTERED.await(5,TimeUnit.SECONDS),"plain worker entered");
+   RefinementService.allowed=true;RefinementService host=new RefinementService();check(RefinementJobService.host(host),"service waits for it");
+   WhisperModel.RELEASE.countDown();check(WhisperModel.CLOSED.await(5,TimeUnit.SECONDS),"closed");settled();
+   check(Recordings.commits==1&&Recordings.completes==1&&WhisperModel.cancels==0,"its window finished");
+   check(host.dones==1&&WhisperModel.opens==1,"the service took over (nothing left) and stopped");
    System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
   }
   if(mode.equals("describe")){
@@ -190,7 +224,7 @@ with tempfile.TemporaryDirectory(prefix='nottheomi-hybrid-job-') as directory:
         sources.append(path)
     sources += [ROOT/'app/src/main/java/app/nottheomi/ai'/name for name in ('RefinementJobService.java', 'RefinementEngine.java', 'RefinementProgress.java')]
     subprocess.run(['javac', '--release', '17', '-d', str(work), *map(str, sources)], check=True)
-    scenarios = ['stop', 'different-job', 'destroy', 'capture-start', 'capture-active', 'progress', 'success', 'in-process', 'stale', 'describe', 'accurate', 'unplugged']
+    scenarios = ['stop', 'different-job', 'destroy', 'capture-start', 'capture-active', 'progress', 'success', 'in-process', 'stale', 'describe', 'accurate', 'unplugged', 'service', 'job-promotes', 'handoff']
     for case in scenarios:
         subprocess.run(['java', '-cp', str(work), 'app.nottheomi.ai.RefinementJobHostTest', case], check=True, timeout=15)
     print(f'JobService lifecycle PASS: {len(scenarios)} scenarios; Android/native/store doubles, not device lifecycle acceptance.')

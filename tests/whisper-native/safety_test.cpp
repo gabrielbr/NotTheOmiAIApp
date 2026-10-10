@@ -27,5 +27,12 @@ int main() {
     for (auto value : floats) assert(value == 0);
     for (auto value : private_text) assert(value == 0);
     assert(kMaxSamples == 480000);
+    // Tensor G4: 4x A520, 3x A720, 1x X4 -> the 4 big cores.
+    assert(fast_cores({1950000, 1950000, 1950000, 1950000, 2600000, 2600000, 2600000, 3100000})
+           == std::vector<int>({4, 5, 6, 7}));
+    assert(fast_cores({2000000, 2000000, 2000000, 2000000}).empty());   // all alike: no pinning
+    assert(fast_cores({0, 0, 0}).empty());                               // unknown: no pinning
+    assert(fast_cores({}).empty());
+    assert(fast_cores({0, 1800000, 2400000}) == std::vector<int>({2})); // unknown cores are not "fast"
     std::cout << "C++ Unicode/bounds/wipe checks passed\n";
 }

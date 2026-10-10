@@ -2,6 +2,9 @@
 #include <whisper.h>
 #include "whisper_safety.h"
 #include <algorithm>
+#include <cstdio>
+#include <sched.h>
+#include <unistd.h>
 #include <atomic>
 #include <limits>
 #include <memory>
@@ -55,6 +58,29 @@ void on_progress(whisper_context *, whisper_state *, int percent, void *data) {
     const int value = std::clamp(percent, 1, 99);  // 100 only once the window is done
     int seen = engine->progress.load();
     while (value > seen && !engine->progress.compare_exchange_weak(seen, value)) {}
+}
+// Keeps the calling thread (and the ggml threads it starts, which inherit it) off the little
+// cores: ggml splits each step evenly, so one slow core holds every thread back. Returns how many
+// cores it pinned to; 0 leaves the affinity untouched (all cores alike, unknown, or refused).
+int pin_fast_cores() {
+    const long configured = sysconf(_SC_NPROCESSORS_CONF);
+    const int count = static_cast<int>(std::clamp<long>(configured, 0, CPU_SETSIZE));
+    std::vector<long> max_khz(count, 0);
+    for (int i = 0; i < count; ++i) {
+        char path[96];
+        std::snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+        if (FILE *file = std::fopen(path, "re")) {
+            long khz = 0;
+            if (std::fscanf(file, "%ld", &khz) == 1 && khz > 0) max_khz[i] = khz;
+            std::fclose(file);
+        }
+    }
+    const std::vector<int> fast = nottheomi::fast_cores(max_khz);
+    if (fast.empty()) return 0;
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    for (int core : fast) CPU_SET(core, &set);
+    return sched_setaffinity(0, sizeof set, &set) == 0 ? static_cast<int>(fast.size()) : 0;
 }
 jstring empty(JNIEnv *env) { return env->NewString(nullptr, 0); }
 
@@ -241,6 +267,12 @@ Java_app_nottheomi_ai_WhisperNative_transcribe(JNIEnv *env, jclass, jlong handle
 extern "C" JNIEXPORT jint JNICALL
 Java_app_nottheomi_ai_WhisperNative_progress(JNIEnv *, jclass, jlong handle) {
     try { if (auto state = lookup(handle)) return state->progress.load(); }
+    catch (...) { }
+    return 0;
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_app_nottheomi_ai_WhisperNative_pinFastCores(JNIEnv *, jclass) {
+    try { return pin_fast_cores(); }
     catch (...) { }
     return 0;
 }

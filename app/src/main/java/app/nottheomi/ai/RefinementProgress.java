@@ -17,6 +17,8 @@ final class RefinementProgress {
     static LongSupplier clock = System::currentTimeMillis;
     /** Which native Whisper build runs ("fast build" / "compatible build"); null until loaded. */
     static volatile String build;
+    /** Fast cores Whisper is pinned to (0: not pinned). */
+    static volatile int cores;
 
     private static String id;
     private static long saved, total, windowStart, windowBytes, windowStartedAt, lastChangeAt;
@@ -103,6 +105,16 @@ final class RefinementProgress {
         return line.toString();
     }
 
+    /** "fast build, 4 fast cores, 3.1× real time" for the home line; null before Whisper loads. */
+    static String engine(Snapshot s) {
+        if (build == null) return null;
+        StringBuilder line = new StringBuilder(build);
+        if (cores > 0) line.append(", ").append(cores).append(" fast cores");
+        if (s.id != null && s.speed > 0)
+            line.append(", ").append(String.format(Locale.ROOT, "%.1f", s.speed)).append("× real time");
+        return line.toString();
+    }
+
     /** True when nothing has moved for STALL_MS. */
     static boolean stalled(Snapshot s, long now) { return now - s.lastChangeAt >= STALL_MS; }
 
@@ -125,5 +137,6 @@ final class RefinementProgress {
     static synchronized void reset() {
         id = null; saved = total = windowStart = windowBytes = windowStartedAt = lastChangeAt = 0;
         lastPercent = -1; speed = 0; windowPercent = () -> 0; waiting = null; accurate = false;
+        build = null; cores = 0;
     }
 }

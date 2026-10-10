@@ -17,17 +17,21 @@ import java.util.List;
 /**
  * Local-only saved-audio refinement. Never starts microphone or Bluetooth.
  *
- * <p>While a capture is active the worker runs on a plain thread in this process, which the
- * capture's foreground service keeps alive: no job time limit, so long windows on a slow phone
- * still finish. Otherwise Android runs it as a job. A pass reaching its own time limit always
- * finishes the window it started; only Android stopping the job (or the app being stopped)
- * discards a window in progress. Progress is saved after every window.
+ * <p>The worker normally runs inside {@link RefinementService}, a foreground service: Android
+ * then lets it use the big CPU cores and doesn't ration its time. A background job (or plain
+ * process) is confined to the little cores and job quotas, which made Whisper many times slower.
+ * When Android refuses the foreground start (app in the background without the battery
+ * exemption), it falls back to the old paths: a plain thread while a capture's foreground service
+ * keeps the process up, otherwise a job. A pass reaching its own time limit always finishes the
+ * window it started. Progress is saved after every window.
  */
 public final class RefinementJobService extends JobService {
     static final int JOB_ID = 41008;
     private static final long PASS_MS = 7 * 60 * 1000L;
     private static final Object LOCK = new Object();
     private static Work owner;
+    /** The service, started while another worker held the model, waiting to take over. */
+    private static RefinementService standby;
     /** Threads while a capture is active on phones with fewer than 8 cores. */
     static final int CAPTURE_THREADS = 2;
     /** Slightly below normal, but not THREAD_PRIORITY_BACKGROUND, which moves threads to the little cores. */
@@ -44,8 +48,40 @@ public final class RefinementJobService extends JobService {
     public static void schedule(Context context) {
         scheduleCharging(context);
         synchronized (LOCK) {
-            if (owner != null) { owner.rescheduleRequested = true; return; }
+            if (owner != null) {
+                owner.rescheduleRequested = true;
+                // A job or plain thread runs on the little cores: move it to the service after its window.
+                if (owner.host == null && standby == null) startService(context);
+                return;
+            }
+            if (startService(context)) return;
             if (capturing()) { startInProcess(context.getApplicationContext()); return; }
+            scheduleJob(context);
+        }
+    }
+
+    /** The service started but couldn't go to the foreground: run the work the old way for a while. */
+    static void scheduleFallback(Context context) {
+        refusedAt = SystemClock.elapsedRealtime();
+        synchronized (LOCK) {
+            if (owner != null) return;
+            if (capturing()) startInProcess(context.getApplicationContext());
+            else scheduleJob(context);
+        }
+    }
+
+    /** When the service last failed to reach the foreground; it isn't retried for a while after. */
+    private static final long REFUSED_MS = 10 * 60 * 1000L;
+    private static volatile long refusedAt = -REFUSED_MS;
+
+    private static boolean startService(Context context) {
+        if (SystemClock.elapsedRealtime() - refusedAt < REFUSED_MS) return false;
+        return RefinementService.start(context);
+    }
+
+    /** The job fallback: Android starts it when it can; it first tries to move into the service. */
+    private static void scheduleJob(Context context) {
+        synchronized (LOCK) {
             try {
                 JobScheduler scheduler = context.getSystemService(JobScheduler.class);
                 if (scheduler == null) return;
@@ -88,15 +124,52 @@ public final class RefinementJobService extends JobService {
      * Whisper threads for the next window, re-read every window: up to 4; while capturing, leave
      * room for live speech and the audio pipeline (2 on phones with fewer than 8 cores).
      */
-    static int threads() { return threads(Runtime.getRuntime().availableProcessors(), capturing()); }
+    static int threads() { return threads(Runtime.getRuntime().availableProcessors(), capturing(), fastCores); }
 
-    static int threads(int processors, boolean capturing) {
-        int cores = Math.max(1, Math.min(4, processors));
+    /** Fast cores the worker is pinned to (0: not pinned, any core). */
+    static volatile int fastCores;
+
+    static int threads(int processors, boolean capturing) { return threads(processors, capturing, 0); }
+
+    /** One thread per fast core when pinned: more threads than those cores would just queue. */
+    static int threads(int processors, boolean capturing, int fast) {
+        int cores = Math.max(1, Math.min(4, fast > 0 ? Math.min(processors, fast) : processors));
         return capturing && processors < 8 ? Math.min(CAPTURE_THREADS, cores) : cores;
     }
 
+    /**
+     * Called by {@link RefinementService} once it's in the foreground: start the worker there, or
+     * take over from another worker after its window. False only if it can't start.
+     */
+    static boolean host(RefinementService service) {
+        synchronized (LOCK) {
+            if (owner != null) {
+                owner.rescheduleRequested = true;
+                if (owner.host == null) {
+                    // Wait in the foreground; the worker hands over after its window.
+                    owner.promote = true;
+                    standby = service;
+                }
+                return true;
+            }
+            Work work = new Work(null, null, service.getApplicationContext(), service);
+            owner = work;
+            work.thread = new Thread(() -> runWork(work), "saved-whisper-refinement");
+            work.thread.start();
+            return true;
+        }
+    }
+
+    /** The service is going away (stopped by Android or the user): stop and leave the rest to a job. */
+    static void hostGone(RefinementService service) {
+        synchronized (LOCK) {
+            if (standby == service) standby = null;
+            if (owner != null && owner.host == service) { owner.hostLost = true; owner.cancel(); }
+        }
+    }
+
     private static void startInProcess(Context context) {
-        Work work = new Work(null, null, context);
+        Work work = new Work(null, null, context, null);
         owner = work;
         work.thread = new Thread(() -> runWork(work), "saved-whisper-refinement");
         work.thread.start();
@@ -112,7 +185,12 @@ public final class RefinementJobService extends JobService {
                 MAIN.post(() -> jobFinished(parameters, retryLater));
                 return true;
             }
-            Work work = new Work(parameters, this, getApplicationContext());
+            // Android runs jobs on the little cores; the service gets the big ones.
+            if (startService(getApplicationContext())) {
+                MAIN.post(() -> jobFinished(parameters, false));
+                return true;
+            }
+            Work work = new Work(parameters, this, getApplicationContext(), null);
             owner = current = work;
             work.thread = new Thread(() -> runWork(work), "saved-whisper-refinement");
             work.thread.start();
@@ -142,7 +220,8 @@ public final class RefinementJobService extends JobService {
     private static void runWork(Work work) {
         boolean retry = false;
         Context context = work.context;
-        try { Process.setThreadPriority(WORKER_PRIORITY); } // native worker threads inherit it
+        // Native worker threads inherit both the priority and the core affinity set below.
+        try { Process.setThreadPriority(work.host != null ? Process.THREAD_PRIORITY_DEFAULT : WORKER_PRIORITY); }
         catch (RuntimeException unavailable) { /* Default priority still works. */ }
         try {
             if (work.shouldPause()) { retry = true; return; }
@@ -166,7 +245,7 @@ public final class RefinementJobService extends JobService {
                 String small = ModelInstaller.prepareSmall(context, work::cancelledNow).getAbsolutePath();
                 if (work.shouldPause()) { retry = true; return; }
                 work.model = new WhisperModel(small, vad);
-                RefinementProgress.build = WhisperNative.BUILD + " build";
+                loaded();
                 if (work.cancelledNow()) { work.cancel(); retry = true; return; }
                 retry |= pass(work, store, quick, false, language, vocabulary, done);
                 closeModel(work);
@@ -178,7 +257,7 @@ public final class RefinementJobService extends JobService {
                     String medium = ModelInstaller.prepare(context, work::cancelledNow).getAbsolutePath();
                     if (work.shouldPause()) { retry = true; return; }
                     work.model = new WhisperModel(medium, vad);
-                    RefinementProgress.build = WhisperNative.BUILD + " build";
+                    loaded();
                     if (work.cancelledNow()) { work.cancel(); retry = true; return; }
                     retry |= pass(work, store, finals, true, language, vocabulary, done);
                 }
@@ -209,12 +288,37 @@ public final class RefinementJobService extends JobService {
         }
     }
 
+    /** Whisper is loaded on this worker thread: note the build, and keep it on the fast cores. */
+    private static void loaded() {
+        RefinementProgress.build = WhisperNative.BUILD + " build";
+        int cores = 0;
+        try { cores = WhisperNative.pinFastCores(); }
+        catch (LinkageError unavailable) { /* All cores, as before. */ }
+        fastCores = cores;
+        RefinementProgress.cores = cores;
+    }
+
     private static void finished(Work work, boolean reschedule) {
         synchronized (LOCK) {
             if (owner != work) return;
             owner = null;
+            RefinementService host = work.host;
+            if (host != null) {
+                if (work.hostLost) { scheduleJob(work.context); return; }
+                boolean more = (reschedule || work.rescheduleRequested) && !work.cancelled;
+                if (!more || !host(host)) host.done();
+                return;
+            }
             RefinementJobService service = work.service;
             if (service != null && service.current == work) service.current = null;
+            RefinementService waiting = standby;
+            standby = null;
+            if (waiting != null) {
+                // The service is up and waiting for this worker's window: continue there.
+                if (service != null && !work.platformStopped) service.jobFinished(work.parameters, false);
+                if (!host(waiting)) waiting.done();
+                return;
+            }
             boolean again = (reschedule || work.rescheduleRequested) && !work.cancelled;
             if (service == null) {
                 // In-process: carry on here while capturing, or hand the rest to a job.
@@ -312,21 +416,32 @@ public final class RefinementJobService extends JobService {
                 }, cancelled, stopBeforeWindow, RefinementProgress::window);
     }
 
-    /** One worker: a job (service and parameters set) or the in-process runner during capture. */
+    /**
+     * One worker: in the foreground service (host set), a job (service and parameters set), or the
+     * plain-thread fallback during capture.
+     */
     private static final class Work {
         final JobParameters parameters;
         final RefinementJobService service;
+        final RefinementService host;
         final Context context;
         final long deadline = SystemClock.elapsedRealtime() + PASS_MS;
-        volatile boolean cancelled, platformStopped, rescheduleRequested;
+        volatile boolean cancelled, platformStopped, rescheduleRequested, hostLost;
+        /** The service started: stop after this window and continue there, on the fast cores. */
+        volatile boolean promote;
         volatile WhisperModel model;
         Thread thread;
-        Work(JobParameters parameters, RefinementJobService service, Context context) {
-            this.parameters = parameters; this.service = service; this.context = context;
+        Work(JobParameters parameters, RefinementJobService service, Context context, RefinementService host) {
+            this.parameters = parameters; this.service = service; this.context = context; this.host = host;
         }
         boolean cancelledNow() { return cancelled; }
-        /** Stop before the next window: a job's time is up, or the capture keeping us alive ended. */
+        /**
+         * Stop before the next window: the service took over, a job's time is up, or the capture
+         * keeping the plain thread alive ended. The service itself runs until the queue is done.
+         */
         boolean softStop() {
+            if (host != null) return false;
+            if (promote) return true;
             return service == null ? !capturing() : SystemClock.elapsedRealtime() >= deadline;
         }
         boolean shouldPause() { return cancelled || softStop(); }
