@@ -78,7 +78,15 @@ public final class ModelInstallerHostTest {
                 ModelInstaller.VAD_BYTES, new String[0], () -> new ByteArrayInputStream(new byte[]{1}), () -> false),
                 IOException.class, "Wrong VAD bytes rejected");
         check(!new File(new File(temporary, "vad-bad"), ModelInstaller.VAD_FILE).exists(), "Rejected VAD not published");
-        System.out.println("ModelInstallerHostTest PASS: " + assertions + " assertions, real pinned Whisper and VAD models");
+        File smallAsset = new File(args[3]);
+        File small = ModelInstaller.install(upgrade, ModelInstaller.SMALL_FILE, ModelInstaller.SMALL_SHA256, ModelInstaller.SMALL_BYTES,
+                new String[0], () -> new FileInputStream(smallAsset), () -> false);
+        check(ModelInstaller.verify(small, ModelInstaller.SMALL_SHA256, ModelInstaller.SMALL_BYTES, () -> false), "Pinned small model installed");
+        Files.delete(new File(upgrade, ModelInstaller.MODEL_FILE).toPath()); // reinstall runs the superseded cleanup
+        ModelInstaller.prepare(upgrade, source, () -> false);
+        check(small.exists() && ModelInstaller.verify(small, ModelInstaller.SMALL_SHA256, ModelInstaller.SMALL_BYTES, () -> false),
+                "Medium install keeps the small model (no longer superseded)");
+        System.out.println("ModelInstallerHostTest PASS: " + assertions + " assertions, real pinned Whisper (medium, small) and VAD models");
     }
     private interface Checked { void run() throws Exception; }
     private static void reject(Checked code, Class<? extends Exception> expected, String label) throws Exception {

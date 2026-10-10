@@ -31,7 +31,7 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 ## What GVoice does
 
 - Omi Bluetooth LE Opus audio → encrypted phone-local PCM and transcript history.
-- Bundled **Vosk** (Portuguese) for streaming drafts; CPU-only multilingual **Whisper medium Q5_0** with bundled **Silero VAD** refines each saved recording, in Portuguese by default (English or per-window detection in Omi settings › Transcripts). Refinement keeps running while you record, with fewer threads at background priority, and cuts its 18–30 s windows at pauses.
+- Bundled **Vosk** (Portuguese) for streaming drafts. Each saved recording gets a quick **Whisper small** transcript right away (while recording too), and **Whisper medium** redoes it while the phone charges (Omi settings › Transcripts › Better transcript while charging). Both use bundled **Silero VAD**, Portuguese by default, windows cut at pauses, and on phones with ARMv8.2 dot-product/fp16 instructions a faster native build.
 - Playback, searchable library and explicit WAV/text export.
 - No Omi account, PC relay, cloud transcription, runtime model download or `INTERNET` permission.
 - Capability-gated battery, brightness, microphone gain and button controls. Long-press/power behavior stays firmware-owned.

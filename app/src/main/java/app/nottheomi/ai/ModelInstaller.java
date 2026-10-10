@@ -14,14 +14,19 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.function.BooleanSupplier;
 
-/** Copies only the pinned bundled Whisper and VAD models; never downloads or touches recordings. */
+/** Copies only the pinned bundled Whisper (medium, small) and VAD models; never downloads or touches recordings. */
 public final class ModelInstaller {
     public static final String MODEL_FILE = "ggml-medium-q5_0.bin";
     public static final String MODEL_SHA256 =
             "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f";
     public static final long MODEL_BYTES = 539212467L;
     /** Earlier pinned Whisper weights. Superseded copies only waste private storage. */
-    static final String[] SUPERSEDED = {"ggml-small.en-q5_1.bin", "ggml-small-q5_1.bin"};
+    static final String[] SUPERSEDED = {"ggml-small.en-q5_1.bin"};
+    /** Whisper small: the quick pass while recording. Medium redoes it while charging. */
+    public static final String SMALL_FILE = "ggml-small-q5_1.bin";
+    public static final String SMALL_SHA256 =
+            "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb";
+    public static final long SMALL_BYTES = 190085487L;
     /** Silero voice-activity model: Whisper only hears the parts of each window with speech. */
     public static final String VAD_FILE = "ggml-silero-v5.1.2.bin";
     public static final String VAD_SHA256 =
@@ -36,6 +41,11 @@ public final class ModelInstaller {
     public static File prepare(Context context, BooleanSupplier cancelled) throws Exception {
         return prepare(new File(context.getNoBackupFilesDir(), "speech-model"),
                 () -> context.getAssets().open(MODEL_FILE), cancelled);
+    }
+
+    public static File prepareSmall(Context context, BooleanSupplier cancelled) throws Exception {
+        return install(new File(context.getNoBackupFilesDir(), "speech-model"), SMALL_FILE, SMALL_SHA256, SMALL_BYTES,
+                new String[0], () -> context.getAssets().open(SMALL_FILE), cancelled);
     }
 
     public static File prepareVad(Context context, BooleanSupplier cancelled) throws Exception {

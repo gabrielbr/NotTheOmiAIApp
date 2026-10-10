@@ -40,7 +40,7 @@ def main():
         names = archive.namelist()
         assert len(names) == len(set(names)), 'Duplicate APK members'
         assert not any(n.endswith('/jfk.wav') or n.endswith('/test.wav') for n in names), 'Test fixture in release'
-        for key in ['model', 'vad_model', 'preview_model']:
+        for key in ['model', 'small_model', 'vad_model', 'preview_model']:
             model = metadata[key]
             member = 'assets/'+model['filename']
             info = archive.getinfo(member)
@@ -50,7 +50,7 @@ def main():
                 for block in iter(lambda: source.read(1024 * 1024), b''):
                     digest.update(block)
                 assert digest.hexdigest() == model['sha256'], 'Wrong model bytes'
-            if key in ('model', 'vad_model'):
+            if key in ('model', 'small_model', 'vad_model'):
                 assert info.compress_type == zipfile.ZIP_STORED, 'Whisper model compressed'
         for name in ['whisper.cpp-MIT.txt','whisper-model-MIT.txt','whisper-silero-vad-MIT.txt','vosk-license.txt','jna-license.txt','concentus-license.txt','omi-license.txt']:
             assert len(archive.read('assets/licenses/'+name)) > 100, 'Missing license'
@@ -61,6 +61,9 @@ def main():
             whisper = 'lib/'+abi+'/libnottheomi-whisper.so'
             expected = {name:value for name,value in runtime_native.items() if name.startswith('lib/'+abi+'/')}
             expected[whisper] = native['abis'][abi]['sha256']
+            if abi in native.get('dotprod', {}):
+                expected['lib/'+abi+'/libnottheomi-whisper-dotprod.so'] = native['dotprod'][abi]['sha256']
+            assert abi != 'arm64-v8a' or 'lib/arm64-v8a/libnottheomi-whisper-dotprod.so' in expected, 'Fast arm64 build missing
             actual = {name:sha(archive.read(name)) for name in names if name.startswith('lib/'+abi+'/') and name.endswith('.so')}
             assert actual == expected, 'APK native libraries differ from pinned inputs'
             actual_native.update(actual)

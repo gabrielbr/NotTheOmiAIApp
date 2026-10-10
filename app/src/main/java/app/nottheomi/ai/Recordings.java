@@ -57,6 +57,7 @@ public final class Recordings {
     private static final int MAX_QUOTA_CACHE_ENTRIES = 4096;
     private static final String ACTIVE = "recording";
     private static final String PENDING = "pending", FAILED = "failed", COMPLETE = "complete";
+    public static final String SMALL = "small", MEDIUM = "medium";
     private static final String CORRUPT = "corrupt";
     private static final String ANNOTATIONS_HEADER = "\n\n[Recording annotations]\n";
     private static final Pattern ANNOTATION = Pattern.compile(
@@ -105,7 +106,9 @@ public final class Recordings {
                         || scalar("SELECT COUNT(*) FROM chunks", null) != 0
                         || scalar("SELECT COUNT(*) FROM nonces", null) != 0
                         || scalar("SELECT COUNT(*) FROM refinements", null) != 0
-                        || scalar("SELECT COUNT(*) FROM refinement_chunks", null) != 0) {
+                        || scalar("SELECT COUNT(*) FROM refinement_chunks", null) != 0
+                        || scalar("SELECT COUNT(*) FROM final_refinements", null) != 0
+                        || scalar("SELECT COUNT(*) FROM final_chunks", null) != 0) {
                     throw new IOException("Recording encryption key is unavailable. "
                             + "Encrypted originals were kept; do not clear app data.");
                 }
@@ -135,13 +138,23 @@ public final class Recordings {
         public final long createdAt, durationMs, bytes;
         /** Saved audio already refined (the durable checkpoint); 0 when not refining. */
         public final long refinedBytes;
+        /** Whisper model of the refined text ("small" quick or "medium"); null when none. */
+        public final String model;
+        /** The accurate pass's checkpoint for a quick transcript, or -1 when none is queued. */
+        public final long improvingBytes;
         public final boolean truncated;
         private Session(Metadata metadata, String transcript) {
-            this(metadata, transcript, transcript, "none", false, 0);
+            this(metadata, transcript, transcript, "none", false, 0, null, -1);
         }
         private Session(Metadata metadata, String transcript, String draft, String state,
                         boolean previewTruncated, long refined) {
+            this(metadata, transcript, draft, state, previewTruncated, refined, null, -1);
+        }
+        private Session(Metadata metadata, String transcript, String draft, String state,
+                        boolean previewTruncated, long refined, String refinedModel, long improving) {
             refinedBytes = refined;
+            model = refinedModel;
+            improvingBytes = improving;
             id = metadata.id;
             title = metadata.title;
             status = metadata.status;
@@ -155,15 +168,23 @@ public final class Recordings {
         }
     }
 
-    /** Authenticated durable checkpoint. States are pending, failed, or complete. */
+    /**
+     * Authenticated durable checkpoint. States are pending, failed, or complete. finalPass marks
+     * the accurate (medium) pass made while charging, which replaces a quick transcript only once
+     * it's complete.
+     */
     public static final class Refinement {
-        public final String id, state;
+        public final String id, state, model;
         public final long offsetBytes, totalBytes;
-        private Refinement(RefinementMetadata metadata) {
+        public final boolean finalPass;
+        private Refinement(RefinementMetadata metadata) { this(metadata, false); }
+        private Refinement(RefinementMetadata metadata, boolean finalPass) {
             id = metadata.id;
             state = metadata.state;
+            model = finalPass ? MEDIUM : metadata.model;
             offsetBytes = metadata.offsetBytes;
             totalBytes = metadata.totalBytes;
+            this.finalPass = finalPass;
         }
     }
 
@@ -386,7 +407,14 @@ public final class Recordings {
     }
 
     /** Publish only a fully processed, authenticated, nonblank transcript; otherwise keep draft. */
-    public void completeRefinement(String id) throws Exception {
+    public void completeRefinement(String id) throws Exception { completeRefinement(id, MEDIUM); }
+
+    /**
+     * Publishes the transcript as made by {@code model}. A quick (small) transcript also queues the
+     * accurate pass, made later while charging; it replaces the quick one only once complete.
+     */
+    public void completeRefinement(String id, String model) throws Exception {
+        if (!SMALL.equals(model) && !MEDIUM.equals(model)) throw new IllegalArgumentException("Unknown model");
         synchronized (lock) {
             transaction(() -> {
                 Metadata metadata = loadMetadata(id);
@@ -402,8 +430,140 @@ public final class Recordings {
                     if (!readText(id, sequence, true).trim().isEmpty()) nonblank = true;
                 }
                 item.state = nonblank ? COMPLETE : FAILED;
+                item.model = model;
                 checkFreeSpace(0);
                 saveRefinement(item, false);
+                if (nonblank && SMALL.equals(model)) {
+                    db.delete("final_chunks", "session_id=?", new String[]{id});
+                    db.delete("final_refinements", "session_id=?", new String[]{id});
+                    RefinementMetadata accurate = new RefinementMetadata();
+                    accurate.id = id;
+                    accurate.state = PENDING;
+                    accurate.model = MEDIUM;
+                    accurate.totalBytes = item.totalBytes;
+                    saveFinal(accurate, true);
+                }
+            });
+        }
+    }
+
+    /** Accurate passes waiting for the phone to charge, oldest first (at most 12). */
+    public List<Refinement> pendingFinals() throws Exception {
+        List<Refinement> result = new ArrayList<>();
+        synchronized (lock) {
+            try (Cursor cursor = db.rawQuery("SELECT session_id FROM final_refinements ORDER BY rowid", null)) {
+                while (result.size() < MAX_RECENT_SESSIONS && cursor.moveToNext()) {
+                    try {
+                        RefinementMetadata item = loadFinal(loadMetadata(cursor.getString(0)), true);
+                        if (item != null && PENDING.equals(item.state)) result.add(new Refinement(item, true));
+                    } catch (CorruptRecordingException damaged) {
+                        // Skip; the quick transcript stays.
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    public Refinement finalRefinement(String id) throws Exception {
+        synchronized (lock) {
+            if (!exists(id)) return null;
+            RefinementMetadata item = loadFinal(loadMetadata(id), true);
+            return item == null ? null : new Refinement(item, true);
+        }
+    }
+
+    /** One window of the accurate pass; invisible until completeFinal swaps it in. */
+    public void commitFinalBatch(String id, long expectedOffset, long nextOffset, String text) throws Exception {
+        if (text == null || expectedOffset < 0 || nextOffset <= expectedOffset
+                || (expectedOffset & 1) != 0 || (nextOffset & 1) != 0) {
+            throw new IllegalArgumentException("An advancing PCM16 checkpoint and text are required.");
+        }
+        byte[] encoded = text.getBytes(StandardCharsets.UTF_8);
+        if (encoded.length > MAX_TEXT_BYTES) throw new IllegalArgumentException("Transcript segment exceeds 1 MiB.");
+        try {
+            synchronized (lock) {
+                checkFreeSpace(encoded.length);
+                transaction(() -> {
+                    Metadata metadata = loadMetadata(id);
+                    requireRefinable(metadata);
+                    RefinementMetadata item = loadFinal(metadata, true);
+                    if (item == null || !PENDING.equals(item.state) || item.offsetBytes != expectedOffset) {
+                        throw new StaleCheckpointException("Accurate pass checkpoint is no longer current.");
+                    }
+                    if (nextOffset > item.totalBytes) throw new IllegalArgumentException("Checkpoint exceeds saved audio.");
+                    if (!text.trim().isEmpty()) {
+                        ContentValues values = new ContentValues();
+                        values.put("session_id", id);
+                        values.put("sequence", item.textCount);
+                        values.put("plain_length", encoded.length);
+                        values.put("envelope", encrypt(id, "final-text", item.textCount, encoded));
+                        db.insertOrThrow("final_chunks", null, values);
+                        item.textCount++;
+                        item.textBytes += encoded.length;
+                    }
+                    item.offsetBytes = nextOffset;
+                    saveFinal(item, false);
+                });
+            }
+        } finally { Arrays.fill(encoded, (byte) 0); }
+    }
+
+    /**
+     * The accurate pass is done: in one transaction its text replaces the quick transcript (each
+     * chunk re-encrypted for the refinement domain) and the pass is removed. A blank result keeps
+     * the quick transcript.
+     */
+    public void completeFinal(String id) throws Exception {
+        synchronized (lock) {
+            transaction(() -> {
+                Metadata metadata = loadMetadata(id);
+                requireRefinable(metadata);
+                RefinementMetadata accurate = loadFinal(metadata, true);
+                RefinementMetadata main = loadRefinement(metadata, true);
+                if (accurate == null || !PENDING.equals(accurate.state) || accurate.offsetBytes != accurate.totalBytes
+                        || main == null || !COMPLETE.equals(main.state)) {
+                    throw new StaleCheckpointException("Accurate pass has not processed all saved audio.");
+                }
+                List<byte[]> texts = new ArrayList<>();
+                boolean nonblank = false;
+                try {
+                    for (long sequence = 0; sequence < accurate.textCount; sequence++) {
+                        byte[] plain = readFinalChunk(id, sequence);
+                        texts.add(plain);
+                        if (!new String(plain, StandardCharsets.UTF_8).trim().isEmpty()) nonblank = true;
+                    }
+                    checkFreeSpace(0);
+                    if (nonblank) {
+                        db.delete("refinement_chunks", "session_id=?", new String[]{id});
+                        for (int sequence = 0; sequence < texts.size(); sequence++) {
+                            byte[] plain = texts.get(sequence);
+                            ContentValues values = new ContentValues();
+                            values.put("session_id", id);
+                            values.put("sequence", sequence);
+                            values.put("plain_length", plain.length);
+                            values.put("envelope", encrypt(id, "refinement-text", sequence, plain));
+                            db.insertOrThrow("refinement_chunks", null, values);
+                        }
+                        main.textCount = accurate.textCount;
+                        main.textBytes = accurate.textBytes;
+                        main.model = MEDIUM;
+                        saveRefinement(main, false);
+                    }
+                    db.delete("final_chunks", "session_id=?", new String[]{id});
+                    db.delete("final_refinements", "session_id=?", new String[]{id});
+                } finally { for (byte[] plain : texts) Arrays.fill(plain, (byte) 0); }
+            });
+        }
+    }
+
+    /** The accurate pass failed: drop it; the quick transcript stays. */
+    public void failFinal(String id) throws Exception {
+        synchronized (lock) {
+            transaction(() -> {
+                if (!exists(id)) return;
+                db.delete("final_chunks", "session_id=?", new String[]{id});
+                db.delete("final_refinements", "session_id=?", new String[]{id});
             });
         }
     }
@@ -466,7 +626,10 @@ public final class Recordings {
                     return;
                 }
                 db.delete("refinement_chunks", "session_id=?", new String[]{id});
+                db.delete("final_chunks", "session_id=?", new String[]{id});
+                db.delete("final_refinements", "session_id=?", new String[]{id});
                 item.state = PENDING;
+                item.model = SMALL;
                 item.offsetBytes = 0;
                 item.textCount = 0;
                 item.textBytes = 0;
@@ -488,6 +651,7 @@ public final class Recordings {
         RefinementMetadata item = new RefinementMetadata();
         item.id = metadata.id;
         item.state = PENDING;
+        item.model = SMALL;
         item.totalBytes = metadata.bytes;
         saveRefinement(item, true);
         metadata.refinementQueued = true;
@@ -547,7 +711,7 @@ public final class Recordings {
 
     private Session readSession(String id, boolean brief) throws Exception {
         Metadata metadata;
-        RefinementMetadata refinement = null;
+        RefinementMetadata refinement = null, improving = null;
         boolean damaged = false;
         synchronized (lock) {
             if (!exists(id)) return null;
@@ -555,13 +719,19 @@ public final class Recordings {
             if (brief && ACTIVE.equals(metadata.status)) return null;
             try { refinement = loadRefinement(metadata, !brief); }
             catch (CorruptRecordingException failure) { damaged = true; }
+            try { improving = loadFinal(metadata, false); }
+            catch (CorruptRecordingException failure) { improving = null; } // the quick text stands
             readers.put(id, readers.getOrDefault(id, 0) + 1);
         }
         // Append-only chunks remain stable. The lease prevents deletion/close while
         // Keystore decrypts outside the writer lock; manifests/counts were read together.
         try {
-            return brief ? preview(metadata, refinement, damaged)
+            Session session = brief ? preview(metadata, refinement, damaged)
                     : snapshot(metadata, refinement, damaged);
+            if (refinement == null || damaged) return session;
+            return new Session(metadata, session.text, session.liveText, session.transcriptState, session.truncated,
+                    session.refinedBytes, refinement.model,
+                    improving != null && PENDING.equals(improving.state) ? improving.offsetBytes : -1);
         } finally { releaseReader(id); }
     }
 
@@ -919,7 +1089,8 @@ public final class Recordings {
         // Unqualified existing SQL must never authenticate shadow TEMP tables instead
         // of the archive. Normal operation has only the connection sentinel in TEMP.
         if (scalar("SELECT COUNT(*) FROM sqlite_temp_master WHERE name IN "
-                + "('sessions','chunks','nonces','refinements','refinement_chunks')", null) != 0) {
+                + "('sessions','chunks','nonces','refinements','refinement_chunks','final_refinements',"
+                + "'final_chunks')", null) != 0) {
             throw new CorruptRecordingException("temporary archive shadow");
         }
         boolean triggerFree = scalar("SELECT COUNT(*) FROM main.sqlite_master WHERE type='trigger'",
@@ -1164,9 +1335,12 @@ public final class Recordings {
         RefinementMetadata item = new RefinementMetadata();
         try {
             JSONObject object = new JSONObject(new String(plain, StandardCharsets.UTF_8));
-            if (object.length() != 7 || integer(object, "version") != 1) {
+            long version = integer(object, "version");
+            if (!(version == 1 && object.length() == 7) && !(version == 2 && object.length() == 8)) {
                 throw new IllegalArgumentException();
             }
+            item.model = version == 1 ? MEDIUM : object.getString("model");
+            if (!SMALL.equals(item.model) && !MEDIUM.equals(item.model)) throw new IllegalArgumentException();
             item.id = metadata.id;
             item.state = object.getString("state");
             item.offsetBytes = integer(object, "offsetBytes");
@@ -1192,8 +1366,12 @@ public final class Recordings {
     }
 
     private void verifyRefinementShape(RefinementMetadata item) throws CorruptRecordingException {
+        verifyShape(item, "refinement_chunks");
+    }
+
+    private void verifyShape(RefinementMetadata item, String table) throws CorruptRecordingException {
         try (Cursor cursor = db.rawQuery("SELECT COUNT(*),COALESCE(SUM(plain_length),0),"
-                + "COALESCE(MIN(sequence),0),COALESCE(MAX(sequence),-1) FROM refinement_chunks "
+                + "COALESCE(MIN(sequence),0),COALESCE(MAX(sequence),-1) FROM " + table + " "
                 + "WHERE session_id=?", new String[]{item.id})) {
             cursor.moveToFirst();
             if (cursor.getLong(0) != item.textCount || cursor.getLong(1) != item.textBytes
@@ -1205,7 +1383,7 @@ public final class Recordings {
 
     private void saveRefinement(RefinementMetadata item, boolean insert) throws Exception {
         JSONObject object = new JSONObject();
-        object.put("version", 1).put("id", item.id).put("state", item.state)
+        object.put("version", 2).put("id", item.id).put("state", item.state).put("model", item.model)
                 .put("offsetBytes", item.offsetBytes).put("totalBytes", item.totalBytes)
                 .put("textCount", item.textCount).put("textBytes", item.textBytes);
         byte[] plain = object.toString().getBytes(StandardCharsets.UTF_8);
@@ -1218,6 +1396,74 @@ public final class Recordings {
         } else if (db.update("refinements", values, "session_id=?", new String[]{item.id}) != 1) {
             throw new CorruptRecordingException("missing refinement manifest");
         }
+    }
+
+    private RefinementMetadata loadFinal(Metadata metadata, boolean verifyChunks) throws Exception {
+        byte[] envelope;
+        try (Cursor cursor = db.rawQuery("SELECT envelope FROM final_refinements WHERE session_id=?",
+                new String[]{metadata.id})) {
+            if (!cursor.moveToFirst()) return null;
+            envelope = cursor.getBlob(0);
+        }
+        byte[] plain = decrypt(metadata.id, "final-meta", 0, envelope, MAX_METADATA_BYTES);
+        RefinementMetadata item = new RefinementMetadata();
+        try {
+            JSONObject object = new JSONObject(new String(plain, StandardCharsets.UTF_8));
+            if (object.length() != 7 || integer(object, "version") != 1) throw new IllegalArgumentException();
+            item.id = metadata.id;
+            item.model = MEDIUM;
+            item.state = object.getString("state");
+            item.offsetBytes = integer(object, "offsetBytes");
+            item.totalBytes = integer(object, "totalBytes");
+            item.textCount = integer(object, "textCount");
+            item.textBytes = integer(object, "textBytes");
+            if (!metadata.id.equals(object.getString("id")) || ACTIVE.equals(metadata.status)
+                    || item.totalBytes != metadata.bytes || item.offsetBytes < 0
+                    || item.offsetBytes > item.totalBytes || (item.offsetBytes & 1) != 0
+                    || item.textCount < 0 || item.textCount > item.offsetBytes / 2
+                    || item.textBytes < item.textCount || item.textBytes > item.textCount * MAX_TEXT_BYTES
+                    || !PENDING.equals(item.state)) {
+                throw new IllegalArgumentException();
+            }
+        } catch (Exception failure) {
+            throw new CorruptRecordingException("accurate pass manifest", failure);
+        } finally { Arrays.fill(plain, (byte) 0); }
+        if (verifyChunks) verifyShape(item, "final_chunks");
+        return item;
+    }
+
+    private void saveFinal(RefinementMetadata item, boolean insert) throws Exception {
+        JSONObject object = new JSONObject();
+        object.put("version", 1).put("id", item.id).put("state", item.state)
+                .put("offsetBytes", item.offsetBytes).put("totalBytes", item.totalBytes)
+                .put("textCount", item.textCount).put("textBytes", item.textBytes);
+        byte[] plain = object.toString().getBytes(StandardCharsets.UTF_8);
+        ContentValues values = new ContentValues();
+        try { values.put("envelope", encrypt(item.id, "final-meta", 0, plain)); }
+        finally { Arrays.fill(plain, (byte) 0); }
+        if (insert) {
+            values.put("session_id", item.id);
+            db.insertOrThrow("final_refinements", null, values);
+        } else if (db.update("final_refinements", values, "session_id=?", new String[]{item.id}) != 1) {
+            throw new CorruptRecordingException("missing accurate pass manifest");
+        }
+    }
+
+    private byte[] readFinalChunk(String id, long sequence) throws Exception {
+        byte[] envelope;
+        long length;
+        try (Cursor cursor = db.rawQuery("SELECT envelope,plain_length FROM final_chunks "
+                + "WHERE session_id=? AND sequence=?", new String[]{id, Long.toString(sequence)})) {
+            if (!cursor.moveToFirst()) throw new CorruptRecordingException("missing accurate pass chunk");
+            envelope = cursor.getBlob(0);
+            length = cursor.getLong(1);
+        }
+        byte[] plain = decrypt(id, "final-text", sequence, envelope, MAX_TEXT_BYTES);
+        if (plain.length == 0 || plain.length != length) {
+            Arrays.fill(plain, (byte) 0);
+            throw new CorruptRecordingException("accurate pass chunk length");
+        }
+        return plain;
     }
 
     private byte[] readRefinementChunk(String id, long sequence) throws Exception {
@@ -1360,11 +1606,13 @@ public final class Recordings {
 
     private static final class RefinementMetadata {
         String id, state;
+        /** Which Whisper made (or is making) the text: "small" (quick) or "medium". */
+        String model = MEDIUM;
         long offsetBytes, totalBytes, textCount, textBytes;
     }
 
     private static final class StoreDatabase extends SQLiteOpenHelper {
-        StoreDatabase(Context context, String name) { super(context, name, null, 3); }
+        StoreDatabase(Context context, String name) { super(context, name, null, 4); }
         @Override public void onConfigure(SQLiteDatabase database) {
             database.setForeignKeyConstraintsEnabled(true);
             database.execSQL("PRAGMA synchronous=FULL");
@@ -1386,15 +1634,26 @@ public final class Recordings {
             database.execSQL("CREATE TABLE nonces(nonce BLOB PRIMARY KEY NOT NULL)");
             createRefinementTables(database);
             createShapeIndex(database);
+            createFinalTables(database);
         }
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if ((oldVersion != 1 && oldVersion != 2) || newVersion != 3) {
+            if (oldVersion < 1 || oldVersion > 3 || newVersion != 4) {
                 throw new IllegalStateException("Unsupported recording store version; data kept.");
             }
             if (oldVersion == 1) createRefinementTables(database);
             // SQLiteOpenHelper commits this additive upgrade atomically. No encrypted
             // rows, nonce reservations, manifests or refinement checkpoints are rewritten.
-            createShapeIndex(database);
+            if (oldVersion <= 2) createShapeIndex(database);
+            createFinalTables(database);
+        }
+        /** The accurate (medium) pass made while charging, kept apart until it's complete. */
+        private static void createFinalTables(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE final_refinements(session_id TEXT PRIMARY KEY NOT NULL "
+                    + "REFERENCES sessions(id) ON DELETE CASCADE,envelope BLOB NOT NULL)");
+            database.execSQL("CREATE TABLE final_chunks(session_id TEXT NOT NULL REFERENCES "
+                    + "sessions(id) ON DELETE CASCADE,sequence INTEGER NOT NULL CHECK(sequence>=0),"
+                    + "plain_length INTEGER NOT NULL CHECK(plain_length>0),"
+                    + "envelope BLOB NOT NULL,PRIMARY KEY(session_id,sequence))");
         }
         private static void createShapeIndex(SQLiteDatabase database) {
             // verifyShape still checks every historical chunk against its authenticated

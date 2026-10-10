@@ -26,6 +26,11 @@ MODEL = "ggml-medium-q5_0.bin"
 MODEL_SHA = "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f"
 MODEL_BYTES = 539212467
 MODEL_URL = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/{REVISION}/{MODEL}"
+# The quick pass while recording: small, same pinned revision (medium redoes it while charging).
+SMALL_MODEL = "ggml-small-q5_1.bin"
+SMALL_SHA = "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
+SMALL_BYTES = 190085487
+SMALL_URL = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/{REVISION}/{SMALL_MODEL}"
 # Silero VAD v5.1.2 converted for whisper.cpp (MIT, snakers4/silero-vad).
 VAD_REVISION = "9ffd54a1e1ee413ddf265af9913beaf518d1639b"
 VAD_MODEL = "ggml-silero-v5.1.2.bin"
@@ -181,6 +186,11 @@ def prepare(offline=False, cache_from=()):
           [p / "whisper-models" / MODEL for p in cache_from], offline)
     if model.stat().st_size != MODEL_BYTES:
         raise ValueError("Pinned model size mismatch")
+    small = CACHE / "whisper-models" / SMALL_MODEL
+    fetch(SMALL_URL, small, SMALL_SHA,
+          [p / "whisper-models" / SMALL_MODEL for p in cache_from], offline)
+    if small.stat().st_size != SMALL_BYTES:
+        raise ValueError("Pinned small model size mismatch")
     vad = CACHE / "whisper-models" / VAD_MODEL
     fetch(VAD_URL, vad, VAD_SHA,
           [p / "whisper-models" / VAD_MODEL for p in cache_from], offline)
@@ -190,6 +200,7 @@ def prepare(offline=False, cache_from=()):
             "source_archive_sha256": sha(archive), "source_files_verified": count,
             "model_revision": REVISION, "model_url": MODEL_URL,
             "model_sha256": sha(model), "model_bytes": model.stat().st_size,
+            "small_url": SMALL_URL, "small_sha256": sha(small),
             "vad_revision": VAD_REVISION, "vad_url": VAD_URL, "vad_sha256": sha(vad)}
 
 

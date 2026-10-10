@@ -30,7 +30,7 @@ public final class OmiSettingsActivity extends Activity {
     private final Set<String> seen=new HashSet<>();
     private LinearLayout page, devices;
     private TextView selected, scanStatus, live, led, desired, presses;
-    private Button scanButton, forgetButton, readButton, applyButton, singleButton, doubleButton, batteryButton, languageButton, micButton, vocabularyButton;
+    private Button scanButton, forgetButton, readButton, applyButton, singleButton, doubleButton, batteryButton, languageButton, micButton, vocabularyButton, chargingButton;
     private SeekBar brightness;
     private OmiBle scanner;
     private boolean resumed, scanning;
@@ -95,6 +95,8 @@ public final class OmiSettingsActivity extends Activity {
         label("The language you speak. Whisper rewrites each saved recording in it; the live draft stays Portuguese.",14,Ui.MUTED);
         languageButton=addButton("",this::chooseLanguage);
         vocabularyButton=addButton("",this::editVocabulary);
+        chargingButton=addButton("",()->{preferences(this).edit().putBoolean("better_charging",!betterWhileCharging(this)).apply();refresh();RefinementJobService.schedule(this);});
+        label("A quick transcript is made right away. With this on, a more accurate one replaces it while the phone charges.",13,Ui.MUTED);
         refresh();
     }
     @Override protected void onResume(){super.onResume();resumed=true;main.post(ticker);if(initialScan){initialScan=false;main.post(this::scan);}}
@@ -122,6 +124,7 @@ public final class OmiSettingsActivity extends Activity {
         singleButton.setEnabled(!active);doubleButton.setEnabled(!active);
         presses.setText(OmiCaptureService.lastButton);
         languageButton.setText("Language · "+languageLabel(language(this)));
+        chargingButton.setText("Better transcript while charging · "+(betterWhileCharging(this)?"On":"Off"));
         String words=vocabulary(this);
         vocabularyButton.setText("Words to expect · "+(words==null?"none":words.length()>28?words.substring(0,28)+"…":words));
         micButton.setText("Gain · "+micLabel(p.getInt("mic_gain",-1)));
@@ -139,6 +142,8 @@ public final class OmiSettingsActivity extends Activity {
         int current=preferences(this).getInt("mic_gain",-1),index=0;for(int i=0;i<MIC_LEVELS.length;i++)if(MIC_LEVELS[i]==current)index=i;
         new AlertDialog.Builder(this).setTitle("Microphone gain").setSingleChoiceItems(MIC_LABELS,index,(d,w)->{preferences(this).edit().putInt("mic_gain",MIC_LEVELS[w]).apply();d.dismiss();refresh();}).setNegativeButton("Cancel",null).show();
     }
+    /** Redo quick (small) transcripts with Whisper medium while the phone charges. On by default. */
+    static boolean betterWhileCharging(Context context){return preferences(context).getBoolean("better_charging",true);}
     /** Names and jargon Whisper should expect (its prompt); null when none. */
     static String vocabulary(Context context){
         String value=preferences(context).getString("vocabulary","").trim();

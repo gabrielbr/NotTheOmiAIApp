@@ -7,7 +7,8 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 STUBS = {
     'android/content/Context.java': '''package android.content;
-public class Context { public Context getApplicationContext(){return this;} public <T> T getSystemService(Class<T> type) { return type.cast(android.app.job.JobScheduler.INSTANCE); } }''',
+public class Context { public Context getApplicationContext(){return this;} public <T> T getSystemService(Class<T> type) { return type==android.os.BatteryManager.class?type.cast(android.os.BatteryManager.INSTANCE):type.cast(android.app.job.JobScheduler.INSTANCE); } }''',
+    'android/os/BatteryManager.java': '''package android.os; public class BatteryManager { public static final BatteryManager INSTANCE=new BatteryManager(); public static volatile boolean charging; public boolean isCharging(){return charging;} }''',
     'android/content/ComponentName.java': '''package android.content;
 public class ComponentName { public ComponentName(Context c, Class<?> type) {} }''',
     'android/os/Looper.java': '''package android.os; public class Looper { public static Looper getMainLooper(){return new Looper();} }''',
@@ -28,7 +29,7 @@ public class Handler {
  public static final int NETWORK_TYPE_NONE=0,BACKOFF_POLICY_EXPONENTIAL=1;
  public static class Builder { public Builder(int id,android.content.ComponentName c){}
  public Builder setRequiredNetworkType(int n){return this;} public Builder setRequiresStorageNotLow(boolean b){return this;}
- public Builder setMinimumLatency(long n){return this;} public Builder setBackoffCriteria(long n,int p){return this;}
+ public Builder setMinimumLatency(long n){return this;} public Builder setRequiresCharging(boolean b){return this;} public Builder setBackoffCriteria(long n,int p){return this;}
  public JobInfo build(){return new JobInfo();} }
 }''',
     'android/app/job/JobScheduler.java': '''package android.app.job; public class JobScheduler {
@@ -41,17 +42,26 @@ public class Handler {
  public void onDestroy(){} public void jobFinished(JobParameters p,boolean r){finished.add(p);retry.add(r);}
 }''',
     'app/nottheomi/ai/CaptureService.java': '''package app.nottheomi.ai; public class CaptureService { public static volatile boolean active; }''',
-    'app/nottheomi/ai/OmiSettingsActivity.java': '''package app.nottheomi.ai; public class OmiSettingsActivity { static String language(android.content.Context c){return "pt";} static String vocabulary(android.content.Context c){return "Gabriel, Ana";} }''',
+    'app/nottheomi/ai/OmiSettingsActivity.java': '''package app.nottheomi.ai; public class OmiSettingsActivity { static String language(android.content.Context c){return "pt";} static String vocabulary(android.content.Context c){return "Gabriel, Ana";} static volatile boolean better; static boolean betterWhileCharging(android.content.Context c){return better;} }''',
     'app/nottheomi/ai/OmiCaptureService.java': '''package app.nottheomi.ai; public class OmiCaptureService { public static volatile boolean active; }''',
     'app/nottheomi/ai/ModelInstaller.java': '''package app.nottheomi.ai; public class ModelInstaller {
  public static java.io.File prepare(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-model");}
- public static java.io.File prepareVad(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-vad");} }''',
+ public static java.io.File prepareVad(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-vad");}
+ public static java.io.File prepareSmall(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-small");} }''',
     'app/nottheomi/ai/Recordings.java': '''package app.nottheomi.ai;
 import java.util.*;
 public class Recordings {
  static final Recordings INSTANCE=new Recordings(); static volatile int commits,completes,failures;
  static final Refinement ENTRY=new Refinement();
- public static class Refinement { public String id="synthetic",state="pending"; public long totalBytes=2,offsetBytes=0; }
+ public static final String SMALL="small", MEDIUM="medium";
+ public static class Refinement { public String id="synthetic",state="pending"; public long totalBytes=2,offsetBytes=0; public boolean finalPass; }
+ static final Refinement FINAL=new Refinement(); static { FINAL.finalPass=true; FINAL.state="none"; }
+ static volatile String completedModel; static volatile int finalCommits,finalCompletes,finalFailures;
+ public List<Refinement> pendingFinals(){return FINAL.state.equals("pending")?List.of(FINAL):List.of();}
+ public Refinement finalRefinement(String id){return FINAL;}
+ public void commitFinalBatch(String id,long before,long after,String text){finalCommits++;FINAL.offsetBytes=after;}
+ public void completeFinal(String id){finalCompletes++;FINAL.state="none";}
+ public void failFinal(String id){finalFailures++;FINAL.state="none";}
  interface Consumer{void accept(byte[] b)throws Exception;}
  public static Recordings get(android.content.Context c){return INSTANCE;}
  public List<Refinement> pendingRefinements(){return ENTRY.state.equals("pending")?List.of(ENTRY):List.of();}
@@ -60,9 +70,10 @@ public class Recordings {
  static volatile boolean stale;
  public static final class StaleCheckpointException extends IllegalStateException { StaleCheckpointException(){super("stale");} }
  public void commitRefinementBatch(String id,long before,long after,String text){if(stale){stale=false;throw new StaleCheckpointException();}commits++;ENTRY.offsetBytes=after;}
- public void completeRefinement(String id){completes++;ENTRY.state="complete";}
+ public void completeRefinement(String id,String model){completes++;completedModel=model;ENTRY.state="complete";if(SMALL.equals(model)){FINAL.state="pending";FINAL.offsetBytes=0;}}
  public void failRefinement(String id){failures++;ENTRY.state="failed";}
 }''',
+    'app/nottheomi/ai/WhisperNative.java': '''package app.nottheomi.ai; public class WhisperNative { public static final String BUILD="fast"; }''',
     'app/nottheomi/ai/ReadyNotifier.java': '''package app.nottheomi.ai; public class ReadyNotifier { static volatile int ready; static void refined(android.content.Context c,java.util.List<String> ids){ready+=ids.size();} }''',
     'app/nottheomi/ai/WhisperModel.java': '''package app.nottheomi.ai;
 import java.util.concurrent.*;
@@ -70,7 +81,8 @@ public class WhisperModel {
  static final CountDownLatch ENTERED=new CountDownLatch(1), RELEASE=new CountDownLatch(1), CLOSED=new CountDownLatch(1);
  static volatile int owners,maxOwners,opens,cancels,threads; static volatile Thread inferenceThread,closeThread;
  static volatile String vad;
- public WhisperModel(String p,String v){vad=v;opens++;owners++;maxOwners=Math.max(owners,maxOwners);}
+ static final java.util.List<String> models=new java.util.concurrent.CopyOnWriteArrayList<>();
+ public WhisperModel(String p,String v){vad=v;models.add(p);opens++;owners++;maxOwners=Math.max(owners,maxOwners);}
  public String transcribe(short[] s,int n,String language,String prompt)throws Exception{if(!"pt".equals(language)||!"Gabriel, Ana".equals(prompt))throw new AssertionError("language/vocabulary");threads=n;inferenceThread=Thread.currentThread();ENTERED.countDown();if(!RELEASE.await(5,TimeUnit.SECONDS))throw new AssertionError("test release timeout");return "synthetic decoded";}
  public void cancel(){cancels++;}
  public int progress(){return 40;}
@@ -114,6 +126,30 @@ public class RefinementJobHostTest {
    RefinementProgress.idle("Waiting for Android to start it");check(RefinementProgress.get().id==null&&"Waiting for Android to start it".equals(RefinementProgress.get().waiting),"idle reason");
    System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
   }
+  if(mode.equals("accurate")){
+   // Quick pass with small, then (plugged in, setting on) the accurate pass with medium; one model at a time.
+   OmiSettingsActivity.better=true;android.os.BatteryManager.charging=true;
+   check(service.onStartJob(start),"async start");
+   check(WhisperModel.ENTERED.await(5,TimeUnit.SECONDS),"quick pass entered");WhisperModel.RELEASE.countDown();
+   long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
+   while(System.nanoTime()<deadline&&Recordings.finalCompletes==0)Thread.sleep(5);
+   settled();
+   check(WhisperModel.models.size()==2&&WhisperModel.models.get(0).endsWith("fake-small")&&WhisperModel.models.get(1).endsWith("fake-model"),"small first, then medium: "+WhisperModel.models);
+   check(WhisperModel.maxOwners==1&&WhisperModel.owners==0,"one model at a time");
+   check("small".equals(Recordings.completedModel)&&Recordings.finalCompletes==1&&Recordings.finalFailures==0,"quick transcript recorded as small, then swapped for the accurate one");
+   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
+  }
+  if(mode.equals("unplugged")){
+   // On battery the accurate pass waits: only the quick pass runs, medium never loads.
+   OmiSettingsActivity.better=true;android.os.BatteryManager.charging=false;
+   check(service.onStartJob(start),"async start");check(WhisperModel.ENTERED.await(5,TimeUnit.SECONDS),"quick entered");
+   WhisperModel.RELEASE.countDown();check(WhisperModel.CLOSED.await(5,TimeUnit.SECONDS),"closed");settled();
+   check(WhisperModel.models.size()==1&&WhisperModel.models.get(0).endsWith("fake-small"),"medium not loaded on battery: "+WhisperModel.models);
+   check("pending".equals(Recordings.FINAL.state)&&Recordings.finalCommits==0,"accurate pass queued, waiting for the charger");
+   check(RefinementProgress.get().waiting!=null&&RefinementProgress.get().waiting.contains("charges"),"says it waits for charging");
+   check("fast build".equals(RefinementProgress.build),"reports which native build runs");
+   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
+  }
   if(mode.equals("stale")){
    Recordings.stale=true;check(service.onStartJob(start),"async start");check(WhisperModel.ENTERED.await(5,TimeUnit.SECONDS),"entered");
    WhisperModel.RELEASE.countDown();check(WhisperModel.CLOSED.await(5,TimeUnit.SECONDS),"closed");settled();
@@ -129,7 +165,7 @@ public class RefinementJobHostTest {
    } else if(mode.equals("different-job")) {service.onStopJob(new JobParameters(999));check(WhisperModel.cancels==0,"different job not cancelled");}
    else if(mode.equals("destroy")){service.onDestroy();check(WhisperModel.cancels>0,"destroy cancels without freeing");check(WhisperModel.owners==1,"destroy retains native owner");}
    else if(mode.equals("capture-start")){CaptureService.active=true;RefinementJobService.captureStarted(service);check(WhisperModel.cancels==0&&WhisperModel.opens==1,"a capture starting neither cancels nor duplicates the running job");}
-   else if(mode.equals("capture-active")){int cores=Math.max(1,Math.min(4,Runtime.getRuntime().availableProcessors()));check(WhisperModel.threads==Math.min(RefinementJobService.CAPTURE_THREADS,cores),"fewer threads while capturing");check(android.os.Process.priority==RefinementJobService.WORKER_PRIORITY&&RefinementJobService.WORKER_PRIORITY<android.os.Process.THREAD_PRIORITY_BACKGROUND,"mild priority, not the background (little-core) group");}
+   else if(mode.equals("capture-active")){int cores=Math.max(1,Math.min(4,Runtime.getRuntime().availableProcessors()));check(WhisperModel.threads==RefinementJobService.threads(Runtime.getRuntime().availableProcessors(),true),"capture thread count");check(RefinementJobService.threads(8,true)==4&&RefinementJobService.threads(4,true)==2&&RefinementJobService.threads(6,false)==4&&RefinementJobService.threads(2,true)==2,"4 threads while capturing on 8-core phones, 2 on smaller ones");check(android.os.Process.priority==RefinementJobService.WORKER_PRIORITY&&RefinementJobService.WORKER_PRIORITY<android.os.Process.THREAD_PRIORITY_BACKGROUND,"mild priority, not the background (little-core) group");}
    else if(mode.equals("progress")){RefinementProgress.Snapshot snap=RefinementProgress.get();check("synthetic".equals(snap.id)&&snap.total==2,"progress names the recording being refined");check(snap.done==0,"a 2-byte window at 40% rounds down to nothing saved yet");}
    else if(mode.equals("success")){check(WhisperModel.threads==Math.max(1,Math.min(4,Runtime.getRuntime().availableProcessors())),"all cores when idle");}
    else throw new IllegalArgumentException(mode);
@@ -154,7 +190,7 @@ with tempfile.TemporaryDirectory(prefix='nottheomi-hybrid-job-') as directory:
         sources.append(path)
     sources += [ROOT/'app/src/main/java/app/nottheomi/ai'/name for name in ('RefinementJobService.java', 'RefinementEngine.java', 'RefinementProgress.java')]
     subprocess.run(['javac', '--release', '17', '-d', str(work), *map(str, sources)], check=True)
-    scenarios = ['stop', 'different-job', 'destroy', 'capture-start', 'capture-active', 'progress', 'success', 'in-process', 'stale', 'describe']
+    scenarios = ['stop', 'different-job', 'destroy', 'capture-start', 'capture-active', 'progress', 'success', 'in-process', 'stale', 'describe', 'accurate', 'unplugged']
     for case in scenarios:
         subprocess.run(['java', '-cp', str(work), 'app.nottheomi.ai.RefinementJobHostTest', case], check=True, timeout=15)
     print(f'JobService lifecycle PASS: {len(scenarios)} scenarios; Android/native/store doubles, not device lifecycle acceptance.')
