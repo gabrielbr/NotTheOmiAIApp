@@ -17,6 +17,11 @@ ALLOWED_PERMISSIONS = {
     'android.permission.RECEIVE_BOOT_COMPLETED',
     'android.permission.REQUEST_INSTALL_PACKAGES',  # in-app updates; Android confirms each install
     'br.gabriel.omitarefas.permission.READ_TRANSCRIPTS',
+    # Gemini Nano through ML Kit: bind Android's AICore service; ML Kit checks the network state.
+    'com.google.android.apps.aicore.service.BIND_SERVICE',
+    'android.permission.ACCESS_NETWORK_STATE',
+    # AndroidX's own signature permission guarding its non-exported dynamic receivers.
+    'br.gabriel.sentient.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION',
 }
 # Computer control is out of scope: no accessibility, overlay, input or screen capture.
 FORBIDDEN = ['BIND_ACCESSIBILITY_SERVICE', 'SYSTEM_ALERT_WINDOW', 'INJECT_EVENTS',
@@ -45,16 +50,19 @@ def pinned_native():
 
 
 def llama_receipt():
-    """libgmind-llama.so as built and ELF-audited by scripts/build_llama.py."""
+    """libgmind-llama.so (and the arm64 fast build) as built and ELF-audited by scripts/build_llama.py."""
     receipt = json.loads((ROOT/'verification/llama-native-build.json').read_text())
     assert receipt['model_not_bundled'] and receipt['cpu_only'] and not receipt['network_backend']
-    return {f"lib/{abi}/libgmind-llama.so": entry['sha256'] for abi, entry in receipt['abis'].items()}
+    assert 'arm64-v8a' in receipt.get('fast', {}), 'Fast arm64 llama build missing'
+    libraries = {f"lib/{abi}/libgmind-llama.so": entry['sha256'] for abi, entry in receipt['abis'].items()}
+    libraries.update({f"lib/{abi}/libgmind-llama-fast.so": entry['sha256'] for abi, entry in receipt['fast'].items()})
+    return libraries
 
 
-def exported_activities(manifest):
-    """Activity names whose android:exported is true, from `aapt dump xmltree` output."""
+def exported_activities(manifest, element='activity'):
+    """Names of {element}s whose android:exported is true, from `aapt dump xmltree` output."""
     exported = set()
-    for block in manifest.split('E: activity')[1:]:
+    for block in manifest.split('E: ' + element)[1:]:
         block = block.split('E: ')[0]  # the activity's own attributes come before any child element
         name = re.search(r'A: android:name\([^)]*\)="([^"]+)"', block).group(1)
         flag = re.search(r'A: android:exported\([^)]*\)=\(type 0x12\)(0x[0-9a-f]+)', block)
@@ -91,7 +99,10 @@ def main():
     assert requested == ALLOWED_PERMISSIONS, f'Unexpected permissions: {sorted(requested ^ ALLOWED_PERMISSIONS)}'
     for forbidden in FORBIDDEN:
         assert forbidden not in manifest, 'Computer-control surface present: ' + forbidden
-    assert 'E: provider' not in manifest, 'Sentient must not export a provider'
+    # ML Kit and AndroidX start through internal providers; none may be exported.
+    assert not exported_activities(manifest, 'provider'), 'Sentient must not export a provider'
+    # ML Kit's usage-logging upload backend is removed in the manifest: nothing is sent.
+    assert 'CctBackendFactory' not in manifest, 'ML Kit usage logging would upload'
     assert exported_activities(manifest) == {'br.gabriel.sentient.SentientActivity'}, \
         'Only the launcher activity may be exported: ' + str(sorted(exported_activities(manifest)))
     assert 'SyncJobService' in manifest and 'android.permission.BIND_JOB_SERVICE' in manifest
@@ -109,10 +120,10 @@ def main():
         actual = {n: sha(archive.read(n)) for n in names if n.startswith('lib/') and n.endswith('.so')}
         assert actual == {**pinned_native(), **llama_receipt()}, 'APK native libraries differ from pinned AARs / llama receipt'
         assert not any(n.endswith('.gguf') or n.endswith('.bin') for n in names), 'A model must not be bundled'
-        for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt', 'ubuntu-font-licence.txt', 'anthropic-sdk-java-MIT.txt', 'okhttp-jackson-kotlin-Apache-2.0.txt', 'llama.cpp-MIT.txt']:
+        for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt', 'ubuntu-font-licence.txt', 'anthropic-sdk-java-MIT.txt', 'okhttp-jackson-kotlin-Apache-2.0.txt', 'llama.cpp-MIT.txt', 'google-ml-kit-terms.txt']:
             assert len(archive.read('assets/licenses/'+name)) > 100, 'Missing license ' + name
         dex = b'\n'.join(archive.read(n) for n in names if n.endswith('.dex'))
-        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;', 'Lbr/gabriel/sentient/SettingsActivity;', 'Lbr/gabriel/sentient/SourceActivity;', 'Lbr/gabriel/sentient/AboutActivity;', 'Lbr/gabriel/sentient/LicensesActivity;', 'Lbr/gabriel/sentient/MessagesListenerService;', 'Lbr/gabriel/sentient/AskActivity;', 'Lbr/gabriel/sentient/LlamaNative;', 'Lcom/anthropic/client/okhttp/AnthropicOkHttpClient;',
+        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;', 'Lbr/gabriel/sentient/SettingsActivity;', 'Lbr/gabriel/sentient/SourceActivity;', 'Lbr/gabriel/sentient/AboutActivity;', 'Lbr/gabriel/sentient/LicensesActivity;', 'Lbr/gabriel/sentient/MessagesListenerService;', 'Lbr/gabriel/sentient/AskActivity;', 'Lbr/gabriel/sentient/LlamaNative;', 'Lbr/gabriel/sentient/NanoBackend;', 'Lcom/google/mlkit/genai/prompt/java/GenerativeModelFutures;', 'Lcom/anthropic/client/okhttp/AnthropicOkHttpClient;',
                            'Lnet/zetetic/database/sqlcipher/SQLiteDatabase;']:
             assert class_name.encode() in dex, 'Missing runtime class ' + class_name
     digest = hashlib.sha256(args.apk.read_bytes()).hexdigest()

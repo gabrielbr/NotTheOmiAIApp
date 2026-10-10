@@ -121,6 +121,8 @@ jobs:
             echo
             echo "GVoice downloads its Whisper models (small 190 MB, medium 539 MB) once, over Wi-Fi by default, from a pinned Hugging Face revision checked by SHA-256. Models already on the phone are kept across updates. Audio and transcripts never leave the phone."
             echo
+            echo "GMind's private on-phone answers use Gemini Nano where Android offers it, otherwise Qwen with a faster native build."
+            echo
             echo "Optional: \`GMind-$APP_VERSION_NAME.apk\` is the companion knowledge base. It reads GVoice transcripts (same signing key) and is the app that talks to online services."
             echo
             echo '```'

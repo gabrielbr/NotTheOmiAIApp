@@ -93,6 +93,22 @@ public final class LocalPrompt {
         return p.append("<|im_start|>user\n").append(clean(question)).append("<|im_end|>\n<|im_start|>assistant\n").toString();
     }
 
+    /**
+     * The same instructions, portrait, sources and recent turns as {@link #chat}, as plain text
+     * for Gemini Nano (no chat template).
+     */
+    static String plain(String about, String sources, List<LlmBackend.Turn> history, String question) {
+        StringBuilder p = new StringBuilder(AskPrompts.LOCAL_SYSTEM);
+        if (about != null && !about.isEmpty()) p.append("\n\nAbout the user:\n").append(about);
+        p.append("\n\nSources:\n").append(sources.isEmpty() ? "(nothing related was found)\n" : sources);
+        if (!history.isEmpty()) {
+            p.append("\nEarlier in this conversation:\n");
+            for (int i = Math.max(0, history.size() - HISTORY_TURNS); i < history.size(); i++)
+                p.append("User: ").append(history.get(i).question).append("\nGMind: ").append(history.get(i).answer).append('\n');
+        }
+        return p.append("\nUser: ").append(question).append("\nGMind:").toString();
+    }
+
     /** Text from people or messages must not be able to open or close a ChatML turn. */
     static String clean(String text) {
         return text == null ? "" : text.replace("<|im_start|>", "").replace("<|im_end|>", "");

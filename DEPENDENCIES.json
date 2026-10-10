@@ -95,6 +95,22 @@
       "coordinate": "com.anthropic:anthropic-java-client-okhttp:2.65.0",
       "sha256": "faf9d94b3756a8c1e51d2073810c612a1b803d9265a10cbad8612f9d9c02cad2",
       "license": "MIT"
+    },
+    {
+      "coordinate": "com.google.mlkit:genai-prompt:1.0.0-beta4@aar",
+      "sha256": "675192b6ba91334ddbfb8cc429a8afb94cba370d927d7dba79525818b7186f6d",
+      "license": "Google ML Kit Terms of Service (not open source)",
+      "note": "Gemini Nano on phones whose Android (AICore) offers it; GMind falls back to Qwen elsewhere. Usage-logging upload backend removed in the manifest."
+    },
+    {
+      "coordinate": "com.google.mlkit:genai-common:1.0.0-beta4@aar",
+      "sha256": "2926c5e3f19fc679a0eba8cab2edadeb0c0f1ae2ba14de9bac6bd7a352ae5a56",
+      "license": "Google ML Kit Terms of Service (not open source)"
+    },
+    {
+      "coordinate": "com.google.mlkit:common:18.11.0@aar",
+      "sha256": "66408a08dbb2465687ff5dd0c8f6410b56549ce3ecf449d9096f3712282131d0",
+      "license": "Google ML Kit Terms of Service (not open source)"
     }
   ],
   "sentient_test_only": [
