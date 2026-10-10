@@ -6,7 +6,7 @@ The backlog item *UI update: less text, real navigation* in `PLAN-SENTIENT.md`, 
 
 | Step | State |
 |---|---|
-| 1. Navigation shell and Settings | Not started |
+| 1. Navigation shell and Settings | Done: `SettingsActivity` (About for now), `Ui.listRow`, gear in the header, `NavigationTest`, only-the-launcher-is-exported check in `verify_apk.py` |
 | 2. Source screen | Not started |
 | 3. Search home: recent items, attention line | Not started |
 | 4. About and licenses screens | Not started |

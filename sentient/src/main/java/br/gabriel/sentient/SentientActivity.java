@@ -1,9 +1,7 @@
 package br.gabriel.sentient;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
@@ -27,9 +25,6 @@ import android.widget.TextView;
 
 import br.gabriel.sentient.plugin.SourcePlugin;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,7 +56,8 @@ public final class SentientActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         LinearLayout page = Ui.page(this);
         setContentView(page);
-        page.addView(Ui.header(this, Ui.iconButton(this, R.drawable.ic_info, "About and privacy", Ui.INK, v -> about())));
+        page.addView(Ui.header(this, Ui.iconButton(this, R.drawable.ic_settings, "Settings", Ui.INK,
+                v -> startActivity(new Intent(this, SettingsActivity.class)))));
         page.addView(Ui.divider(this));
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -373,47 +369,6 @@ public final class SentientActivity extends Activity {
     static String date(Activity a, long ts) {
         return DateUtils.formatDateTime(a, ts, DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_SHOW_TIME
                 | DateUtils.FORMAT_ABBREV_MONTH);
-    }
-
-    // --- About ---------------------------------------------------------------------------------
-
-    private void about() {
-        new AlertDialog.Builder(this).setTitle("GMind " + versionName())
-                .setMessage("Your knowledge base: everything GMind collects, searchable in one place.\n\n"
-                        + "• Encrypted on this phone. Uninstalling or clearing the app's data deletes it.\n"
-                        + "• Syncs once a day while the battery isn't low, or when you tap Sync now.\n"
-                        + "• It reads your GVoice transcripts, and WhatsApp and Signal messages from their notifications once you allow access. In this version nothing leaves the phone.\n"
-                        + "• Read-only: GMind never sends messages or acts for you.")
-                .setNegativeButton("Close", null)
-                .setPositiveButton("Licenses", (d, w) -> licenses())
-                .show();
-    }
-
-    private String versionName() {
-        try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
-        catch (PackageManager.NameNotFoundException missing) { return ""; }
-    }
-
-    private void licenses() {
-        StringBuilder text = new StringBuilder();
-        try {
-            for (String name : getAssets().list("licenses")) {
-                try (InputStream in = getAssets().open("licenses/" + name)) {
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
-                    byte[] buffer = new byte[8192];
-                    for (int n; (n = in.read(buffer)) > 0; ) out.write(buffer, 0, n);
-                    text.append(name).append("\n\n").append(new String(out.toByteArray(), StandardCharsets.UTF_8))
-                            .append("\n\n");
-                }
-            }
-        } catch (java.io.IOException failure) {
-            text.append("License files could not be opened.");
-        }
-        TextView t = Ui.text(this, text.toString(), 12, Ui.INK, false);
-        t.setPadding(dp(20), dp(10), dp(20), dp(10));
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(t);
-        new AlertDialog.Builder(this).setTitle("Open-source licenses").setView(scroll).setPositiveButton("Close", null).show();
     }
 
     private int dp(int value) { return Ui.dp(this, value); }

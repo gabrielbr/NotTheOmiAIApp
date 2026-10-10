@@ -37,6 +37,16 @@ GMind (built from the `sentient` module) uses the same design system as GVoice (
 - Message results show who wrote them (`WhatsApp · Mãe · …`, or `You`).
 - Opening a message shows the 10 messages before and after it as a chat log. The hit sits on a white panel with the search words highlighted, and your own messages are labelled *You*.
 
+## Navigation
+
+The UI update in [`PLAN-GMIND-UI.md`](../PLAN-GMIND-UI.md) splits the one long page into screens, step by step.
+
+![Settings](ui/gmind-settings.png)
+*Step 1: the gear in the header opens Settings. About moved there; more rows arrive as their features do.*
+
+- `Ui.listRow` is the Settings row: a bold label, a short status on the right (coral when something needs attention) and a chevron.
+- Settings never shows a row for a feature that doesn't work yet.
+
 ## Screenshots
 
 `sentient/src/test/java/br/gabriel/sentient/SentientScreenshotTest.java` renders the real screens with Robolectric native graphics and sample rows. No database or Keystore is needed:

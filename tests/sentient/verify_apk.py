@@ -42,6 +42,18 @@ def pinned_native():
     return expected
 
 
+def exported_activities(manifest):
+    """Activity names whose android:exported is true, from `aapt dump xmltree` output."""
+    exported = set()
+    for block in manifest.split('E: activity')[1:]:
+        block = block.split('E: ')[0]  # the activity's own attributes come before any child element
+        name = re.search(r'A: android:name\([^)]*\)="([^"]+)"', block).group(1)
+        flag = re.search(r'A: android:exported\([^)]*\)=\(type 0x12\)(0x[0-9a-f]+)', block)
+        if flag and flag.group(1) != '0x0':
+            exported.add(name)
+    return exported
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('apk', type=Path)
@@ -71,6 +83,8 @@ def main():
     for forbidden in FORBIDDEN:
         assert forbidden not in manifest, 'Computer-control surface present: ' + forbidden
     assert 'E: provider' not in manifest, 'Sentient must not export a provider'
+    assert exported_activities(manifest) == {'br.gabriel.sentient.SentientActivity'}, \
+        'Only the launcher activity may be exported: ' + str(sorted(exported_activities(manifest)))
     assert 'SyncJobService' in manifest and 'android.permission.BIND_JOB_SERVICE' in manifest
     # WhatsApp and Signal capture: one notification listener the user enables in Settings; no extra permission.
     assert 'MessagesListenerService' in manifest and 'android.permission.BIND_NOTIFICATION_LISTENER_SERVICE' in manifest
@@ -88,7 +102,7 @@ def main():
         for name in ['sqlcipher-android-BSD.txt', 'androidx-sqlite-Apache-2.0.txt', 'ubuntu-font-licence.txt']:
             assert len(archive.read('assets/licenses/'+name)) > 100, 'Missing license ' + name
         dex = b'\n'.join(archive.read(n) for n in names if n.endswith('.dex'))
-        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;', 'Lbr/gabriel/sentient/MessagesListenerService;',
+        for class_name in ['Lbr/gabriel/sentient/SyncJobService;', 'Lbr/gabriel/sentient/plugin/SourcePlugin;', 'Lbr/gabriel/sentient/ItemActivity;', 'Lbr/gabriel/sentient/SettingsActivity;', 'Lbr/gabriel/sentient/MessagesListenerService;',
                            'Lnet/zetetic/database/sqlcipher/SQLiteDatabase;']:
             assert class_name.encode() in dex, 'Missing runtime class ' + class_name
     digest = hashlib.sha256(args.apk.read_bytes()).hexdigest()

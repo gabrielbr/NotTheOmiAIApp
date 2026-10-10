@@ -71,6 +71,11 @@ public final class SentientScreenshotTest {
         settle(); shot(a, "search-empty");
     }
 
+    @Test public void settings() throws Exception {
+        SettingsActivity a = Robolectric.buildActivity(SettingsActivity.class).setup().get();
+        settle(); shot(a, "settings");
+    }
+
     @Test public void item() throws Exception {
         ItemActivity a = Robolectric.buildActivity(ItemActivity.class,
                 new Intent().putExtra(ItemActivity.EXTRA_ID, 1L).putExtra(ItemActivity.EXTRA_QUERY, "contrato")).setup().get();
