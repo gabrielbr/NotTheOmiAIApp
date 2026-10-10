@@ -35,6 +35,7 @@ public final class SentientHostTest {
         knowledgeTools();
         citations();
         localPrompt();
+        recentItems();
         System.out.println("PASS_SENTIENT_HOST_CHECKS " + checks);
     }
 
@@ -407,6 +408,26 @@ public final class SentientHostTest {
         Sources.ensure(db, ChatMessages.WHATSAPP);
         Sources.State state = Sources.ensure(db, ChatMessages.WHATSAPP);
         check(state.lastItemAt == 4000, "source knows its newest message time");
+    }
+
+    private static void recentItems() throws Exception {
+        Db db = fresh();
+        check(Items.recent(db, 20).isEmpty(), "recent: empty store");
+        StringBuilder longText = new StringBuilder();
+        for (int i = 0; i < 100; i++) longText.append("palavra ");
+        db.transaction(() -> Ingest.upsert(db, Arrays.asList(
+                RawItem.builder(ChatMessages.WHATSAPP, "r1").kind(RawItem.MESSAGE).timestamp(1000).text("primeira")
+                        .conversation("fam", "Família", "group").author("name:Mãe", "Mãe", false).build(),
+                RawItem.builder(ChatMessages.WHATSAPP, "r2").kind(RawItem.MESSAGE).timestamp(3000).text("terceira")
+                        .conversation("fam", "Família", "group").author("name:Pai", "Pai", false).build(),
+                RawItem.builder(OmiTranscripts.ID, "r3").kind(RawItem.TRANSCRIPT).timestamp(2000).text(longText.toString())
+                        .conversation("r3", "Reunião", "meeting").build()), 1));
+        List<Items.Item> recent = Items.recent(db, 20);
+        check(recent.size() == 3 && recent.get(0).text.equals("terceira") && recent.get(1).source.equals(OmiTranscripts.ID)
+                && recent.get(2).text.equals("primeira"), "recent: newest first, across sources");
+        check(recent.get(0).author.equals("Pai") && recent.get(0).conversation.equals("Família"), "recent: author and chat");
+        check(recent.get(1).text.length() == Items.PREVIEW_CHARS, "recent: long text cut to a preview");
+        check(Items.recent(db, 2).size() == 2, "recent: limit");
     }
 
     private static void check(boolean ok, String what) {

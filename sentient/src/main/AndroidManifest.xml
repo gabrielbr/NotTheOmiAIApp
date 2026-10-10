@@ -10,7 +10,8 @@
       installed first. Apps with different signers can't both define it, which is intended. -->
  <permission android:name="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS" android:protectionLevel="signature" android:label="Read GVoice transcripts"/>
  <uses-permission android:name="br.gabriel.omitarefas.permission.READ_TRANSCRIPTS"/>
- <queries><package android:name="br.gabriel.omitarefas"/></queries>
+ <!-- GVoice for transcripts; Signal so its source screen can open it to fix a setting. -->
+ <queries><package android:name="br.gabriel.omitarefas"/><package android:name="org.thoughtcrime.securesms"/></queries>
  <application android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:label="GMind" android:icon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:supportsRtl="true">
   <activity android:name=".SentientActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
@@ -26,6 +27,10 @@
   <activity android:name=".UpdatesActivity" android:exported="false"/>
   <activity android:name=".WatchedChatsActivity" android:exported="false"/>
   <receiver android:name=".UpdateInstaller$Receiver" android:exported="false"/>
+  <activity android:name=".SettingsActivity" android:exported="false"/>
+  <activity android:name=".SourceActivity" android:exported="false"/>
+  <activity android:name=".AboutActivity" android:exported="false"/>
+  <activity android:name=".LicensesActivity" android:exported="false"/>
   <!-- Chat capture: reads WhatsApp and Signal notifications only; the user grants access in Settings. -->
   <service android:name=".MessagesListenerService" android:label="GMind message capture" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true">
    <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>

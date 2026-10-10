@@ -15,6 +15,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -203,6 +204,26 @@ final class Ui {
         return t;
     }
 
+    /** Tappable list row: label, a short status (coral when it needs attention) and a chevron. */
+    static LinearLayout listRow(Context c, String label, String status, boolean alert, View.OnClickListener click) {
+        LinearLayout r = row(c);
+        r.setPadding(0, dp(c, 16), 0, dp(c, 16));
+        r.setBackground(new RippleDrawable(ColorStateList.valueOf(0x3343F3B7), null, shape(c, Color.WHITE, 0)));
+        r.addView(text(c, label, 17, INK, true), new LinearLayout.LayoutParams(0, -2, 1));
+        if (status != null) {
+            TextView s = text(c, status, 14, alert ? CORAL_TEXT : MUTED, false);
+            s.setPadding(dp(c, 12), 0, dp(c, 4), 0);
+            r.addView(s);
+        }
+        ImageView chevron = new ImageView(c);
+        chevron.setImageResource(R.drawable.ic_chevron);
+        chevron.setImageTintList(ColorStateList.valueOf(MUTED));
+        r.addView(chevron, new LinearLayout.LayoutParams(dp(c, 20), dp(c, 20)));
+        r.setContentDescription(status == null ? label : label + ", " + status);
+        r.setOnClickListener(click);
+        return r;
+    }
+
     static View divider(Context c) {
         View v = new View(c);
         v.setBackgroundColor(LINE);
@@ -239,6 +260,22 @@ final class Ui {
         FontSpan(Typeface face) { this.face = face; }
         @Override public void updateDrawState(android.text.TextPaint p) { p.setTypeface(face); }
         @Override public void updateMeasureState(android.text.TextPaint p) { p.setTypeface(face); }
+    }
+
+    /** A secondary screen: back arrow, then a scrolling column with the standard margins, which is
+     * returned for the screen's content. Also marks the window secure, as every GMind screen is. */
+    static LinearLayout secondaryPage(Activity a) {
+        a.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        LinearLayout page = page(a);
+        a.setContentView(page);
+        page.addView(backBar(a, null));
+        page.addView(divider(a));
+        android.widget.ScrollView scroll = new android.widget.ScrollView(a);
+        LinearLayout content = column(a);
+        content.setPadding(dp(a, 20), dp(a, 20), dp(a, 20), dp(a, 28));
+        scroll.addView(content);
+        page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        return content;
     }
 
     /** Back arrow bar for secondary screens. */
