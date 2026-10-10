@@ -45,26 +45,33 @@ public final class HiddenActivity extends Activity {
         io.execute(() -> {
             List<Items.Item> items;
             int count;
+            String status = null;
             try {
                 Db db = KnowledgeStore.get(this);
                 items = Items.hidden(db, LIMIT);
                 count = Relevance.hiddenCount(db);
+                status = Meta.get(db, Review.STATUS);
             } catch (Exception failure) {
                 items = Collections.emptyList();
                 count = 0;
             }
             final List<Items.Item> shown = items;
             final int total = count;
-            main.post(() -> { if (!destroyed) show(shown, total); });
+            final String review = status;
+            main.post(() -> { if (!destroyed) show(shown, total, review); });
         });
     }
 
-    void show(List<Items.Item> items, int total) {
+    void show(List<Items.Item> items, int total) { show(items, total, null); }
+
+    /** {@code review}: the last overnight review's line, or null before the first. */
+    void show(List<Items.Item> items, int total, String review) {
         content.removeAllViews();
         content.addView(Ui.title(this, "Hidden from memory", "Hidden"));
         Ui.gap(content, 6);
-        content.addView(Ui.text(this, "Marketing, newsletters and automated mail stay stored but are left out of the home "
-                + "screen, Ask, your portrait and the vault. Search can still find them. Keep puts an item back.",
+        content.addView(Ui.text(this, "Marketing, newsletters, automated mail and other things not worth remembering stay "
+                + "stored but are left out of the home screen, Ask, your portrait and the vault. Search can still find them. "
+                + "Keep puts an item back.",
                 14, Ui.MUTED, false));
         Switch on = new Switch(this);
         on.setText("Hide marketing and automated mail");
@@ -78,6 +85,12 @@ public final class HiddenActivity extends Activity {
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2);
         sp.topMargin = Ui.dp(this, 14);
         content.addView(on, sp);
+        TextView night = Ui.text(this, "Overnight review · " + (review != null ? review
+                : "while the phone charges, " + (AskBackends.local(this) ? "Qwen on the phone" : "Claude")
+                  + " (Ask's choice) reads what came in from every source and hides what isn't worth remembering."),
+                13, Ui.MUTED, false);
+        night.setPadding(0, Ui.dp(this, 8), 0, 0);
+        content.addView(night);
         if (items.isEmpty()) {
             TextView none = Ui.text(this, "Nothing is hidden.", 16, Ui.INK, true);
             none.setPadding(0, Ui.dp(this, 24), 0, 0);

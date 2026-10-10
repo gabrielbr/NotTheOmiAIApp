@@ -81,6 +81,7 @@ public final class SentientActivity extends Activity implements LiveSources.List
 
         sources = new LiveSources(this, this);
         SyncJobService.scheduleDaily(this);
+        NightJobService.ensure(this);
     }
 
     @Override protected void onResume() { super.onResume(); sources.resume(); }

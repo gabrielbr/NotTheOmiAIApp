@@ -15,7 +15,7 @@ import java.util.List;
  */
 public final class SyncJobService extends JobService {
     static final int DAILY_JOB = 52001, NOW_JOB = 52002;
-    /** Claude enrichment requests per sync (about 12k characters each); the rest waits for the next sync. */
+    /** Claude enrichment requests per night round (about 12k characters each); the rest waits for the next round. */
     static final int AI_BATCHES = 40;
     private static final long DAY_MS = 24L * 60 * 60 * 1000, FLEX_MS = 6L * 60 * 60 * 1000;
     private static final Object LOCK = new Object();
@@ -76,22 +76,8 @@ public final class SyncJobService extends JobService {
                     java.time.ZoneId zone = java.time.ZoneId.systemDefault();
                     try { Enrichment.run(db, now, zone); }
                     catch (Exception failure) { enriched = " · portrait not updated (" + failure.getClass().getSimpleName() + ")"; }
-                    String key = AskSettings.enrich(this) ? AskSettings.apiKey(this) : null;
-                    if (key != null && !cancelled) {
-                        try {
-                            Extraction.Run run = Extraction.run(db, new ClaudeExtractor(key, null), now, zone, AI_BATCHES, () -> cancelled);
-                            Portrait.write(db, now, zone);
-                            AskSettings.setEnrichStatus(this, "Last run: " + run.batches + " batches · " + run.counts.entities
-                                    + " things, " + run.counts.relations + " links, " + run.counts.facts + " facts"
-                                    + (run.refused > 0 ? " · " + run.refused + " declined" : "") + " · "
-                                    + android.text.format.DateUtils.formatDateTime(this, now,
-                                            android.text.format.DateUtils.FORMAT_SHOW_DATE | android.text.format.DateUtils.FORMAT_SHOW_TIME));
-                        } catch (ClaudeBackend.AskException refused) {
-                            AskSettings.setEnrichStatus(this, refused.getMessage());
-                        } catch (Exception failure) {
-                            AskSettings.setEnrichStatus(this, "Enrichment failed (" + failure.getClass().getSimpleName() + "); it resumes next sync.");
-                        }
-                    }
+                    // Claude enrichment and the AI review of what came in run while the phone charges.
+                    NightJobService.ensure(this);
                     if (VaultFolder.enabled(this) && VaultFolder.auto(this)) VaultFolder.export(this, db, now);
                     try { UpdateInstaller.remember(this, Updates.latest(new UrlHttp()), now); }
                     catch (Exception offlineOrLimited) { /* the next sync checks again */ }

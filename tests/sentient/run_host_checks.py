@@ -17,7 +17,7 @@ JAR = ROOT/'.cache/host/sqlite-jdbc-3.50.3.0.jar'
 PURE = ['Db', 'Schema', 'Ingest', 'Sources', 'SyncRunner', 'Search', 'Items', 'OmiTranscripts', 'ChatMessages', 'KnowledgeTools', 'Citations', 'LlmBackend', 'AskPrompts', 'LocalPrompt',
         'ComposioClient', 'ComposioToolkit', 'ComposioGmail', 'ComposioCalendar', 'ComposioDrive', 'ComposioSlack', 'ComposioTodoist', 'ComposioTickTick', 'ComposioPlugin',
         'MatrixClient', 'MatrixPlugin',
-        'TaskExtractor', 'Meta', 'FoundTasks', 'People', 'Digest', 'Portrait', 'Vault', 'Enrichment', 'Extraction', 'Updates', 'DueDates', 'Requests', 'TodoistSync', 'DriveVault', 'Relevance']
+        'TaskExtractor', 'Meta', 'FoundTasks', 'People', 'Digest', 'Portrait', 'Vault', 'Enrichment', 'Extraction', 'Updates', 'DueDates', 'Requests', 'TodoistSync', 'DriveVault', 'Relevance', 'Review']
 
 
 def jar():
