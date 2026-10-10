@@ -2,6 +2,7 @@ package br.gabriel.sentient;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -34,14 +35,58 @@ public final class NavigationTest {
     }
 
     @Test public void sourceRowOpensItsScreen() throws Exception {
-        SentientActivity home = Robolectric.buildActivity(SentientActivity.class).setup().get();
+        SettingsActivity settings = Robolectric.buildActivity(SettingsActivity.class).setup().get();
         SentientScreenshotTest.settle();
-        home.showSources(Arrays.asList(SentientScreenshotTest.state(ChatMessages.WHATSAPP, null, null, 0, null)));
-        View row = only(home, "WhatsApp", View.FIND_VIEWS_WITH_TEXT);
-        ((View) row.getParent()).performClick();
-        Intent next = Shadows.shadowOf(home).getNextStartedActivity();
+        settings.showRows(Arrays.asList(SentientScreenshotTest.state(ChatMessages.WHATSAPP, null, null, 0, null)));
+        ((View) only(settings, "WhatsApp", View.FIND_VIEWS_WITH_TEXT).getParent()).performClick();
+        Intent next = Shadows.shadowOf(settings).getNextStartedActivity();
         assertEquals(SourceActivity.class.getName(), next.getComponent().getClassName());
         assertEquals(ChatMessages.WHATSAPP, next.getStringExtra(SourceActivity.EXTRA_PLUGIN_ID));
+    }
+
+    @Test public void attentionLineOpensTheSourceOrTheList() throws Exception {
+        SentientActivity home = home();
+        SentientScreenshotTest.grantWhatsApp(home, true);
+        Sources.State fine = SentientScreenshotTest.state(OmiTranscripts.ID, 1L, "OK", 3, 1L);
+        Sources.State broken = SentientScreenshotTest.state(OmiTranscripts.ID, 1L, "Unavailable · Install GVoice", 3, 1L);
+        Sources.State signal = SentientScreenshotTest.noticed(
+                SentientScreenshotTest.state(ChatMessages.SIGNAL, 1L, "OK · live", 0, null), MessagesListenerService.HIDDEN);
+
+        home.showAttention(Arrays.asList(fine));
+        assertEquals(0, find(home, "needs attention", View.FIND_VIEWS_WITH_TEXT, false).size());
+
+        home.showAttention(Arrays.asList(broken));
+        only(home, "GVoice recordings needs attention ›", View.FIND_VIEWS_WITH_TEXT).performClick();
+        Intent next = Shadows.shadowOf(home).getNextStartedActivity();
+        assertEquals(SourceActivity.class.getName(), next.getComponent().getClassName());
+        assertEquals(OmiTranscripts.ID, next.getStringExtra(SourceActivity.EXTRA_PLUGIN_ID));
+
+        home.showAttention(Arrays.asList(broken, signal));
+        only(home, "2 sources need attention ›", View.FIND_VIEWS_WITH_TEXT).performClick();
+        assertEquals(SettingsActivity.class.getName(), Shadows.shadowOf(home).getNextStartedActivity().getComponent().getClassName());
+    }
+
+    @Test public void emptyHomeOpensSetup() throws Exception {
+        SentientActivity home = home();
+        home.showHome(java.util.Collections.emptyList());
+        only(home, "Set up sources", View.FIND_VIEWS_WITH_TEXT).performClick();
+        assertEquals(SettingsActivity.class.getName(), Shadows.shadowOf(home).getNextStartedActivity().getComponent().getClassName());
+    }
+
+    @Test public void recentItemOpensWithoutHighlight() throws Exception {
+        SentientActivity home = home();
+        home.showHome(SentientScreenshotTest.recent());
+        only(home, "Open Reunião com o João", View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION).performClick();
+        Intent next = Shadows.shadowOf(home).getNextStartedActivity();
+        assertEquals(ItemActivity.class.getName(), next.getComponent().getClassName());
+        assertEquals(1L, next.getLongExtra(ItemActivity.EXTRA_ID, -1));
+        assertNull(next.getStringExtra(ItemActivity.EXTRA_QUERY));
+    }
+
+    private static SentientActivity home() throws Exception {
+        SentientActivity home = Robolectric.buildActivity(SentientActivity.class).setup().get();
+        SentientScreenshotTest.settle(); // let the store error from the real (absent) Keystore land first
+        return home;
     }
 
     @Test public void accessButtonOpensNotificationAccess() throws Exception {
@@ -63,12 +108,14 @@ public final class NavigationTest {
         assertEquals(1, find(omi, "Sync now", View.FIND_VIEWS_WITH_TEXT).size());
     }
 
-    /** Views whose text (or description) is exactly this; findViewsWithText also matches substrings. */
-    private static ArrayList<View> find(Activity a, String text, int flags) {
+    private static ArrayList<View> find(Activity a, String text, int flags) { return find(a, text, flags, true); }
+
+    /** Views whose text (or description) contains this, or is exactly this. */
+    private static ArrayList<View> find(Activity a, String text, int flags, boolean exact) {
         ArrayList<View> found = new ArrayList<>();
         a.getWindow().getDecorView().findViewsWithText(found, text, flags);
-        found.removeIf(v -> !text.contentEquals(flags == View.FIND_VIEWS_WITH_TEXT
-                ? ((android.widget.TextView) v).getText() : v.getContentDescription()));
+        found.removeIf(v -> v.getVisibility() != View.VISIBLE || exact && !text.contentEquals(
+                flags == View.FIND_VIEWS_WITH_TEXT ? ((android.widget.TextView) v).getText() : v.getContentDescription()));
         return found;
     }
 

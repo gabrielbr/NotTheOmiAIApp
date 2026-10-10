@@ -54,6 +54,14 @@ The UI update in [`PLAN-GMIND-UI.md`](../PLAN-GMIND-UI.md) splits the one long p
 - The source screen has the chip (*Working* or *Needs attention*), the counts, the problem in one coral sentence with its one fix (**Allow notification access**, **Open Signal**), **What it saves** (the limits, always shown) and, for GVoice recordings only, the sync line and **Sync now**. WhatsApp and Signal save messages as they arrive, so they have no sync button.
 - The setup paragraphs and the access button are gone from the home page.
 
+![Home](ui/gmind-home.png)
+*Step 3: first launch, a normal day, and a source that needs attention.*
+
+- With an empty search field, home shows **Recent**: the 20 newest items across sources, in the same rows as search results. Tapping one opens it, without highlights.
+- One coral line under the search field appears only when something needs attention: *Signal needs attention ›* opens Signal's screen; *2 sources need attention ›* opens Settings. It stays while you search.
+- First launch is one line and one button: *Nothing here yet.* and **Set up sources**.
+- Sources, the sync line and **Sync now** left home; they're in Settings and on each source's screen.
+
 ## Screenshots
 
 `sentient/src/test/java/br/gabriel/sentient/SentientScreenshotTest.java` renders the real screens with Robolectric native graphics and sample rows. No database or Keystore is needed:

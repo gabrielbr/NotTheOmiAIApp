@@ -37,27 +37,23 @@ public final class SentientScreenshotTest {
         SentientActivity a = Robolectric.buildActivity(SentientActivity.class).setup().get();
         settle();
         long now = System.currentTimeMillis();
-        a.showSources(Arrays.asList(state(OmiTranscripts.ID, null, null, 0, null),
+        grantWhatsApp(a, false);
+        a.showAttention(Arrays.asList(state(OmiTranscripts.ID, null, null, 0, null),
                 state(ChatMessages.WHATSAPP, null, null, 0, null), state(ChatMessages.SIGNAL, null, null, 0, null)));
+        a.showHome(Collections.emptyList());
         settle(); shot(a, "home-empty");
 
         grantWhatsApp(a, true);
-        a.showSources(Arrays.asList(
+        List<Sources.State> fine = Arrays.asList(
                 state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
                 state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L),
-                state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 41, now - 40 * 60_000L)));
+                state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 41, now - 40 * 60_000L));
+        a.showAttention(fine);
+        a.showHome(recent());
         settle(); shot(a, "home");
 
-        a.showSources(Arrays.asList(
-                state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
-                state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L),
+        a.showAttention(Arrays.asList(fine.get(0), fine.get(1),
                 noticed(state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 0, null), MessagesListenerService.HIDDEN)));
-        settle(); shot(a, "home-signal-hidden");
-
-        grantWhatsApp(a, false);
-        a.showSources(Arrays.asList(
-                state(OmiTranscripts.ID, now - 26 * HOUR, "Unavailable · Install GVoice to sync recordings", 142, now - 30 * HOUR),
-                state(ChatMessages.WHATSAPP, now - 26 * HOUR, "OK · live", 318, now - 26 * HOUR)));
         settle(); shot(a, "home-attention");
 
         List<Search.Hit> hits = new ArrayList<>();
@@ -138,6 +134,20 @@ public final class SentientScreenshotTest {
                 message(5, "Pai", false, 58, "Pudim! Levo o vinho"),
                 message(6, null, true, 55, "Fechado, chego às 19h")));
         settle(); shot(t, "thread");
+    }
+
+    static List<Items.Item> recent() throws Exception {
+        Constructor<Items.Item> c = Items.Item.class.getDeclaredConstructor(Object[].class);
+        c.setAccessible(true);
+        long now = System.currentTimeMillis();
+        return Arrays.asList(
+                message(4, "Mãe", false, 5, "Jantar no domingo? Faço aquele pudim de sobremesa que vocês gostam"),
+                message(3, null, true, 40, "Abre sim, até o meio-dia"),
+                c.newInstance((Object) new Object[]{1L, OmiTranscripts.ID, "transcript", now - 3 * HOUR,
+                        "Bom dia pessoal. Preciso ligar para o João sobre o contrato amanhã. Ficou combinado de enviar a proposta dia 15.",
+                        "Reunião com o João", null, null, 0L}),
+                c.newInstance((Object) new Object[]{8L, ChatMessages.SIGNAL, "message", now - 5 * HOUR,
+                        "Te mando o endereço amanhã cedo", "Rui", 9L, "Rui", 0L}));
     }
 
     /** Same state plus a standing notice (row column 7). */

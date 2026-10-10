@@ -35,6 +35,17 @@ public final class Items {
         return rows.isEmpty() ? null : new Item(rows.get(0));
     }
 
+    /** Characters of text kept for a list row; transcripts can be long. */
+    static final int PREVIEW_CHARS = 280;
+
+    /** The newest {@code limit} items across sources, newest first, with text cut to a preview. */
+    public static List<Item> recent(Db db, int limit) throws Exception {
+        List<Item> result = new java.util.ArrayList<>();
+        for (Object[] row : db.query(SELECT.replace("items.text,", "substr(items.text, 1, " + PREVIEW_CHARS + "),")
+                + " ORDER BY items.ts DESC, items.id DESC LIMIT ?", limit)) result.add(new Item(row));
+        return result;
+    }
+
     /** Up to {@code n} messages before and after {@code item} in its conversation, oldest first,
      * including the item itself. Just the item when it has no conversation. */
     public static List<Item> around(Db db, Item item, int n) throws Exception {
