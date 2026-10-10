@@ -32,7 +32,8 @@ public final class AskPrompts {
             + "`limit` lines like \"[#id] YYYY-MM-DD HH:MM · source · chat · author: snippet\". Narrow with source "
             + "(omi.transcripts, whatsapp, signal, telegram, matrix, composio.gmail, composio.googlecalendar, "
             + "composio.googledrive, composio.slack, composio.todoist, composio.ticktick), person (a name), and from/to dates (YYYY-MM-DD, inclusive). "
-            + "With only a person, lists their latest items.";
+            + "With only a person, lists their latest items. Marketing, newsletters and automated mail are left out; set "
+            + "include_hidden to true only when the question is about those.";
     public static final String CONVERSATION_DESCRIPTION =
             "Shows an item in context: the items before and after it in the same chat, email thread or calendar, "
             + "oldest first. Use it to read a whole exchange around a search hit.";

@@ -60,7 +60,10 @@ public final class Extraction {
                     "about", str("Entity key"),
                     "key", str("snake_case attribute, e.g. role, birthday, phone_city, preference"),
                     "value", str("Short value, in the items' language"),
-                    "evidence", ids())));
+                    "evidence", ids())),
+            // Not worth remembering: marketing, newsletters, automated notifications, mass mail.
+            "noise", Json.object("type", "array", "items", Json.object("type", "integer"), "description",
+                    "Ids of items not worth remembering, like 123 for [#123]"));
 
     public static final String SYSTEM = "You extract a personal knowledge graph from the user's own messages, emails, "
             + "calendar events, files, tasks and recording transcripts. Each item starts with its id like [#123]; items "
@@ -68,7 +71,9 @@ public final class Extraction {
             + "Return the people, organizations, projects, places, topics and events these items clearly mention, how "
             + "they relate, and lasting facts about them (role, where someone works or lives, family ties, birthdays, "
             + "preferences, decisions). Use only what the items state; don't guess. Skip greetings, small talk, "
-            + "newsletters and one-off logistics. Refer to the user with the key \"me\" and never create another entity "
+            + "newsletters and one-off logistics. In noise, list the ids of items that aren't worth remembering about the "
+            + "user's life: marketing, newsletters, automated notifications and mass mail (never the user's own items or "
+            + "personal messages). Refer to the user with the key \"me\" and never create another entity "
             + "for them. Give every entity, relation and fact the ids of the items that support it, from this batch only. "
             + "Write names and values in the items' language. Empty lists are fine when there's nothing worth keeping.";
 
@@ -83,6 +88,7 @@ public final class Extraction {
                 + " FROM items LEFT JOIN conversations ON conversations.id = items.conversation_id"
                 + " LEFT JOIN identities ON identities.id = items.author_identity_id"
                 + " WHERE (items.ingested_at > ? OR (items.ingested_at = ? AND items.id > ?)) AND items.ts >= ?"
+                + " AND " + Relevance.visible() // no need to pay Claude to read promotions
                 + " ORDER BY items.ingested_at, items.id", cursor[0], cursor[0], cursor[1], floor);
         List<Batch> batches = new ArrayList<>();
         Batch current = null;
@@ -158,6 +164,7 @@ public final class Extraction {
                     run.counts.relations += c.relations;
                     run.counts.facts += c.facts;
                     run.counts.dropped += c.dropped;
+                    run.counts.noise += c.noise;
                 }
                 done(db, batch);
                 return null;
@@ -169,7 +176,7 @@ public final class Extraction {
 
     // ---- applying a reply -----------------------------------------------------------------------
 
-    public static final class Counts { public int entities, relations, facts, dropped; }
+    public static final class Counts { public int entities, relations, facts, dropped, noise; }
 
     /** Writes one reply. Cited ids outside the batch are dropped; so is anything left without evidence. */
     public static Counts apply(Db db, Batch batch, String json, long now) throws Exception {
@@ -221,6 +228,13 @@ public final class Extraction {
             else db.exec("UPDATE facts SET value = ?, evidence_item_id = ?, updated_at = ? WHERE id = ?", value, evidence.get(0), now, existing.get(0)[0]);
             counts.facts++;
         }
+        List<Long> noise = new ArrayList<>();
+        for (Object id : Json.list(Json.at(reply, "noise"))) {
+            Long n = Json.num(id);
+            if (n != null && batch.ids.contains(n)) noise.add(n);
+        }
+        Relevance.claude(db, noise);
+        counts.noise = noise.size();
         return counts;
     }
 

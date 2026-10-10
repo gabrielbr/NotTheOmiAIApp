@@ -34,7 +34,7 @@ public final class YouActivity extends Activity {
     /** What the screen shows, read off the main thread. */
     static final class State {
         String portrait;
-        int suggestions, openTasks;
+        int suggestions, openTasks, hidden;
         List<String> names = new ArrayList<>();
         final List<String> days = new ArrayList<>();
     }
@@ -67,6 +67,7 @@ public final class YouActivity extends Activity {
                     s.portrait = Portrait.read(db);
                     s.names = FoundTasks.names(db);
                     s.suggestions = People.suggestions(db, 50).size();
+                    s.hidden = Relevance.hiddenCount(db);
                     s.openTasks = FoundTasks.list(db, FoundTasks.OPEN, System.currentTimeMillis() - TasksActivity.WINDOW_MS, 500).size();
                     for (Object[] d : Digest.days(db, 14)) s.days.add((String) d[0]);
                 }
@@ -109,6 +110,10 @@ public final class YouActivity extends Activity {
         LinearLayout.LayoutParams nrp = new LinearLayout.LayoutParams(-1, -2);
         nrp.topMargin = dp(12);
         content.addView(nameRow, nrp);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
+        hp.topMargin = dp(6);
+        content.addView(Ui.button(this, "Hidden from memory · " + s.hidden, Ui.Style.QUIET,
+                v -> startActivity(new Intent(this, HiddenActivity.class))), hp);
 
         if (s.portrait == null) {
             TextView empty = Ui.text(this, "Your portrait appears after the first sync.", 15, Ui.MUTED, false);

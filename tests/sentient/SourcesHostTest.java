@@ -197,7 +197,7 @@ public final class SourcesHostTest {
                 .on("POST", "/tools/execute/GMAIL_FETCH_EMAILS", 200, fixture("composio/gmail-page1.json"))
                 .on("POST", "/tools/execute/GMAIL_FETCH_EMAILS", 200, fixture("composio/gmail-page2.json"));
         List<SyncRunner.Outcome> out = sync(db, plugin(new ComposioGmail()), http, "ck", null, NOW);
-        check(!out.get(0).failed && out.get(0).added == 3, "gmail: three emails (draft skipped): " + out.get(0).status);
+        check(!out.get(0).failed && out.get(0).added == 4, "gmail: four emails (draft skipped): " + out.get(0).status);
         Map<String, Object> first = args(http.requests.get(0));
         check(("after:" + (NOW - ComposioToolkit.FIRST_SYNC_MS) / 1000).equals(first.get("query")), "gmail: first sync is the last 30 days");
         check(!first.containsKey("page_token") && "p2".equals(args(http.requests.get(1)).get("page_token")), "gmail: pages with the token");
@@ -228,6 +228,13 @@ public final class SourcesHostTest {
                 "gmail: next sync starts an hour before the newest email");
         String raw = (String) row(db, "SELECT raw_json FROM items WHERE items.external_id = 'm1'")[0];
         check(!raw.contains("payload") && !raw.contains("messageText"), "gmail: raw json drops the bulky body");
+        Object[] promo = row(db, "SELECT raw_json, noise, noise_reason FROM items WHERE external_id = 'm5'");
+        check(((String) promo[0]).contains("\"bulk\":true") && !((String) promo[0]).contains("payload"),
+                "gmail: the mailing-list header is kept as a bulk flag");
+        check(((Number) promo[1]).intValue() == Relevance.RULE && "Gmail: Promotions".equals(promo[2]),
+                "gmail: promotions are hidden from memory on arrival");
+        check(((Number) row(db, "SELECT noise FROM items WHERE external_id = 'm1'")[0]).intValue() == 0,
+                "gmail: personal mail is memory");
 
         FakeHttp again = new FakeHttp().on("POST", "/tools/execute/GMAIL_FETCH_EMAILS", 200, fixture("composio/gmail-page2.json"));
         List<SyncRunner.Outcome> second = sync(db, plugin(new ComposioGmail()), again, "ck", null, NOW + 1000);
@@ -487,13 +494,13 @@ public final class SourcesHostTest {
                 .text("almoço amanhã").conversation("c", "Ana", "dm").author("name:Ana", "Ana", false).build()), NOW);
         long people = count(db, "SELECT COUNT(*) FROM people");
         int deleted = db.transaction(() -> Sources.forget(db, "composio.gmail"));
-        check(deleted == 3, "forget: counts deleted items");
+        check(deleted == 4, "forget: counts deleted items");
         check(count(db, "SELECT COUNT(*) FROM items WHERE source = 'composio.gmail'") == 0
                 && count(db, "SELECT COUNT(*) FROM conversations WHERE source = 'composio.gmail'") == 0
                 && count(db, "SELECT COUNT(*) FROM identities WHERE source = 'composio.gmail'") == 0, "forget: items, threads and senders gone");
         List<Search.Hit> hits = Search.find(db, "almoco", 10);
         check(hits.size() == 1 && "whatsapp".equals(hits.get(0).source), "forget: search index updated, other sources kept");
-        check(count(db, "SELECT COUNT(*) FROM people") == people - 2 && count(db, "SELECT COUNT(*) FROM people WHERE is_me = 1") == 1,
+        check(count(db, "SELECT COUNT(*) FROM people") == people - 3 && count(db, "SELECT COUNT(*) FROM people WHERE is_me = 1") == 1,
                 "forget: senders' people removed, Me kept");
         check(row(db, "SELECT plugin_id FROM sources WHERE plugin_id = 'composio.gmail'") == null, "forget: source state reset");
     }

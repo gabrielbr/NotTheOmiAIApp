@@ -20,6 +20,7 @@ public final class Ingest {
 
     public static Stats upsert(Db db, List<RawItem> items, long now) throws Exception {
         Stats stats = new Stats();
+        List<Long> changed = new java.util.ArrayList<>();
         for (RawItem item : items) {
             Long conversation = conversation(db, item);
             Long author = identity(db, item);
@@ -29,10 +30,10 @@ public final class Ingest {
             List<Object[]> existing = db.query("SELECT id, text, ts, conversation_id, author_identity_id, raw_json"
                     + " FROM items WHERE source = ? AND external_id = ?", item.source, item.externalId);
             if (existing.isEmpty()) {
-                db.insert("INSERT INTO items(source, external_id, conversation_id, author_identity_id, from_me,"
+                changed.add(db.insert("INSERT INTO items(source, external_id, conversation_id, author_identity_id, from_me,"
                         + " ts, kind, text, raw_json, ingested_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         item.source, item.externalId, conversation, author, item.fromMe ? 1 : 0,
-                        item.timestamp, item.kind, item.text, item.rawJson, now);
+                        item.timestamp, item.kind, item.text, item.rawJson, now));
                 stats.added++;
                 continue;
             }
@@ -47,8 +48,10 @@ public final class Ingest {
                     + " from_me = ?, kind = ?, raw_json = ?, ingested_at = ? WHERE id = ?",
                     item.text, item.timestamp, conversation, author, item.fromMe ? 1 : 0, item.kind,
                     item.rawJson, now, row[0]);
+            changed.add(((Number) row[0]).longValue());
             stats.updated++;
         }
+        Relevance.judge(db, changed); // what's worth remembering
         return stats;
     }
 

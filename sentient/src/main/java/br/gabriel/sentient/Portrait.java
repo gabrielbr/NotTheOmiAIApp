@@ -59,6 +59,7 @@ public final class Portrait {
                 + "   JOIN entities dst ON dst.id = relations.dst_entity WHERE relations.src_entity = entities.id LIMIT 3) e2)"
                 + " FROM mentions JOIN entities ON entities.id = mentions.entity_id JOIN items ON items.id = mentions.item_id"
                 + " WHERE items.ts >= ? AND entities.type IN (" + in + ") AND entities.canonical_key NOT LIKE 'person:%'"
+                + " AND " + Relevance.visible()
                 + " GROUP BY entities.id ORDER BY COUNT(*) DESC LIMIT ?", args);
         if (rows.isEmpty()) return;
         md.append(title).append("\n\n");
@@ -111,7 +112,7 @@ public final class Portrait {
         List<Object[]> people = db.query("SELECT people.display_name, COUNT(*), MAX(items.id), group_concat(DISTINCT items.source),"
                 + " MAX(items.ts) FROM items JOIN identities ON identities.id = items.author_identity_id"
                 + " JOIN people ON people.id = identities.person_id WHERE items.ts >= ? AND people.is_me = 0"
-                + " AND items.kind IN (?, ?, ?) GROUP BY people.id ORDER BY COUNT(*) DESC LIMIT ?",
+                + " AND items.kind IN (?, ?, ?) AND " + Relevance.visible() + " GROUP BY people.id ORDER BY COUNT(*) DESC LIMIT ?",
                 since, RawItem.MESSAGE, RawItem.EMAIL, RawItem.EVENT, TOP);
         if (!people.isEmpty()) {
             md.append("## People I talk to most (last 30 days)\n\n");
