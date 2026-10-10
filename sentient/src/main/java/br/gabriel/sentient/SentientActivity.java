@@ -65,8 +65,7 @@ public final class SentientActivity extends Activity implements LiveSources.List
         content.addView(attention, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, -2);
         ap.topMargin = dp(10);
-        content.addView(Ui.button(this, "Ask a question", Ui.Style.DARK,
-                v -> startActivity(new Intent(this, AskActivity.class))), ap);
+        content.addView(Ui.button(this, "Ask a question", Ui.Style.DARK, v -> ask()), ap);
         LinearLayout.LayoutParams yp = new LinearLayout.LayoutParams(-1, -2);
         yp.topMargin = dp(6);
         content.addView(Ui.button(this, "About you · people · to-dos", Ui.Style.QUIET,
@@ -92,6 +91,13 @@ public final class SentientActivity extends Activity implements LiveSources.List
         super.onDestroy();
     }
 
+    /** Opens Ask, carrying whatever is in the search box as the question. */
+    private void ask() {
+        Intent intent = new Intent(this, AskActivity.class);
+        if (!query.isEmpty()) intent.putExtra(AskActivity.EXTRA_QUESTION, query);
+        startActivity(intent);
+    }
+
     private EditText searchField() {
         EditText search = new EditText(this);
         search.setSingleLine(true);
@@ -114,6 +120,15 @@ public final class SentientActivity extends Activity implements LiveSources.List
             search.setCompoundDrawablePadding(dp(10));
         }
         search.setContentDescription("Search everything synced");
+        // Enter asks GMind what was typed (the results below update as you type).
+        search.setOnEditorActionListener((v, action, event) -> {
+            boolean enter = action == EditorInfo.IME_ACTION_SEARCH || action == EditorInfo.IME_ACTION_DONE
+                    || (event != null && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER
+                        && event.getAction() == android.view.KeyEvent.ACTION_DOWN);
+            if (!enter) return false;
+            ask();
+            return true;
+        });
         search.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
