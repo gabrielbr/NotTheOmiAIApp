@@ -3,10 +3,8 @@ package br.gabriel.sentient;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
-import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.util.List;
@@ -22,17 +20,8 @@ public final class SourceActivity extends Activity implements LiveSources.Listen
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         pluginId = getIntent().getStringExtra(EXTRA_PLUGIN_ID);
-        LinearLayout page = Ui.page(this);
-        setContentView(page);
-        page.addView(Ui.backBar(this, null));
-        page.addView(Ui.divider(this));
-        ScrollView scroll = new ScrollView(this);
-        content = Ui.column(this);
-        content.setPadding(Ui.dp(this, 20), Ui.dp(this, 20), Ui.dp(this, 20), Ui.dp(this, 28));
-        scroll.addView(content);
-        page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        content = Ui.secondaryPage(this);
         sources = new LiveSources(this, this);
     }
 

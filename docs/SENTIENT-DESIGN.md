@@ -62,6 +62,15 @@ The UI update in [`PLAN-GMIND-UI.md`](../PLAN-GMIND-UI.md) splits the one long p
 - First launch is one line and one button: *Nothing here yet.* and **Set up sources**.
 - Sources, the sync line and **Sync now** left home; they're in Settings and on each source's screen.
 
+![About](ui/gmind-about.png)
+*Steps 4 and 5: home without its title, About and Licenses as screens.*
+
+- About is a screen: the version, then the four things to know about your data, one line each, and **Open-source licenses**.
+- Licenses lists each file with its name. The files are hard-wrapped at 80 columns, so each paragraph is joined into one before it's shown.
+- The *Your knowledge* title is gone: the header says GMind and the search field's hint says what it searches.
+- Recordings are labelled *GVoice recording*, not *Omi recording*.
+- Every secondary screen uses `Ui.secondaryPage`: back arrow, hairline, scrolling column, secure window.
+
 ## Screenshots
 
 `sentient/src/test/java/br/gabriel/sentient/SentientScreenshotTest.java` renders the real screens with Robolectric native graphics and sample rows. No database or Keystore is needed:

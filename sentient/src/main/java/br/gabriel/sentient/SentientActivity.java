@@ -55,8 +55,6 @@ public final class SentientActivity extends Activity implements LiveSources.List
         scroll.addView(content);
         page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        content.addView(Ui.title(this, "Your knowledge", "knowledge"));
-        Ui.gap(content, 16);
         content.addView(searchField(), new LinearLayout.LayoutParams(-1, dp(52)));
         attention = Ui.text(this, "", 15, Ui.CORAL_TEXT, true);
         attention.setPadding(0, dp(14), 0, dp(4));
@@ -263,14 +261,14 @@ public final class SentientActivity extends Activity implements LiveSources.List
         return conversation == null || conversation.isEmpty() ? PluginRegistry.displayName(a, source) : conversation;
     }
 
-    /** "WhatsApp · Ana · 9 Oct, 14:02"; "Omi recording · 9 Oct, 14:02". */
+    /** "WhatsApp · Ana · 9 Oct, 14:02"; "GVoice recording · 9 Oct, 14:02". */
     static String metaOf(Activity a, String source, String author, boolean fromMe, long ts) {
         String who = fromMe ? "You" : author;
         return kindOf(a, source) + (who == null ? "" : " · " + who) + " · " + date(a, ts);
     }
 
     static String kindOf(Activity a, String source) {
-        return OmiTranscripts.ID.equals(source) ? "Omi recording" : PluginRegistry.displayName(a, source);
+        return OmiTranscripts.ID.equals(source) ? "GVoice recording" : PluginRegistry.displayName(a, source);
     }
 
     static String date(Activity a, long ts) {

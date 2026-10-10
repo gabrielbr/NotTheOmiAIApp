@@ -262,6 +262,22 @@ final class Ui {
         @Override public void updateMeasureState(android.text.TextPaint p) { p.setTypeface(face); }
     }
 
+    /** A secondary screen: back arrow, then a scrolling column with the standard margins, which is
+     * returned for the screen's content. Also marks the window secure, as every GMind screen is. */
+    static LinearLayout secondaryPage(Activity a) {
+        a.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        LinearLayout page = page(a);
+        a.setContentView(page);
+        page.addView(backBar(a, null));
+        page.addView(divider(a));
+        android.widget.ScrollView scroll = new android.widget.ScrollView(a);
+        LinearLayout content = column(a);
+        content.setPadding(dp(a, 20), dp(a, 20), dp(a, 20), dp(a, 28));
+        scroll.addView(content);
+        page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        return content;
+    }
+
     /** Back arrow bar for secondary screens. */
     static LinearLayout backBar(Activity a, View trailing) {
         LinearLayout bar = row(a);

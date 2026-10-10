@@ -125,6 +125,25 @@ public final class NavigationTest {
         return found.get(0);
     }
 
+    @Test public void aboutLeadsToLicenses() throws Exception {
+        SettingsActivity settings = Robolectric.buildActivity(SettingsActivity.class).setup().get();
+        ((View) only(settings, "About", View.FIND_VIEWS_WITH_TEXT).getParent()).performClick();
+        assertEquals(AboutActivity.class.getName(), Shadows.shadowOf(settings).getNextStartedActivity().getComponent().getClassName());
+
+        AboutActivity about = Robolectric.buildActivity(AboutActivity.class).setup().get();
+        ((View) only(about, "Open-source licenses", View.FIND_VIEWS_WITH_TEXT).getParent()).performClick();
+        assertEquals(LicensesActivity.class.getName(), Shadows.shadowOf(about).getNextStartedActivity().getComponent().getClassName());
+
+        LicensesActivity licenses = Robolectric.buildActivity(LicensesActivity.class).setup().get();
+        for (String name : new String[]{"sqlcipher-android-BSD.txt", "androidx-sqlite-Apache-2.0.txt", "ubuntu-font-licence.txt"})
+            only(licenses, name, View.FIND_VIEWS_WITH_TEXT);
+    }
+
+    @Test public void licensesReflowParagraphs() {
+        assertEquals("Apache License Version 2.0\n\n1. Definitions. \"License\" means",
+                LicensesActivity.reflow("   Apache License\r\n   Version 2.0\n\n  \n1. Definitions.\n   \"License\" means\n"));
+    }
+
     @Test public void settingsListsAbout() {
         SettingsActivity settings = Robolectric.buildActivity(SettingsActivity.class).setup().get();
         ArrayList<View> found = new ArrayList<>();

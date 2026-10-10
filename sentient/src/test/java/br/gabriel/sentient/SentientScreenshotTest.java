@@ -79,6 +79,11 @@ public final class SentientScreenshotTest {
         settle(); shot(a, "settings");
     }
 
+    @Test public void about() throws Exception {
+        shot(Robolectric.buildActivity(AboutActivity.class).setup().get(), "about");
+        shot(Robolectric.buildActivity(LicensesActivity.class).setup().get(), "licenses");
+    }
+
     @Test public void sources() throws Exception {
         long now = System.currentTimeMillis();
         SourceActivity omi = source(OmiTranscripts.ID);
