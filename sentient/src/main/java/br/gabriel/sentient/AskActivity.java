@@ -104,6 +104,8 @@ public final class AskActivity extends Activity implements AskSession.Observer {
         session.observe(this);
         shownCount = -1;
         changed();
+        // Whether Gemini Nano can answer on this phone decides what setup "On this phone" needs.
+        if (AskBackends.local(this)) Nano.refresh(() -> runOnUiThread(() -> { if (!isFinishing()) refreshSetup(); }));
     }
 
     @Override protected void onPause() {

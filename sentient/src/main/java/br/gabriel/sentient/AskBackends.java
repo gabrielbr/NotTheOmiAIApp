@@ -13,6 +13,7 @@ final class AskBackends {
     /** What the Ask screen should ask the user to do first, or null when ready. */
     static String missingSetup(Context c) {
         if (local(c)) {
+            if (Nano.cached() == Nano.AVAILABLE) return null;
             if (!LocalModel.ready(c)) return "Download the on-device model (" + LocalModel.gb(LocalModel.BYTES)
                     + ") to ask without the internet. Nothing you ask leaves the phone.";
             return null;
@@ -24,7 +25,13 @@ final class AskBackends {
 
     static LlmBackend create(Context c) throws Exception {
         Db db = KnowledgeStore.get(c);
-        if (local(c)) return new LocalBackend(c, db);
+        if (local(c)) {
+            // Gemini Nano when this phone's Android offers it, with Qwen behind it; else Qwen.
+            if (Nano.status() == Nano.AVAILABLE)
+                return new NanoBackend(Nano.model(), new KnowledgeTools(db, ZoneId.systemDefault()),
+                        Portrait.brief(Portrait.read(db)), LocalModel.ready(c) ? new LocalBackend(c, db) : null);
+            return new LocalBackend(c, db);
+        }
         ZoneId zone = ZoneId.systemDefault();
         String key = AskSettings.apiKey(c);
         if (key == null) throw new ClaudeBackend.AskException("Add your Claude API key in Ask settings.");
@@ -33,7 +40,8 @@ final class AskBackends {
 
     /** The one-line footer: who answers and where the data goes. */
     static String footer(Context c) {
-        if (local(c)) return "Answered on this phone by " + LocalModel.NAME + ". Nothing leaves the phone.";
+        if (local(c)) return "Answered on this phone by "
+                + (Nano.cached() == Nano.AVAILABLE ? "Gemini Nano" : LocalModel.NAME) + ". Nothing you ask leaves the phone.";
         return "Answered by " + AskSettings.modelName(AskSettings.model(c))
                 + ". Your question and the messages it looks up are sent to Anthropic.";
     }

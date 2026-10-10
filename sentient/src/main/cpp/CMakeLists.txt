@@ -9,7 +9,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # input; CPU only, portable baseline, no network or dynamically loaded backends.
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(GGML_CPU ON CACHE BOOL "" FORCE)
-set(GGML_CPU_ARM_ARCH "armv8-a" CACHE STRING "Portable Android arm64 baseline" FORCE)
+# Two arm64 builds: "portable" (armv8-a, any 64-bit phone) and "fast" (dot-product, half-precision
+# and int8 matrix-multiply instructions, e.g. Tensor G4), chosen at runtime by LlamaNative.
+set(GMIND_VARIANT "portable" CACHE STRING "portable or fast")
+if(GMIND_VARIANT STREQUAL "fast")
+    set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16+i8mm" CACHE STRING "ARMv8.2 dotprod+fp16+i8mm build" FORCE)
+elseif(GMIND_VARIANT STREQUAL "portable")
+    set(GGML_CPU_ARM_ARCH "armv8-a" CACHE STRING "Portable Android arm64 baseline" FORCE)
+else()
+    message(FATAL_ERROR "GMIND_VARIANT must be portable or fast")
+endif()
 foreach(option
     LLAMA_BUILD_COMMON LLAMA_BUILD_TESTS LLAMA_BUILD_TOOLS LLAMA_BUILD_EXAMPLES LLAMA_BUILD_SERVER
     LLAMA_BUILD_APP LLAMA_BUILD_UI LLAMA_BUILD_MTMD LLAMA_OPENSSL LLAMA_CURL LLAMA_BUILD_IS_DEV
@@ -41,6 +50,12 @@ target_link_options(gmind-llama PRIVATE -Wl,--exclude-libs,ALL
     "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.map"
     -Wl,-z,defs -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack)
 set_target_properties(gmind-llama PROPERTIES LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/exports.map")
+if(GMIND_VARIANT STREQUAL "fast")
+    if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
+        message(FATAL_ERROR "The fast build is arm64-only")
+    endif()
+    set_target_properties(gmind-llama PROPERTIES OUTPUT_NAME "gmind-llama-fast")
+endif()
 
 option(GMIND_HOST_TEST "Build a host JNI library for tests, never packaged" OFF)
 if(ANDROID)

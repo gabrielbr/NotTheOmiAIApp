@@ -27,6 +27,11 @@ def main():
     model = CACHE / "llama-test" / TEST_MODEL
     if not model.is_file() or sha(model) != TEST_MODEL_SHA:
         raise SystemExit("Run scripts/prepare_llama.py first")
+    with tempfile.TemporaryDirectory(prefix="llama-tiers-") as work:
+        binary = Path(work) / "cpu-tiers"
+        run(["g++", "-std=c++17", "-Wall", "-Wextra", "-Werror", "-fsanitize=address,undefined", "-I",
+             ROOT / "sentient/src/main/cpp", ROOT / "tests/llama-native/cpu_tiers_test.cpp", "-o", binary])
+        print(run([binary]).strip())
     build = CACHE / "llama-host-build"
     run(["cmake", "-S", ROOT / "sentient/src/main/cpp", "-B", build, "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release",
          "-DGMIND_HOST_TEST=ON", f"-DLLAMA_SOURCE={SOURCE}"])

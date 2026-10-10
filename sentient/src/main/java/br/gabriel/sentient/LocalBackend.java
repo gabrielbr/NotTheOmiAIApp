@@ -13,7 +13,9 @@ import java.util.function.BooleanSupplier;
  * (LocalPrompt), then the model writes the answer, streamed to the screen. Nothing leaves the phone.
  */
 final class LocalBackend implements LlmBackend {
-    static final int CONTEXT = 4096, MAX_ANSWER = 384, SOURCE_BUDGET = 7000;
+    static final int CONTEXT = 4096, MAX_ANSWER = 384, SOURCE_BUDGET = 4500;
+    /** Fast cores the answering thread is pinned to (0: not pinned, any core). */
+    static volatile int fastCores;
     private static final Object LOCK = new Object();
     private static long handle;
     private static String loadedPath;
@@ -27,7 +29,10 @@ final class LocalBackend implements LlmBackend {
         this.db = db;
     }
 
-    @Override public String name() { return LocalModel.NAME + " on this phone"; }
+    @Override public String name() {
+        String build = LlamaNative.build;
+        return LocalModel.NAME + " on this phone" + (build == null ? "" : " (" + build + " build)");
+    }
 
     @Override public Answer answer(List<Turn> history, String question, Listener listener, BooleanSupplier cancelled)
             throws Exception {
@@ -36,6 +41,10 @@ final class LocalBackend implements LlmBackend {
         String about = Portrait.brief(Portrait.read(db));
         if (cancelled.getAsBoolean()) throw new ClaudeBackend.AskException("Stopped.");
         synchronized (LOCK) {
+            LlamaNative.loadLibrary();
+            // Pin this thread (and the threads llama.cpp starts from it) to the fast cores.
+            int pinned = LlamaNative.pinFastCores();
+            if (pinned > 0) fastCores = pinned;
             long h = load(listener);
             listener.status("Reading your messages…");
             StringBuilder text = new StringBuilder();
@@ -80,6 +89,7 @@ final class LocalBackend implements LlmBackend {
         listener.status("Loading the model…");
         LlamaNative.loadLibrary();
         int threads = Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors() - 2));
+        if (fastCores > 0) threads = Math.min(4, fastCores); // one per fast core
         handle = LlamaNative.load(path, CONTEXT, threads);
         if (handle == 0) throw new ClaudeBackend.AskException("The on-device model couldn't be loaded. Try deleting and downloading it again.");
         loadedPath = path;

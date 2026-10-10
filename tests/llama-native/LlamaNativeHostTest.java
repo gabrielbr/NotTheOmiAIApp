@@ -14,6 +14,13 @@ public final class LlamaNativeHostTest {
     public static void main(String[] args) throws Exception {
         System.load(args[0]);
         String model = args[1];
+        int pinned = LlamaNative.pinFastCores();
+        check(pinned >= 0 && pinned <= Runtime.getRuntime().availableProcessors(), "pinning to fast cores is safe: " + pinned);
+        String g4 = "processor\t: 0\nFeatures\t: fp asimd aes asimdhp asimddp i8mm bf16\n\nprocessor\t: 7\nFeatures\t: fp asimd asimdhp asimddp i8mm\n";
+        check(LlamaNative.fastCpu(g4), "Tensor G4 features pick the fast build");
+        check(!LlamaNative.fastCpu(g4.replace(" i8mm bf16", " bf16")), "a core without i8mm keeps the compatible build");
+        check(!LlamaNative.fastCpu("processor\t: 0\nFeatures\t: fp asimd\n") && !LlamaNative.fastCpu(null) && !LlamaNative.fastCpu(""),
+                "older or unknown CPUs keep the compatible build");
         check(LlamaNative.load("/nonexistent/model.gguf", 256, 2) == 0, "missing model gives 0");
         check(LlamaNative.load(model, 16, 2) == 0, "context below the minimum refused");
         long h = LlamaNative.load(model, 256, 2);

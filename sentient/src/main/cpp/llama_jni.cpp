@@ -4,10 +4,14 @@
 #include <jni.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <sched.h>
+#include <unistd.h>
 #include <mutex>
 #include <string>
 #include <vector>
 
+#include "cpu_tiers.h"
 #include "llama.h"
 
 namespace {
@@ -52,7 +56,37 @@ bool emit(JNIEnv *env, jobject sink, jmethodID accept, const std::string &bytes)
     return !env->ExceptionCheck() && go == JNI_TRUE;
 }
 
+// Keeps the calling thread (and the ggml threads it starts, which inherit it) off the little
+// cores: ggml splits each step evenly, so one slow core holds every thread back. Returns how many
+// cores it pinned to; 0 leaves the affinity untouched (all cores alike, unknown, or refused).
+int pin_fast_cores() {
+    const long configured = sysconf(_SC_NPROCESSORS_CONF);
+    const int count = static_cast<int>(std::clamp<long>(configured, 0, CPU_SETSIZE));
+    std::vector<long> max_khz(count, 0);
+    for (int i = 0; i < count; ++i) {
+        char path[96];
+        std::snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+        if (FILE *file = std::fopen(path, "re")) {
+            long khz = 0;
+            if (std::fscanf(file, "%ld", &khz) == 1 && khz > 0) max_khz[i] = khz;
+            std::fclose(file);
+        }
+    }
+    const std::vector<int> fast = gmind::fast_cores(max_khz);
+    if (fast.empty()) return 0;
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    for (int core : fast) CPU_SET(core, &set);
+    return sched_setaffinity(0, sizeof set, &set) == 0 ? static_cast<int>(fast.size()) : 0;
+}
+
 }  // namespace
+
+extern "C" JNIEXPORT jint JNICALL
+Java_br_gabriel_sentient_LlamaNative_pinFastCores(JNIEnv *, jclass) {
+    try { return pin_fast_cores(); }
+    catch (...) { return 0; }
+}
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_br_gabriel_sentient_LlamaNative_load(JNIEnv *env, jclass, jstring jpath, jint n_ctx, jint n_threads) {

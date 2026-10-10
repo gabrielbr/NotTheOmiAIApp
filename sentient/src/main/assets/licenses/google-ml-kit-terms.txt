@@ -1,0 +1,12 @@
+Google ML Kit (GenAI Prompt API, com.google.mlkit:genai-prompt 1.0.0-beta4 and its ML Kit and
+Google Play services dependencies)
+
+GMind uses ML Kit only to ask Android's own Gemini Nano model (AICore) to answer on the phone, on
+phones where Android offers it. ML Kit is provided by Google under the ML Kit Terms of Service:
+https://developers.google.com/ml-kit/terms
+It is not open-source software; its terms, and Google's APIs Terms of Service
+(https://developers.google.com/terms), apply to that component only.
+
+ML Kit's usage logging (Google's datatransport "cct" upload backend) is removed from GMind's
+manifest, so GMind does not send ML Kit usage data. The Gemini Nano model itself is managed and
+updated by Android, not by GMind.

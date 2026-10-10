@@ -22,6 +22,7 @@ public final class AskSettingsActivity extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final java.util.concurrent.ExecutorService io = java.util.concurrent.Executors.newSingleThreadExecutor();
     private LinearLayout content, local;
+    private TextView nano;
     private boolean visible, destroyed;
     private final Runnable poll = new Runnable() {
         @Override public void run() {
@@ -48,7 +49,10 @@ public final class AskSettingsActivity extends Activity {
         draw();
     }
 
-    @Override protected void onResume() { super.onResume(); visible = true; main.post(poll); }
+    @Override protected void onResume() {
+        super.onResume(); visible = true; main.post(poll);
+        Nano.refresh(() -> main.post(() -> { if (nano != null) nano.setText(Nano.describe(Nano.cached())); }));
+    }
     @Override protected void onPause() { visible = false; main.removeCallbacks(poll); super.onPause(); }
     @Override protected void onDestroy() { destroyed = true; io.shutdownNow(); super.onDestroy(); }
 
@@ -133,8 +137,13 @@ public final class AskSettingsActivity extends Activity {
 
     private void drawLocal() {
         section("On this phone");
-        content.addView(Ui.text(this, LocalModel.NAME + " runs on the phone's processor: nothing you ask leaves it, and it "
-                + "works offline. It needs a one-time " + LocalModel.gb(LocalModel.BYTES) + " download and answers more "
+        nano = Ui.text(this, Nano.describe(Nano.cached()), 15, Ui.INK, true);
+        nano.setPadding(0, 0, 0, dp(8));
+        content.addView(nano);
+        content.addView(Ui.text(this, "Gemini Nano is the model Android runs itself on some phones: fast, nothing to "
+                + "download here, and only while GMind is on screen. Elsewhere, and when Nano can't answer, "
+                + LocalModel.NAME + " runs on the phone's processor. Either way nothing you ask leaves the phone and it "
+                + "works offline. Qwen needs a one-time " + LocalModel.gb(LocalModel.BYTES) + " download and answers more "
                 + "slowly and simply than Claude.", 14, Ui.MUTED, false));
         String unsupported = LocalModel.unsupported(this);
         if (unsupported != null) {
