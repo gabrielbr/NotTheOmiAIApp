@@ -38,6 +38,10 @@ size_t complete_utf8(const std::string &s) {
     return n;  // not valid UTF-8; pass it through rather than stall
 }
 
+// Prompt tokens decoded per step: small enough that Stop and the progress line respond within
+// a second or two on a phone CPU.
+constexpr int kPromptStep = 128;
+
 // Returns false when Java asked to stop or threw.
 bool emit(JNIEnv *env, jobject sink, jmethodID accept, const std::string &bytes) {
     jbyteArray chunk = env->NewByteArray(static_cast<jsize>(bytes.size()));
@@ -90,6 +94,8 @@ Java_br_gabriel_sentient_LlamaNative_generate(JNIEnv *env, jclass, jlong handle,
     jclass type = env->GetObjectClass(sink);
     jmethodID accept = env->GetMethodID(type, "accept", "([B)Z");
     if (accept == nullptr) return kBadInput;
+    jmethodID progress = env->GetMethodID(type, "progress", "(II)Z");
+    if (progress == nullptr) return kBadInput;
     jsize length = env->GetArrayLength(jprompt);
     std::string prompt(static_cast<size_t>(length), '\0');
     env->GetByteArrayRegion(jprompt, 0, length, reinterpret_cast<jbyte *>(&prompt[0]));
@@ -101,10 +107,12 @@ Java_br_gabriel_sentient_LlamaNative_generate(JNIEnv *env, jclass, jlong handle,
     if (llama_tokenize(s->vocab, prompt.data(), static_cast<int32_t>(prompt.size()), tokens.data(), needed, true, true) < 0)
         return kBadInput;
     if (needed + max_tokens > s->n_ctx) return kTooLong;
-    int batch = static_cast<int>(llama_n_batch(s->ctx));
-    for (int i = 0; i < needed; i += batch) {
-        int count = std::min(batch, needed - i);
+    int step = std::min(kPromptStep, static_cast<int>(llama_n_batch(s->ctx)));
+    for (int i = 0; i < needed; i += step) {
+        int count = std::min(step, needed - i);
         if (llama_decode(s->ctx, llama_batch_get_one(tokens.data() + i, count)) != 0) return kDecodeFailed;
+        jboolean go = env->CallBooleanMethod(sink, progress, static_cast<jint>(i + count), static_cast<jint>(needed));
+        if (env->ExceptionCheck() || go != JNI_TRUE) return 0;  // stopped while reading the prompt
     }
 
     llama_sampler_chain_params sp = llama_sampler_chain_default_params();
