@@ -59,6 +59,7 @@ public final class MainActivity extends Activity {
     private String query="", selectedId, exportId, exportKind;
     private long refinementRevision = -1;
     private TextView detailTranscript, detailRefinement, refiningLine;
+    private LinearLayout backgroundPrompt;
     /** The recording shown in detail, for the live refinement line. */
     private Recordings.Session detailSession;
     private Button detailRetry;
@@ -83,7 +84,7 @@ public final class MainActivity extends Activity {
         intent.removeExtra(ReadyNotifier.EXTRA_OPEN);intent.removeExtra(ReadyNotifier.EXTRA_LIBRARY);
         if(id!=null)detail(id);else if(all){library=true;draw();}
     }
-    @Override protected void onResume(){super.onResume();resumed=true;ReadyNotifier.clear(this);main.removeCallbacks(ticker);main.post(ticker);if(ready){if(library)loadLibrary();else loadHomeHistory();}main.post(this::resumeStart);}
+    @Override protected void onResume(){super.onResume();resumed=true;if(backgroundPrompt!=null&&OmiSettingsActivity.backgroundAllowed(this))backgroundPrompt.setVisibility(View.GONE);ReadyNotifier.clear(this);main.removeCallbacks(ticker);main.post(ticker);if(ready){if(library)loadLibrary();else loadHomeHistory();}main.post(this::resumeStart);}
     @Override protected void onPause(){resumed=false;main.removeCallbacks(ticker);playback.stop();super.onPause();}
     @Override protected void onDestroy(){destroyed=true;viewGeneration++;playback.stop();io.shutdown();main.removeCallbacks(ticker);super.onDestroy();}
     @Override protected void onSaveInstanceState(Bundle out){out.putBoolean("library",library);out.putString("query",query);out.putString("exportId",exportId);out.putString("exportKind",exportKind);super.onSaveInstanceState(out);}
@@ -149,6 +150,12 @@ public final class MainActivity extends Activity {
         content.addView(recentHead);
         refiningLine=text("",14,Ui.MUTED,false);refiningLine.setPadding(0,dp(10),0,0);refiningLine.setVisibility(View.GONE);
         refiningLine.setOnClickListener(v->{RefinementProgress.Snapshot p=RefinementProgress.get();if(p.id!=null)detail(p.id);});content.addView(refiningLine);
+        backgroundPrompt=Ui.row(this);backgroundPrompt.setPadding(0,dp(10),0,0);
+        TextView why=text("Transcribe faster in the background",14,Ui.INK,false);backgroundPrompt.addView(why,new LinearLayout.LayoutParams(0,-2,1));
+        Button allow=button("Allow",Ui.Style.QUIET,v->OmiSettingsActivity.requestBackground(this));allow.setTextSize(14);allow.setMinHeight(dp(40));backgroundPrompt.addView(allow,new LinearLayout.LayoutParams(-2,dp(40)));
+        Button later=button("Not now",Ui.Style.QUIET,v->{OmiSettingsActivity.dismissBackgroundPrompt(this);backgroundPrompt.setVisibility(View.GONE);});later.setTextSize(14);later.setMinHeight(dp(40));backgroundPrompt.addView(later,new LinearLayout.LayoutParams(-2,dp(40)));
+        backgroundPrompt.setVisibility(OmiSettingsActivity.backgroundAllowed(this)||OmiSettingsActivity.backgroundPromptDismissed(this)?View.GONE:View.VISIBLE);
+        content.addView(backgroundPrompt);
         historyHint=text("",15,Ui.MUTED,false);historyHint.setPadding(0,dp(12),0,0);content.addView(historyHint);
         historyRows=column();content.addView(historyRows);
         refreshCapture();if(ready)loadHomeHistory();
@@ -395,7 +402,8 @@ public final class MainActivity extends Activity {
     private void refreshProgress(){
         RefinementProgress.Snapshot p=RefinementProgress.get();long now=RefinementProgress.clock.getAsLong();
         if(refiningLine!=null){
-            String head="Whisper"+(RefinementProgress.build!=null?" ("+RefinementProgress.build+")":"")+" · ";
+            String engine=RefinementProgress.engine(p);
+            String head="Whisper"+(engine!=null?" ("+engine+")":"")+" · ";
             String described=p.id!=null?RefinementProgress.describe(p,now):null;
             String line=described!=null?head+Character.toLowerCase(described.charAt(0))+described.substring(1)+" ›":p.waiting!=null?head+p.waiting:"";
             setText(refiningLine,line);refiningLine.setVisibility(line.isEmpty()||library||selectedId!=null?View.GONE:View.VISIBLE);

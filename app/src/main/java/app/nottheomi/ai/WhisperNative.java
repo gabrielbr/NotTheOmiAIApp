@@ -60,6 +60,12 @@ public final class WhisperNative {
     public static native int progress(long handle);
 
     /**
+     * Keeps the calling thread, and the Whisper threads it starts, on the cores above the slowest
+     * frequency tier (the big cores). Returns how many; 0 when all cores are alike or it can't.
+     */
+    public static native int pinFastCores();
+
+    /**
      * Cross-thread safe, non-blocking with respect to inference. Cancellation is
      * sticky: discard/close this handle and open a new one to resume. Unknown or
      * already-closed handles are harmless. Model loading itself is synchronous.

@@ -89,6 +89,7 @@ def main():
     assert 'application-debuggable' not in badging
     assert 'android.permission.INTERNET' not in permissions
     assert 'android.permission.BIND_JOB_SERVICE' in manifest and 'RefinementJobService' in manifest
+    assert 'RefinementService' in manifest, 'Foreground transcription service missing'
     # The only exported data surface: transcripts for same-signer apps (Sentient), read-only.
     assert 'br.gabriel.omitarefas.permission.READ_TRANSCRIPTS' in permissions
     provider = manifest[manifest.index('TranscriptProvider'):][:600]

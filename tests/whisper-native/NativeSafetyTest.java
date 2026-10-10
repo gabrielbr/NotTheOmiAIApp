@@ -49,6 +49,8 @@ public final class NativeSafetyTest {
         check(live() == 0);
         long handle = open();
         check(handle > 0 && live() == 1);
+        int pinned = WhisperNative.pinFastCores();
+        check(pinned >= 0 && pinned <= Runtime.getRuntime().availableProcessors());
         io(() -> WhisperNative.transcribe(0, audio(16000), 4, "pt", null));
         io(() -> WhisperNative.transcribe(Long.MAX_VALUE, audio(16000), 4, "pt", null));
         io(() -> WhisperNative.transcribe(handle, null, 4, "pt", null));
