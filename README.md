@@ -19,7 +19,7 @@ Every merge to `main` publishes a signed release under [Releases](https://github
 
 Both apps are signed with the same key and every release has a higher version code, so a new APK installs over the old one and keeps your data. Release details are in [RELEASING.md](RELEASING.md).
 
-GVoice has no internet access, so it can't check for updates itself. Use [Obtainium](https://github.com/ImranR98/Obtainium) instead:
+GVoice doesn't check for updates itself. Use [Obtainium](https://github.com/ImranR98/Obtainium) instead:
 
 1. **GVoice:** **Add App** → `https://github.com/gabrielbr/NotTheOmiAIApp`, and set the APK filter to `^GVoice-.*-arm64-v8a\.apk$`.
 2. **GMind (optional):** download `GMind-<version>.apk` from the latest release and install it by hand. Obtainium won't track a second app from the same repository.
@@ -31,9 +31,9 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 ## What GVoice does
 
 - Omi Bluetooth LE Opus audio → encrypted phone-local PCM and transcript history.
-- Bundled **Vosk** (Portuguese) for streaming drafts. Each saved recording gets a quick **Whisper small** transcript right away (while recording too), and **Whisper medium** redoes it while the phone charges (Omi settings › Transcripts › Better transcript while charging). Both use bundled **Silero VAD**, Portuguese by default, windows cut at pauses, and on phones with ARMv8.2 dot-product/fp16 instructions a faster native build.
+- Bundled **Vosk** (Portuguese) for streaming drafts. Each saved recording gets a quick **Whisper small** transcript right away (while recording too), and **Whisper medium** redoes it while the phone charges (Omi settings › Transcripts › Better transcript while charging). Whisper small (190 MB) and medium (539 MB) aren't in the APK: GVoice downloads each once, over Wi-Fi by default, from a pinned Hugging Face revision and checks its size and SHA-256 (medium only when it's first needed). Both use bundled **Silero VAD**, Portuguese by default, windows cut at pauses, and on phones with ARMv8.2 dot-product/fp16 instructions a faster native build.
 - Playback, searchable library and explicit WAV/text export.
-- No Omi account, PC relay, cloud transcription, runtime model download or `INTERNET` permission.
+- No Omi account, PC relay or cloud transcription. Internet access is used only to download the two pinned Whisper model files; audio and transcripts never leave the phone.
 - Capability-gated battery, brightness, microphone gain and button controls. Long-press/power behavior stays firmware-owned.
 - Short Bluetooth losses (up to 200 ms) are filled by the Opus decoder instead of splitting the recording; "Words to expect" (Omi settings › Transcripts) helps Whisper spell names and jargon.
 - Explicit phone-microphone fallback; no automatic substitution when the wearable is absent.
@@ -46,7 +46,7 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 - **Also:** an **About you** portrait rebuilt after each sync (Ask reads it), daily digests, People across apps with merge suggestions, to-dos found in what you say and write and in the chats you choose, with due dates (send them to the Todoist app, or create them directly in Todoist through Composio when you turn that on), and a Markdown vault export to a folder you pick, or to a "GMind vault" folder in your Google Drive so Claude can read it in any chat with its Drive connector.
 - **Optional AI enrichment:** with your Claude key, Claude Haiku 5.5 notes the people, projects, places and facts in what comes in, for the portrait, the vault and Ask. Off until you turn it on.
 - **Later phases:** access from Claude anywhere, and Matrix encrypted rooms. Read-only: it never acts on other services.
-- **Privacy split:** GVoice stays offline. It only exposes a read-only transcript provider behind a signature permission, so only an app signed with the same key can read it. GMind is the only one of the two apps with internet access.
+- **Privacy split:** GVoice's only network use is downloading its pinned Whisper models; audio and transcripts stay on the phone. It only exposes a read-only transcript provider behind a signature permission, so only an app signed with the same key can read it. GMind is the app that talks to online services.
 - Not yet tested on a phone. It uses the same design system as GVoice ([GMind audit](docs/SENTIENT-DESIGN.md)).
 
 The full plan and status are in [PLAN-SENTIENT.md](PLAN-SENTIENT.md).
@@ -94,7 +94,7 @@ python3 scripts/build_llama.py --ndk "$ANDROID_SDK_ROOT/ndk/27.2.12479018"
 
 The preparation script downloads and verifies pinned public models/source. Native compilation itself does not download. Build provenance is pinned in [DEPENDENCIES.json](DEPENDENCIES.json). Supported ABIs: `arm64-v8a`, `x86_64`; no 32-bit ARM. Model weights, generated native libraries, APKs, signing keys and machine configuration are excluded from Git.
 
-Use `python3 scripts/sign_release.py --help` for signing with **your own external key directory**. Original release signing keys are not published. `tests/hybrid/verify_apk.py` checks models/native payloads, both speech engines, signature and lack of Internet permission.
+Use `python3 scripts/sign_release.py --help` for signing with **your own external key directory**. Original release signing keys are not published. `tests/hybrid/verify_apk.py` checks the bundled models and native payloads, that the downloaded Whisper models are not bundled and their pins match, both speech engines, and the signature.
 
 ## Host tests
 

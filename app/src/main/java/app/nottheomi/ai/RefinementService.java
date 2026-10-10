@@ -105,7 +105,7 @@ public final class RefinementService extends Service {
 
     private static String text() {
         RefinementProgress.Snapshot snapshot = RefinementProgress.get();
-        if (snapshot.id == null) return "Preparing Whisper";
+        if (snapshot.id == null) return snapshot.waiting != null ? snapshot.waiting : "Preparing Whisper";
         return RefinementProgress.describe(snapshot, RefinementProgress.clock.getAsLong());
     }
 

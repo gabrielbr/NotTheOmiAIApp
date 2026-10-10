@@ -26,9 +26,10 @@ public class Handler {
     'android/app/job/JobParameters.java': '''package android.app.job; public class JobParameters {
  private final int id; public JobParameters(int n){id=n;} public int getJobId(){return id;} }''',
     'android/app/job/JobInfo.java': '''package android.app.job; public class JobInfo {
- public static final int NETWORK_TYPE_NONE=0,BACKOFF_POLICY_EXPONENTIAL=1;
+ public static final int NETWORK_TYPE_NONE=0,NETWORK_TYPE_ANY=1,NETWORK_TYPE_UNMETERED=2,BACKOFF_POLICY_EXPONENTIAL=1;
+ public static volatile int lastNetwork=-1;
  public static class Builder { public Builder(int id,android.content.ComponentName c){}
- public Builder setRequiredNetworkType(int n){return this;} public Builder setRequiresStorageNotLow(boolean b){return this;}
+ public Builder setRequiredNetworkType(int n){lastNetwork=n;return this;} public Builder setRequiresStorageNotLow(boolean b){return this;}
  public Builder setMinimumLatency(long n){return this;} public Builder setRequiresCharging(boolean b){return this;} public Builder setBackoffCriteria(long n,int p){return this;}
  public JobInfo build(){return new JobInfo();} }
 }''',
@@ -42,12 +43,16 @@ public class Handler {
  public void onDestroy(){} public void jobFinished(JobParameters p,boolean r){finished.add(p);retry.add(r);}
 }''',
     'app/nottheomi/ai/CaptureService.java': '''package app.nottheomi.ai; public class CaptureService { public static volatile boolean active; }''',
-    'app/nottheomi/ai/OmiSettingsActivity.java': '''package app.nottheomi.ai; public class OmiSettingsActivity { static String language(android.content.Context c){return "pt";} static String vocabulary(android.content.Context c){return "Gabriel, Ana";} static volatile boolean better; static boolean betterWhileCharging(android.content.Context c){return better;} }''',
+    'app/nottheomi/ai/OmiSettingsActivity.java': '''package app.nottheomi.ai; public class OmiSettingsActivity { static String language(android.content.Context c){return "pt";} static String vocabulary(android.content.Context c){return "Gabriel, Ana";} static volatile boolean better; static boolean betterWhileCharging(android.content.Context c){return better;} static volatile boolean mobile; static boolean mobileDownloads(android.content.Context c){return mobile;} }''',
     'app/nottheomi/ai/OmiCaptureService.java': '''package app.nottheomi.ai; public class OmiCaptureService { public static volatile boolean active; }''',
     'app/nottheomi/ai/ModelInstaller.java': '''package app.nottheomi.ai; public class ModelInstaller {
- public static java.io.File prepare(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-model");}
+ public static final class WaitingForNetwork extends java.io.IOException { WaitingForNetwork(String m){super(m);} }
+ public interface Progress { void update(long done, long total); }
+ static volatile boolean offline; static final java.util.List<String> downloads=new java.util.concurrent.CopyOnWriteArrayList<>();
+ static java.io.File fetch(String name,Progress p)throws java.io.IOException{if(offline)throw new WaitingForNetwork(name);downloads.add(name);p.update(50,100);p.update(100,100);return new java.io.File(name);}
+ public static java.io.File prepare(android.content.Context c,java.util.function.BooleanSupplier stop,boolean metered,Progress p)throws java.io.IOException{return fetch("fake-model",p);}
  public static java.io.File prepareVad(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-vad");}
- public static java.io.File prepareSmall(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-small");} }''',
+ public static java.io.File prepareSmall(android.content.Context c,java.util.function.BooleanSupplier stop,boolean metered,Progress p)throws java.io.IOException{return fetch("fake-small",p);} }''',
     'app/nottheomi/ai/Recordings.java': '''package app.nottheomi.ai;
 import java.util.*;
 public class Recordings {
@@ -141,6 +146,29 @@ public class RefinementJobHostTest {
    check(host.dones==1&&WhisperModel.opens==1,"the service took over (nothing left) and stopped");
    System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
   }
+  if(mode.equals("offline")){
+   // The model isn't on the phone and there's no Wi-Fi: wait for an unmetered network, no Whisper.
+   RefinementService.allowed=true;ModelInstaller.offline=true;RefinementService host=new RefinementService();
+   check(RefinementJobService.host(host),"service takes the work");settled();
+   check(WhisperModel.opens==0&&Recordings.commits==0&&"pending".equals(Recordings.ENTRY.state),"nothing transcribed, recording still queued");
+   check(JobInfo.lastNetwork==JobInfo.NETWORK_TYPE_UNMETERED&&JobScheduler.INSTANCE.schedules>=1,"job waits for Wi-Fi");
+   check(host.dones==1,"service stops while waiting");
+   check(RefinementProgress.get().waiting!=null&&RefinementProgress.get().waiting.contains("Wi-Fi"),"says it waits for Wi-Fi");
+   OmiSettingsActivity.mobile=true;check(RefinementJobService.host(new RefinementService()),"again, mobile data allowed");settled();
+   check(JobInfo.lastNetwork==JobInfo.NETWORK_TYPE_ANY,"any network when mobile data is allowed");
+   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
+  }
+  if(mode.equals("download-now")){
+   // Settings › Download now: fetch the models with nothing to transcribe; medium only with the accurate setting on.
+   Recordings.ENTRY.state="complete";RefinementService.allowed=true;OmiSettingsActivity.better=false;
+   RefinementJobService.downloadNow(service);RefinementService host=new RefinementService();check(RefinementJobService.host(host),"service takes the work");settled();
+   check(ModelInstaller.downloads.equals(java.util.List.of("fake-small"))&&WhisperModel.opens==0,"small only, no Whisper: "+ModelInstaller.downloads);
+   check(!RefinementJobService.downloadRequested&&host.dones==1,"request done, service stops");
+   OmiSettingsActivity.better=true;RefinementJobService.downloadNow(service);check(RefinementJobService.host(new RefinementService()),"again");settled();
+   check(ModelInstaller.downloads.equals(java.util.List.of("fake-small","fake-small","fake-model")),"medium too with the accurate setting: "+ModelInstaller.downloads);
+   check(RefinementProgress.get().waiting==null,"download line cleared when done");
+   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
+  }
   if(mode.equals("describe")){
    long[] now={1_000_000L};RefinementProgress.clock=()->now[0];RefinementProgress.reset();
    int[] window={0};long total=41L*60*1000*RefinementProgress.BYTES_PER_MS; // 41 minutes of audio
@@ -224,7 +252,7 @@ with tempfile.TemporaryDirectory(prefix='nottheomi-hybrid-job-') as directory:
         sources.append(path)
     sources += [ROOT/'app/src/main/java/app/nottheomi/ai'/name for name in ('RefinementJobService.java', 'RefinementEngine.java', 'RefinementProgress.java')]
     subprocess.run(['javac', '--release', '17', '-d', str(work), *map(str, sources)], check=True)
-    scenarios = ['stop', 'different-job', 'destroy', 'capture-start', 'capture-active', 'progress', 'success', 'in-process', 'stale', 'describe', 'accurate', 'unplugged', 'service', 'job-promotes', 'handoff']
+    scenarios = ['stop', 'different-job', 'destroy', 'capture-start', 'capture-active', 'progress', 'success', 'in-process', 'stale', 'describe', 'accurate', 'unplugged', 'service', 'job-promotes', 'handoff', 'offline', 'download-now']
     for case in scenarios:
         subprocess.run(['java', '-cp', str(work), 'app.nottheomi.ai.RefinementJobHostTest', case], check=True, timeout=15)
     print(f'JobService lifecycle PASS: {len(scenarios)} scenarios; Android/native/store doubles, not device lifecycle acceptance.')

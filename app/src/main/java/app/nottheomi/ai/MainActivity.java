@@ -402,10 +402,11 @@ public final class MainActivity extends Activity {
     private void refreshProgress(){
         RefinementProgress.Snapshot p=RefinementProgress.get();long now=RefinementProgress.clock.getAsLong();
         if(refiningLine!=null){
+            RefinementProgress.background=OmiSettingsActivity.backgroundAllowed(this);
             String engine=RefinementProgress.engine(p);
             String head="Whisper"+(engine!=null?" ("+engine+")":"")+" · ";
             String described=p.id!=null?RefinementProgress.describe(p,now):null;
-            String line=described!=null?head+Character.toLowerCase(described.charAt(0))+described.substring(1)+" ›":p.waiting!=null?head+p.waiting:"";
+            String line=described!=null?head+Character.toLowerCase(described.charAt(0))+described.substring(1)+" ›":p.waiting!=null?head+p.waiting:engine!=null?head+"ready":"";
             setText(refiningLine,line);refiningLine.setVisibility(line.isEmpty()||library||selectedId!=null?View.GONE:View.VISIBLE);
             refiningLine.setTextColor(p.id!=null&&RefinementProgress.stalled(p,now)?Ui.CORAL_TEXT:Ui.MUTED);
         }

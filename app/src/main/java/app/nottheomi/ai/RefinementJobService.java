@@ -11,6 +11,7 @@ import android.os.Looper;
 import android.os.Process;
 import android.os.SystemClock;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -80,21 +81,25 @@ public final class RefinementJobService extends JobService {
     }
 
     /** The job fallback: Android starts it when it can; it first tries to move into the service. */
-    private static void scheduleJob(Context context) {
+    private static void scheduleJob(Context context) { scheduleJob(context, JobInfo.NETWORK_TYPE_NONE); }
+
+    /** {@code network}: the network a model download needs; NONE once the models are on the phone. */
+    private static void scheduleJob(Context context, int network) {
         synchronized (LOCK) {
             try {
                 JobScheduler scheduler = context.getSystemService(JobScheduler.class);
                 if (scheduler == null) return;
                 int result = scheduler.schedule(new JobInfo.Builder(JOB_ID,
                         new ComponentName(context, RefinementJobService.class))
-                        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NONE)
+                        .setRequiredNetworkType(network)
                         .setRequiresStorageNotLow(true)
                         .setMinimumLatency(1000L)
                         .setBackoffCriteria(30000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
                         .build());
                 if (result != JobScheduler.RESULT_SUCCESS)
                     setState("Whisper scheduling unavailable · reopen app to retry; drafts kept");
-                else RefinementProgress.idle("Waiting for Android to start it (it needs some free storage)");
+                else if (network == JobInfo.NETWORK_TYPE_NONE)
+                    RefinementProgress.idle("Waiting for Android to start it (it needs some free storage)");
             } catch (RuntimeException unavailable) {
                 setState("Whisper scheduling unavailable · reopen app to retry; drafts kept");
             }
@@ -115,6 +120,30 @@ public final class RefinementJobService extends JobService {
     }
 
     private static void setState(String value) { state = value; revision++; }
+
+    /** Settings › "Download now": fetch the models even with nothing to transcribe yet. */
+    static volatile boolean downloadRequested;
+
+    static void downloadNow(Context context) {
+        downloadRequested = true;
+        schedule(context);
+    }
+
+    private static boolean metered(Context context) { return OmiSettingsActivity.mobileDownloads(context); }
+
+    private static ModelInstaller.Progress downloading(String model) {
+        return (done, total) -> RefinementProgress.download(total <= 0 || done >= total ? null
+                : "Downloading Whisper " + model + " · " + done * 100 / total + "% · "
+                  + done / 1_000_000 + " of " + total / 1_000_000 + " MB");
+    }
+
+    private static File small(Context context, Work work) throws Exception {
+        return ModelInstaller.prepareSmall(context, work::cancelledNow, metered(context), downloading("small"));
+    }
+
+    private static File medium(Context context, Work work) throws Exception {
+        return ModelInstaller.prepare(context, work::cancelledNow, metered(context), downloading("medium"));
+    }
     private static boolean capturing() { return CaptureService.active || OmiCaptureService.active; }
 
     /** A capture started: refine saved recordings alongside it, in this process. Any thread. */
@@ -229,7 +258,8 @@ public final class RefinementJobService extends JobService {
             boolean better = OmiSettingsActivity.betterWhileCharging(context);
             List<Recordings.Refinement> quick = store.pendingRefinements();
             boolean accurate = better && charging(context) && !store.pendingFinals().isEmpty();
-            if (quick.isEmpty() && !accurate) {
+            boolean fetch = downloadRequested;
+            if (quick.isEmpty() && !accurate && !fetch) {
                 setState("Saved transcripts up to date");
                 RefinementProgress.idle(better && !store.pendingFinals().isEmpty()
                         ? "Quick transcripts done · the accurate ones are made while the phone charges" : null);
@@ -242,7 +272,7 @@ public final class RefinementJobService extends JobService {
             List<String> done = new ArrayList<>();
             // Quick pass: Whisper small, while recording too.
             if (!quick.isEmpty()) {
-                String small = ModelInstaller.prepareSmall(context, work::cancelledNow).getAbsolutePath();
+                String small = small(context, work).getAbsolutePath();
                 if (work.shouldPause()) { retry = true; return; }
                 work.model = new WhisperModel(small, vad);
                 loaded();
@@ -254,13 +284,19 @@ public final class RefinementJobService extends JobService {
             if (!work.shouldPause() && better && charging(context)) {
                 List<Recordings.Refinement> finals = store.pendingFinals();
                 if (!finals.isEmpty()) {
-                    String medium = ModelInstaller.prepare(context, work::cancelledNow).getAbsolutePath();
+                    String medium = medium(context, work).getAbsolutePath();
                     if (work.shouldPause()) { retry = true; return; }
                     work.model = new WhisperModel(medium, vad);
                     loaded();
                     if (work.cancelledNow()) { work.cancel(); retry = true; return; }
                     retry |= pass(work, store, finals, true, language, vocabulary, done);
                 }
+            }
+            // "Download now": the models only, so they're ready before the first recording.
+            if (fetch && !work.shouldPause()) {
+                small(context, work);
+                if (better) medium(context, work);
+                downloadRequested = false;
             }
             try { ReadyNotifier.refined(context, done); }
             catch (RuntimeException notificationUnavailable) { /* Transcripts are saved either way. */ }
@@ -271,7 +307,16 @@ public final class RefinementJobService extends JobService {
                 RefinementProgress.idle(better && !store.pendingFinals().isEmpty()
                         ? "Quick transcripts done · the accurate ones are made while the phone charges" : null);
             }
+        } catch (ModelInstaller.WaitingForNetwork offline) {
+            // Not an error: Android starts the job again once an allowed network is up.
+            boolean anyNetwork = metered(context);
+            RefinementProgress.download(null);
+            RefinementProgress.idle(anyNetwork ? "Waiting for a network to download the Whisper model"
+                    : "Waiting for Wi-Fi to download the Whisper model");
+            setState("Waiting to download the Whisper model");
+            work.network = anyNetwork ? JobInfo.NETWORK_TYPE_ANY : JobInfo.NETWORK_TYPE_UNMETERED;
         } catch (Exception | LinkageError failure) {
+            RefinementProgress.download(null);
             if (work.shouldPause()) retry = true;
             else {
                 setState("Whisper unavailable · drafts and audio kept; reopen app to retry");
@@ -302,6 +347,18 @@ public final class RefinementJobService extends JobService {
         synchronized (LOCK) {
             if (owner != work) return;
             owner = null;
+            if (work.network >= 0) {
+                // A model download needs a network: hand over to a job that waits for one.
+                RefinementJobService service = work.service;
+                if (service != null && service.current == work) service.current = null;
+                if (service != null && !work.platformStopped) service.jobFinished(work.parameters, false);
+                if (work.host != null) work.host.done();
+                RefinementService waiting = standby;
+                standby = null;
+                if (waiting != null) waiting.done();
+                scheduleJob(work.context, work.network);
+                return;
+            }
             RefinementService host = work.host;
             if (host != null) {
                 if (work.hostLost) { scheduleJob(work.context); return; }
@@ -429,6 +486,8 @@ public final class RefinementJobService extends JobService {
         volatile boolean cancelled, platformStopped, rescheduleRequested, hostLost;
         /** The service started: stop after this window and continue there, on the fast cores. */
         volatile boolean promote;
+        /** Set when a model download waits for this network type (a JobInfo NETWORK_TYPE_*). */
+        volatile int network = -1;
         volatile WhisperModel model;
         Thread thread;
         Work(JobParameters parameters, RefinementJobService service, Context context, RefinementService host) {

@@ -30,7 +30,7 @@ public final class OmiSettingsActivity extends Activity {
     private final Set<String> seen=new HashSet<>();
     private LinearLayout page, devices;
     private TextView selected, scanStatus, live, led, desired, presses;
-    private Button scanButton, forgetButton, readButton, applyButton, singleButton, doubleButton, batteryButton, languageButton, micButton, vocabularyButton, chargingButton, backgroundButton;
+    private Button scanButton, forgetButton, readButton, applyButton, singleButton, doubleButton, batteryButton, languageButton, micButton, vocabularyButton, chargingButton, backgroundButton, smallModelButton, mediumModelButton, downloadButton, mobileButton;
     private SeekBar brightness;
     private OmiBle scanner;
     private boolean resumed, scanning;
@@ -97,6 +97,11 @@ public final class OmiSettingsActivity extends Activity {
         vocabularyButton=addButton("",this::editVocabulary);
         chargingButton=addButton("",()->{preferences(this).edit().putBoolean("better_charging",!betterWhileCharging(this)).apply();refresh();RefinementJobService.schedule(this);});
         label("A quick transcript is made right away. With this on, a more accurate one replaces it while the phone charges.",13,Ui.MUTED);
+        smallModelButton=addButton("",()->{});
+        mediumModelButton=addButton("",()->{});
+        downloadButton=addButton("Download models now",()->{RefinementJobService.downloadNow(this);refresh();});
+        mobileButton=addButton("",()->{preferences(this).edit().putBoolean("mobile_downloads",!mobileDownloads(this)).apply();refresh();RefinementJobService.schedule(this);});
+        label("Whisper's models are downloaded once from a pinned Hugging Face release and checked by SHA-256. Only the model files are fetched; recordings and transcripts never leave the phone. The accurate model is only downloaded when it's needed.",13,Ui.MUTED);
         backgroundButton=addButton("",()->{if(!backgroundAllowed(this))requestBackground(this);});
         label("Lets GVoice start transcribing on the phone's fast cores while it's in the background. Otherwise Android may hold it to the slow cores and run it in short bursts.",13,Ui.MUTED);
         refresh();
@@ -128,6 +133,9 @@ public final class OmiSettingsActivity extends Activity {
         languageButton.setText("Language · "+languageLabel(language(this)));
         chargingButton.setText("Better transcript while charging · "+(betterWhileCharging(this)?"On":"Off"));
         backgroundButton.setText("Transcribe in the background · "+(backgroundAllowed(this)?"Allowed":"Allow"));
+        smallModelButton.setText("Whisper small (quick) · "+modelState(ModelInstaller.SMALL_FILE,ModelInstaller.SMALL_BYTES));
+        mediumModelButton.setText("Whisper medium (accurate) · "+modelState(ModelInstaller.MODEL_FILE,ModelInstaller.MODEL_BYTES));
+        mobileButton.setText("Download models over mobile data · "+(mobileDownloads(this)?"On":"Off"));
         String words=vocabulary(this);
         vocabularyButton.setText("Words to expect · "+(words==null?"none":words.length()>28?words.substring(0,28)+"…":words));
         micButton.setText("Gain · "+micLabel(p.getInt("mic_gain",-1)));
@@ -163,6 +171,13 @@ public final class OmiSettingsActivity extends Activity {
     static boolean backgroundPromptDismissed(Context context){return preferences(context).getBoolean("background_prompt_dismissed",false);}
     static void dismissBackgroundPrompt(Context context){preferences(context).edit().putBoolean("background_prompt_dismissed",true).apply();}
     /** Redo quick (small) transcripts with Whisper medium while the phone charges. On by default. */
+    /** Model downloads may use mobile (metered) data. Off by default: Wi-Fi only. */
+    static boolean mobileDownloads(Context context){return preferences(context).getBoolean("mobile_downloads",false);}
+    private String modelState(String name,long bytes){
+        long have=ModelInstaller.downloaded(this,name,bytes);
+        if(have>=bytes)return "on this phone";
+        return have>0?(have/1_000_000)+" of "+(bytes/1_000_000)+" MB downloaded":(bytes/1_000_000)+" MB to download";
+    }
     static boolean betterWhileCharging(Context context){return preferences(context).getBoolean("better_charging",true);}
     /** Names and jargon Whisper should expect (its prompt); null when none. */
     static String vocabulary(Context context){

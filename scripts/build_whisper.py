@@ -192,12 +192,10 @@ def main():
         result["path"] = dest.relative_to(ROOT).as_posix()
     assets = ROOT / "app/src/main/assets"
     assets.mkdir(parents=True, exist_ok=True)
-    if not (assets / MODEL).is_file() or sha(assets / MODEL) != MODEL_SHA:
-        shutil.copyfile(model, assets / MODEL)
-    require_hash(assets / MODEL, MODEL_SHA)
-    if not (assets / SMALL_MODEL).is_file() or sha(assets / SMALL_MODEL) != SMALL_SHA:
-        shutil.copyfile(small, assets / SMALL_MODEL)
-    require_hash(assets / SMALL_MODEL, SMALL_SHA)
+    # Whisper medium and small are downloaded by the app (pinned URL + SHA-256), never bundled:
+    # remove copies an older build left here so they can't end up in the APK.
+    for downloaded in (MODEL, SMALL_MODEL):
+        (assets / downloaded).unlink(missing_ok=True)
     if not (assets / VAD_MODEL).is_file() or sha(assets / VAD_MODEL) != VAD_SHA:
         shutil.copyfile(vad, assets / VAD_MODEL)
     require_hash(assets / VAD_MODEL, VAD_SHA)
@@ -210,9 +208,9 @@ def main():
     receipt = {"schema_version": 1, "source_commit": COMMIT, "source_url": SOURCE_URL,
                "source_archive_sha256": SOURCE_SHA, "source_files_verified": count,
                "model": MODEL, "model_revision": REVISION, "model_url": MODEL_URL,
-               "model_sha256": sha(assets / MODEL), "model_bytes": MODEL_BYTES,
+               "model_sha256": sha(model), "model_bytes": MODEL_BYTES, "model_delivery": "runtime download",
                "small_model": SMALL_MODEL, "small_url": SMALL_URL,
-               "small_sha256": sha(assets / SMALL_MODEL), "small_bytes": SMALL_BYTES,
+               "small_sha256": sha(small), "small_bytes": SMALL_BYTES, "small_delivery": "runtime download",
                "vad_model": VAD_MODEL, "vad_revision": VAD_REVISION, "vad_url": VAD_URL,
                "vad_sha256": sha(assets / VAD_MODEL), "vad_bytes": VAD_BYTES,
                "licenses": {p.relative_to(ROOT).as_posix(): sha(p) for p in sorted(licenses.glob("whisper*"))},

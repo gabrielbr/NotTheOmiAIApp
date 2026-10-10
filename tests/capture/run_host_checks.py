@@ -14,10 +14,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--sdk', type=pathlib.Path)
 parser.add_argument('--service-only', action='store_true', help='run service fixtures without the installer or Android SDK')
 parser.add_argument('--model', type=pathlib.Path,
-                    default=ROOT / 'app/src/main/assets/ggml-medium-q5_0.bin',
-                    help='real Whisper model file (defaults to the packaged asset)')
+                    default=ROOT / '.cache/whisper-models/ggml-medium-q5_0.bin',
+                    help='real Whisper model file (downloaded at runtime by the app; pinned copy from prepare_whisper.py)')
 parser.add_argument('--small-model', type=pathlib.Path,
-                    default=ROOT / 'app/src/main/assets/ggml-small-q5_1.bin', help='pinned Whisper small model')
+                    default=ROOT / '.cache/whisper-models/ggml-small-q5_1.bin', help='pinned Whisper small model')
 parser.add_argument('--vad-model', type=pathlib.Path,
                     default=ROOT / 'app/src/main/assets/ggml-silero-v5.1.2.bin', help='pinned Silero VAD model')
 parser.add_argument('--preview-model', type=pathlib.Path,
@@ -42,12 +42,17 @@ if not args.service_only:
         subprocess.run(['javac', '--release', '17', '-cp', str(android), '-d', str(classes),
                         str(source / 'ModelInstaller.java'),
                         str(ROOT / 'tests/capture/ModelInstallerHostTest.java'),
+                        str(ROOT / 'tests/capture/ModelDownloadHostTest.java'),
                         str(source / 'PreviewModelInstaller.java'),
                         str(ROOT / 'tests/capture/PreviewModelInstallerHostTest.java')], check=True)
         fixture = directory / 'fixture'
         fixture.mkdir()
         subprocess.run(['java', '-cp', f'{classes}:{android}', 'app.nottheomi.ai.ModelInstallerHostTest',
                         str(args.model), str(fixture), str(args.vad_model), str(args.small_model)], check=True, timeout=120)
+        download_fixture = directory / 'download-fixture'
+        download_fixture.mkdir()
+        subprocess.run(['java', '-cp', f'{classes}:{android}', 'app.nottheomi.ai.ModelDownloadHostTest',
+                        str(args.vad_model), str(download_fixture)], check=True, timeout=120)
         preview_fixture = directory / 'preview-fixture'
         preview_fixture.mkdir()
         subprocess.run(['java', '-cp', f'{classes}:{android}', 'app.nottheomi.ai.PreviewModelInstallerHostTest',
