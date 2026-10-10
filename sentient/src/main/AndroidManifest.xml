@@ -18,6 +18,7 @@
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
   </activity>
   <activity android:name=".ItemActivity" android:exported="false"/>
+  <activity android:name=".HiddenActivity" android:exported="false"/>
   <activity android:name=".AskActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
   <activity android:name=".AskSettingsActivity" android:exported="false"/>
   <activity android:name=".ConnectActivity" android:exported="false"/>

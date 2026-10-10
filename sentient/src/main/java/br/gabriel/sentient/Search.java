@@ -27,7 +27,11 @@ public final class Search {
         }
     }
 
-    public static List<Hit> find(Db db, String query, int limit) throws Exception {
+    /** Matches that count as memory (hidden mail left out), best first. */
+    public static List<Hit> find(Db db, String query, int limit) throws Exception { return find(db, query, limit, false); }
+
+    /** {@code includeHidden}: also marketing and automated mail hidden from memory. */
+    public static List<Hit> find(Db db, String query, int limit, boolean includeHidden) throws Exception {
         List<Hit> hits = new ArrayList<>();
         String match = matchExpression(query);
         if (match.isEmpty()) return hits;
@@ -36,9 +40,18 @@ public final class Search {
                 + " JOIN items ON items.id = items_fts.rowid"
                 + " LEFT JOIN conversations ON conversations.id = items.conversation_id"
                 + " LEFT JOIN identities ON identities.id = items.author_identity_id"
-                + " WHERE items_fts MATCH ? ORDER BY bm25(items_fts) LIMIT ?", START, END, match, limit))
+                + " WHERE items_fts MATCH ?" + (includeHidden ? "" : " AND " + Relevance.visible())
+                + " ORDER BY bm25(items_fts) LIMIT ?", START, END, match, limit))
             hits.add(new Hit(row));
         return hits;
+    }
+
+    /** How many matches are hidden from memory (so the screen can offer to show them). */
+    public static int hiddenMatches(Db db, String query) throws Exception {
+        String match = matchExpression(query);
+        if (match.isEmpty()) return 0;
+        return ((Number) db.query("SELECT COUNT(*) FROM items_fts JOIN items ON items.id = items_fts.rowid"
+                + " WHERE items_fts MATCH ? AND NOT (" + Relevance.visible() + ")", match).get(0)[0]).intValue();
     }
 
     /** Free text → FTS5 query: every word must match, as a prefix. Never a syntax error. */

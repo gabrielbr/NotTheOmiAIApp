@@ -11,6 +11,9 @@ public final class Items {
         public final String source, kind, text, conversation, author;
         public final Long conversationId;
         public final boolean fromMe;
+        /** Relevance.noise value, why it's hidden (null when it isn't), and the author's handle. */
+        public final int noise;
+        public final String noiseReason, authorHandle;
         Item(Object[] row) {
             id = ((Number) row[0]).longValue();
             source = (String) row[1];
@@ -21,11 +24,17 @@ public final class Items {
             conversationId = row[6] == null ? null : ((Number) row[6]).longValue();
             author = (String) row[7];
             fromMe = ((Number) row[8]).intValue() != 0;
+            noise = row.length > 9 ? ((Number) row[9]).intValue() : Relevance.KEEP;
+            noiseReason = row.length > 10 ? (String) row[10] : null;
+            authorHandle = row.length > 11 ? (String) row[11] : null;
         }
+        /** Left out of memory (feed, Ask, portrait…) under the current setting. */
+        public boolean hidden() { return noise == Relevance.HIDDEN_BY_YOU || (Relevance.enabled && noise > 0); }
     }
 
     private static final String SELECT = "SELECT items.id, items.source, items.kind, items.ts, items.text,"
-            + " conversations.title, items.conversation_id, identities.display_name, items.from_me FROM items"
+            + " conversations.title, items.conversation_id, identities.display_name, items.from_me,"
+            + " items.noise, items.noise_reason, identities.handle FROM items"
             + " LEFT JOIN conversations ON conversations.id = items.conversation_id"
             + " LEFT JOIN identities ON identities.id = items.author_identity_id";
 
@@ -42,7 +51,17 @@ public final class Items {
     public static List<Item> recent(Db db, int limit) throws Exception {
         List<Item> result = new java.util.ArrayList<>();
         for (Object[] row : db.query(SELECT.replace("items.text,", "substr(items.text, 1, " + PREVIEW_CHARS + "),")
-                + " ORDER BY items.ts DESC, items.id DESC LIMIT ?", limit)) result.add(new Item(row));
+                + " WHERE " + Relevance.visible() + " ORDER BY items.ts DESC, items.id DESC LIMIT ?", limit))
+            result.add(new Item(row));
+        return result;
+    }
+
+    /** Items hidden from memory, grouped by why (then newest first), text cut to a preview. */
+    public static List<Item> hidden(Db db, int limit) throws Exception {
+        List<Item> result = new java.util.ArrayList<>();
+        for (Object[] row : db.query(SELECT.replace("items.text,", "substr(items.text, 1, " + PREVIEW_CHARS + "),")
+                + " WHERE NOT (" + Relevance.visible() + ") ORDER BY items.noise_reason, items.ts DESC LIMIT ?", limit))
+            result.add(new Item(row));
         return result;
     }
 

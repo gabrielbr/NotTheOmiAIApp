@@ -1,5 +1,7 @@
 package br.gabriel.sentient;
 
+import static org.junit.Assert.assertEquals;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -139,6 +141,49 @@ public final class SentientScreenshotTest {
                 message(5, "Pai", false, 58, "Pudim! Levo o vinho"),
                 message(6, null, true, 55, "Fechado, chego às 19h")));
         settle(); shot(t, "thread");
+    }
+
+    @Test public void memory() throws Exception {
+        Constructor<Items.Item> c = Items.Item.class.getDeclaredConstructor(Object[].class);
+        c.setAccessible(true);
+        long now = System.currentTimeMillis();
+        Items.Item promo = c.newInstance((Object) new Object[]{9L, "composio.gmail", "email", now - 3 * HOUR,
+                "50% off\n\nSó hoje, sapatos com metade do preço.", "50% off", 12L, "Loja", 0L,
+                Relevance.RULE, "Gmail: Promotions", "email:ofertas@loja.com"});
+        Items.Item personal = c.newInstance((Object) new Object[]{10L, "composio.gmail", "email", now - 2 * HOUR,
+                "Jantar sábado?\n\nVamos?", "Jantar sábado?", 13L, "Ana", 0L, Relevance.KEEP, null, "email:ana@example.com"});
+
+        ItemActivity hidden = Robolectric.buildActivity(ItemActivity.class, new Intent().putExtra(ItemActivity.EXTRA_ID, 9L)).setup().get();
+        settle();
+        hidden.show(promo, null);
+        settle(); shot(hidden, "item-hidden");
+        assertEquals(1, views(hidden, "Keep in memory").size());
+        assertEquals(0, views(hidden, "Hide from memory").size());
+
+        ItemActivity kept = Robolectric.buildActivity(ItemActivity.class, new Intent().putExtra(ItemActivity.EXTRA_ID, 10L)).setup().get();
+        settle();
+        kept.show(personal, null);
+        settle();
+        assertEquals(1, views(kept, "Hide from memory").size());
+        assertEquals(1, views(kept, "Hide everything from Ana").size());
+
+        HiddenActivity list = Robolectric.buildActivity(HiddenActivity.class).setup().get();
+        settle();
+        Items.Item social = c.newInstance((Object) new Object[]{11L, "composio.gmail", "email", now - 5 * HOUR,
+                "Ana curtiu sua foto", "Ana curtiu sua foto", 14L, "Rede social", 0L, Relevance.RULE, "Gmail: Social", "email:notify@social.com"});
+        Items.Item digest = c.newInstance((Object) new Object[]{12L, "composio.gmail", "email", now - 6 * HOUR,
+                "Weekly usage report", "Weekly usage report", 15L, "SaaS", 0L, Relevance.CLAUDE, "Claude: not worth remembering", "email:team@saas.com"});
+        list.show(Arrays.asList(digest, promo, social), 3);
+        settle(); shot(list, "hidden");
+        assertEquals(3, views(list, "Keep").size());
+        assertEquals(1, views(list, "Gmail: Promotions").size());
+    }
+
+    private static java.util.ArrayList<android.view.View> views(android.app.Activity a, String text) {
+        java.util.ArrayList<android.view.View> found = new java.util.ArrayList<>();
+        a.getWindow().getDecorView().findViewsWithText(found, text, android.view.View.FIND_VIEWS_WITH_TEXT);
+        found.removeIf(v -> !(v instanceof android.widget.TextView) || !text.contentEquals(((android.widget.TextView) v).getText()));
+        return found;
     }
 
     @Test public void connect() throws Exception {

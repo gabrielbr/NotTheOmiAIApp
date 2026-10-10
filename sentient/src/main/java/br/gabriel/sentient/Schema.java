@@ -75,6 +75,11 @@ public final class Schema {
             "ALTER TABLE found_tasks ADD COLUMN due TEXT",
             "ALTER TABLE found_tasks ADD COLUMN todoist_id TEXT",
         },
+        { // 4: what's worth remembering. noise: 0 keep, 1 rule, 2 Claude, 3 hidden by you, -1 kept by you
+            "ALTER TABLE items ADD COLUMN noise INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE items ADD COLUMN noise_reason TEXT",
+            "CREATE INDEX items_noise ON items(noise, ts)",
+        },
     };
 
     public static int latest() { return MIGRATIONS.length; }

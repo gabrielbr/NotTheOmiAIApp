@@ -64,6 +64,35 @@
      "DRAFT"
     ],
     "subject": "draft"
+   },
+   {
+    "messageId": "m5",
+    "threadId": "t5",
+    "internalDate": "1791460900000",
+    "labelIds": [
+     "INBOX",
+     "CATEGORY_PROMOTIONS"
+    ],
+    "payload": {
+     "mimeType": "text/plain",
+     "headers": [
+      {
+       "name": "From",
+       "value": "Loja <ofertas@loja.com>"
+      },
+      {
+       "name": "Subject",
+       "value": "50% off"
+      },
+      {
+       "name": "List-Unsubscribe",
+       "value": "<mailto:sair@loja.com>"
+      }
+     ],
+     "body": {
+      "data": "U8OzIGhvamU"
+     }
+    }
    }
   ],
   "nextPageToken": "p2",

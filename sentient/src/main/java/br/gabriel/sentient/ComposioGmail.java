@@ -81,6 +81,11 @@ final class ComposioGmail extends ComposioToolkit {
         if (body != null && !body.trim().isEmpty()) text.append("\n\n").append(body.trim());
 
         Map<String, Object> raw = new LinkedHashMap<>(Json.obj(m));
+        // Mailing-list headers decide what's worth remembering (Relevance); the rest of the payload goes.
+        String precedence = header(payload, "Precedence");
+        boolean listUnsubscribe = header(payload, "List-Unsubscribe") != null || header(payload, "List-Id") != null;
+        if (listUnsubscribe || (precedence != null && precedence.trim().toLowerCase(java.util.Locale.ROOT).matches("bulk|list|junk")))
+            raw.put("bulk", Boolean.TRUE);
         raw.remove("payload");
         raw.remove("messageText");
         raw.remove("attachmentList");

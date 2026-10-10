@@ -92,6 +92,7 @@ public final class ItemActivity extends Activity {
             if (isHit) row.setContentDescription("Search result: " + who + ", " + m.text);
             content.addView(row);
         }
+        memory(hit);
     }
 
     /** {@code marked} is the full text with match markers, or null to show it plain. */
@@ -113,5 +114,59 @@ public final class ItemActivity extends Activity {
         body.setLineSpacing(0, 1.3f);
         body.setTextIsSelectable(true);
         content.addView(body);
+        memory(item);
+    }
+
+    private LinearLayout memoryBox;
+
+    /** Whether this item counts as memory, why not, and the Hide / Keep controls. */
+    void memory(Items.Item item) {
+        if (memoryBox == null || memoryBox.getParent() != content) {
+            memoryBox = Ui.column(this);
+            memoryBox.setPadding(0, Ui.dp(this, 24), 0, 0);
+            content.addView(memoryBox);
+        }
+        memoryBox.removeAllViews();
+        memoryBox.addView(Ui.divider(this));
+        LinearLayout.LayoutParams full = new LinearLayout.LayoutParams(-1, -2);
+        full.topMargin = Ui.dp(this, 10);
+        if (item.hidden()) {
+            TextView why = Ui.text(this, "Hidden from memory · " + (item.noiseReason == null ? "Hidden" : item.noiseReason)
+                    + ". GMind leaves it out of the home screen, Ask and your portrait.", 14, Ui.CORAL_TEXT, false);
+            why.setPadding(0, Ui.dp(this, 12), 0, 0);
+            memoryBox.addView(why);
+            memoryBox.addView(Ui.button(this, "Keep in memory", Ui.Style.QUIET, v -> change(item, db -> Relevance.keep(db, item.id))), full);
+            if (item.authorHandle != null && item.noise == Relevance.HIDDEN_BY_YOU && item.noiseReason != null
+                    && item.noiseReason.contains("sender"))
+                memoryBox.addView(Ui.button(this, "Keep everything from " + sender(item), Ui.Style.QUIET,
+                        v -> change(item, db -> Relevance.keepSender(db, item.authorHandle))), full);
+            return;
+        }
+        if (item.fromMe) return; // your own words are always memory
+        memoryBox.addView(Ui.button(this, "Hide from memory", Ui.Style.QUIET, v -> change(item, db -> Relevance.hide(db, item.id))), full);
+        if (item.authorHandle != null)
+            memoryBox.addView(Ui.button(this, "Hide everything from " + sender(item), Ui.Style.QUIET,
+                    v -> change(item, db -> Relevance.hideSender(db, item.authorHandle))), full);
+    }
+
+    private static String sender(Items.Item item) {
+        if (item.author != null && !item.author.isEmpty()) return item.author;
+        String h = item.authorHandle;
+        return h.contains(":") ? h.substring(h.indexOf(':') + 1) : h;
+    }
+
+    private interface Change { void apply(Db db) throws Exception; }
+
+    private void change(Items.Item item, Change change) {
+        io.execute(() -> {
+            Items.Item fresh;
+            try {
+                Db db = KnowledgeStore.get(this);
+                db.transaction(() -> { change.apply(db); return null; });
+                fresh = Items.get(db, item.id);
+            } catch (Exception failure) { fresh = null; }
+            final Items.Item updated = fresh;
+            main.post(() -> { if (!destroyed && updated != null) memory(updated); });
+        });
     }
 }

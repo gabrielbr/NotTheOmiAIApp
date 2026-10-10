@@ -53,18 +53,21 @@ public final class People {
         Suggestion(Person a, Person b, String reason) { this.a = a; this.b = b; this.reason = reason; }
     }
 
-    private static final String PERSON = "SELECT people.id, people.display_name, people.is_me,"
+    /** Counts only what's memory: someone who only sends marketing mail drops out of People. */
+    private static String person() {
+        return "SELECT people.id, people.display_name, people.is_me,"
             + " (SELECT group_concat(DISTINCT identities.source) FROM identities WHERE identities.person_id = people.id),"
             + " (SELECT COUNT(*) FROM items JOIN identities ON identities.id = items.author_identity_id"
-            + "   WHERE identities.person_id = people.id),"
+            + "   WHERE identities.person_id = people.id AND " + Relevance.visible() + "),"
             + " (SELECT MAX(items.ts) FROM items JOIN identities ON identities.id = items.author_identity_id"
-            + "   WHERE identities.person_id = people.id)"
+            + "   WHERE identities.person_id = people.id AND " + Relevance.visible() + ")"
             + " FROM people";
+    }
 
     /** Everyone with at least one item, most active first; you first of all. */
     public static List<Person> list(Db db, int limit) throws Exception {
         List<Person> people = new ArrayList<>();
-        for (Object[] r : db.query("SELECT * FROM (" + PERSON + ") ORDER BY 3 DESC, 5 DESC, 2 LIMIT ?", limit)) {
+        for (Object[] r : db.query("SELECT * FROM (" + person() + ") ORDER BY 3 DESC, 5 DESC, 2 LIMIT ?", limit)) {
             Person p = new Person(r);
             if (p.items > 0 || p.me) people.add(p);
         }
@@ -72,7 +75,7 @@ public final class People {
     }
 
     public static Person get(Db db, long id) throws Exception {
-        List<Object[]> rows = db.query(PERSON + " WHERE people.id = ?", id);
+        List<Object[]> rows = db.query(person() + " WHERE people.id = ?", id);
         return rows.isEmpty() ? null : new Person(rows.get(0));
     }
 
@@ -229,14 +232,14 @@ public final class People {
         return db.query("SELECT conversations.id, conversations.title, conversations.source, COUNT(*), MAX(items.ts)"
                 + " FROM items JOIN identities ON identities.id = items.author_identity_id"
                 + " JOIN conversations ON conversations.id = items.conversation_id"
-                + " WHERE identities.person_id = ? GROUP BY conversations.id ORDER BY COUNT(*) DESC LIMIT ?", person, limit);
+                + " WHERE identities.person_id = ? AND " + Relevance.visible() + " GROUP BY conversations.id ORDER BY COUNT(*) DESC LIMIT ?", person, limit);
     }
 
     /** Item ids of this person's latest items, newest first. */
     public static List<Long> recentItems(Db db, long person, int limit) throws Exception {
         List<Long> ids = new ArrayList<>();
         for (Object[] r : db.query("SELECT items.id FROM items JOIN identities ON identities.id = items.author_identity_id"
-                + " WHERE identities.person_id = ? ORDER BY items.ts DESC LIMIT ?", person, limit))
+                + " WHERE identities.person_id = ? AND " + Relevance.visible() + " ORDER BY items.ts DESC LIMIT ?", person, limit))
             ids.add(((Number) r[0]).longValue());
         return ids;
     }

@@ -31,7 +31,8 @@ public final class KnowledgeTools {
         switch (tool) {
             case SEARCH:
                 return search(str(input, "query"), str(input, "source"), str(input, "person"),
-                        day(input, "from", false), day(input, "to", true), num(input, "limit", 10, 1, MAX_LIMIT));
+                        day(input, "from", false), day(input, "to", true), num(input, "limit", 10, 1, MAX_LIMIT),
+                        Boolean.TRUE.equals(input.get("include_hidden")));
             case CONVERSATION:
                 Long id = longValue(input.get("item_id"));
                 if (id == null) throw new IllegalArgumentException("item_id is required");
@@ -55,6 +56,12 @@ public final class KnowledgeTools {
 
     /** Full-text search; filters narrow it. A person filter alone lists their latest items. */
     public String search(String query, String source, String person, Long from, Long to, int limit) throws Exception {
+        return search(query, source, person, from, to, limit, false);
+    }
+
+    /** {@code includeHidden}: also marketing and automated mail, which is otherwise left out. */
+    public String search(String query, String source, String person, Long from, Long to, int limit,
+                         boolean includeHidden) throws Exception {
         String match = Search.matchExpression(query);
         if (match.isEmpty() && person == null) throw new IllegalArgumentException("query or person is required");
         StringBuilder sql = new StringBuilder("SELECT items.id, items.ts, items.source, conversations.title,"
@@ -68,6 +75,7 @@ public final class KnowledgeTools {
         sql.append(" LEFT JOIN conversations ON conversations.id = items.conversation_id"
                 + " LEFT JOIN identities ON identities.id = items.author_identity_id"
                 + " LEFT JOIN people ON people.id = identities.person_id WHERE 1 = 1");
+        if (!includeHidden) sql.append(" AND ").append(Relevance.visible());
         if (!match.isEmpty()) { sql.append(" AND items_fts MATCH ?"); args.add(match); }
         if (source != null) { sql.append(" AND items.source = ?"); args.add(source); }
         if (person != null) {
@@ -81,7 +89,11 @@ public final class KnowledgeTools {
         sql.append(" LIMIT ?");
         args.add(limit);
         List<Object[]> rows = db.query(sql.toString(), args.toArray());
-        if (rows.isEmpty()) return "No matches.";
+        if (rows.isEmpty()) {
+            int hidden = includeHidden || match.isEmpty() ? 0 : Search.hiddenMatches(db, query);
+            return hidden == 0 ? "No matches." : "No matches. " + hidden + " match in mail hidden as marketing or automated"
+                    + " (search again with include_hidden if the question is about that).";
+        }
         StringBuilder out = new StringBuilder();
         for (Object[] r : rows)
             line(out, (Long) r[0], (Long) r[1], (String) r[2], (String) r[3], (String) r[4], flag(r[5]), (String) r[6]);
@@ -106,7 +118,7 @@ public final class KnowledgeTools {
                 + " JOIN items ON items.id = items_fts.rowid"
                 + " LEFT JOIN conversations ON conversations.id = items.conversation_id"
                 + " LEFT JOIN identities ON identities.id = items.author_identity_id"
-                + " WHERE items_fts MATCH ? ORDER BY bm25(items_fts) LIMIT ?", any.toString(), Math.min(limit, MAX_LIMIT));
+                + " WHERE items_fts MATCH ? AND " + Relevance.visible() + " ORDER BY bm25(items_fts) LIMIT ?", any.toString(), Math.min(limit, MAX_LIMIT));
         if (rows.isEmpty()) return "No matches.";
         StringBuilder out = new StringBuilder();
         for (Object[] r : rows)
@@ -129,7 +141,7 @@ public final class KnowledgeTools {
         List<Object[]> rows = db.query("SELECT people.id, people.display_name, people.is_me,"
                 + " group_concat(DISTINCT identities.source), COUNT(items.id), MAX(items.ts)"
                 + " FROM people JOIN identities ON identities.person_id = people.id"
-                + " LEFT JOIN items ON items.author_identity_id = identities.id"
+                + " LEFT JOIN items ON items.author_identity_id = identities.id AND " + Relevance.visible()
                 + " WHERE people.display_name LIKE ? OR identities.display_name LIKE ?"
                 + " GROUP BY people.id ORDER BY COUNT(items.id) DESC LIMIT 10", "%" + name + "%", "%" + name + "%");
         if (rows.isEmpty()) return "No one named like that.";
@@ -173,7 +185,7 @@ public final class KnowledgeTools {
                     + " items.from_me, substr(items.text, 1, " + MAX_TEXT + ") FROM mentions JOIN items ON items.id = mentions.item_id"
                     + " LEFT JOIN conversations ON conversations.id = items.conversation_id"
                     + " LEFT JOIN identities ON identities.id = items.author_identity_id"
-                    + " WHERE mentions.entity_id = ? ORDER BY items.ts DESC LIMIT 5", e[0]))
+                    + " WHERE mentions.entity_id = ? AND " + Relevance.visible() + " ORDER BY items.ts DESC LIMIT 5", e[0]))
                 line(out, (Long) m[0], (Long) m[1], (String) m[2], (String) m[3], (String) m[4], flag(m[5]), (String) m[6]);
         }
         return out.toString();
@@ -191,7 +203,7 @@ public final class KnowledgeTools {
                 + " identities.display_name, items.from_me, substr(items.text, 1, " + MAX_TEXT + ") FROM items"
                 + " LEFT JOIN conversations ON conversations.id = items.conversation_id"
                 + " LEFT JOIN identities ON identities.id = items.author_identity_id"
-                + " WHERE items.ts >= ? AND items.ts < ?" + filter + " ORDER BY items.ts LIMIT ?", args.toArray());
+                + " WHERE items.ts >= ? AND items.ts < ? AND " + Relevance.visible() + filter + " ORDER BY items.ts LIMIT ?", args.toArray());
         if (rows.isEmpty()) return "Nothing in that range.";
         StringBuilder out = new StringBuilder();
         for (Object[] r : rows)

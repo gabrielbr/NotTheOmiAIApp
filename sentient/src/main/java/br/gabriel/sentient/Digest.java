@@ -44,7 +44,9 @@ public final class Digest {
         long from = day.atStartOfDay(zone).toInstant().toEpochMilli();
         long to = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
         List<Object[]> counts = db.query("SELECT source, kind, COUNT(*) FROM items WHERE ts >= ? AND ts < ?"
-                + " AND kind != ? GROUP BY source, kind ORDER BY COUNT(*) DESC", from, to, RawItem.EVENT);
+                + " AND kind != ? AND " + Relevance.visible() + " GROUP BY source, kind ORDER BY COUNT(*) DESC", from, to, RawItem.EVENT);
+        long hidden = ((Number) db.query("SELECT COUNT(*) FROM items WHERE ts >= ? AND ts < ? AND NOT ("
+                + Relevance.visible() + ")", from, to).get(0)[0]).longValue();
         List<Object[]> events = db.query("SELECT id, ts, substr(text, 1, instr(text || char(10), char(10)) - 1) FROM items"
                 + " WHERE kind = ? AND ts >= ? AND ts < ? ORDER BY ts LIMIT 20", RawItem.EVENT, from, to);
         if (counts.isEmpty() && events.isEmpty()) return null;
@@ -55,13 +57,15 @@ public final class Digest {
             for (Object[] c : counts)
                 md.append("- ").append(People.sourceName((String) c[0])).append(": ")
                         .append(count(((Number) c[2]).longValue(), noun((String) c[1]))).append('\n');
+            if (hidden > 0) md.append("- Hidden from memory: ").append(count(hidden, "item"))
+                    .append(" (marketing and automated mail)\n");
             md.append('\n');
         }
 
         List<Object[]> people = db.query("SELECT people.display_name, COUNT(*), MAX(items.id),"
                 + " group_concat(DISTINCT items.source) FROM items"
                 + " JOIN identities ON identities.id = items.author_identity_id JOIN people ON people.id = identities.person_id"
-                + " WHERE items.ts >= ? AND items.ts < ? AND people.is_me = 0 AND items.kind IN (?, ?)"
+                + " WHERE items.ts >= ? AND items.ts < ? AND people.is_me = 0 AND items.kind IN (?, ?) AND " + Relevance.visible()
                 + " GROUP BY people.id ORDER BY COUNT(*) DESC LIMIT ?", from, to, RawItem.MESSAGE, RawItem.EMAIL, TOP);
         if (!people.isEmpty()) {
             md.append("## People\n\n");
@@ -73,7 +77,7 @@ public final class Digest {
 
         List<Object[]> chats = db.query("SELECT conversations.title, conversations.source, COUNT(*), MAX(items.id)"
                 + " FROM items JOIN conversations ON conversations.id = items.conversation_id"
-                + " WHERE items.ts >= ? AND items.ts < ? AND items.kind = ? AND conversations.title IS NOT NULL"
+                + " WHERE items.ts >= ? AND items.ts < ? AND items.kind = ? AND conversations.title IS NOT NULL AND " + Relevance.visible()
                 + " GROUP BY conversations.id ORDER BY COUNT(*) DESC LIMIT ?", from, to, RawItem.MESSAGE, TOP);
         if (!chats.isEmpty()) {
             md.append("## Conversations\n\n");

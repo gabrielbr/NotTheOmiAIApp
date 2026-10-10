@@ -32,6 +32,7 @@ final class KnowledgeStore {
         Db db = new SqlCipherDb(database);
         db.exec("PRAGMA foreign_keys = ON");
         Schema.migrate(db);
+        Relevance.load(db);
         instance = db;
         return db;
     }

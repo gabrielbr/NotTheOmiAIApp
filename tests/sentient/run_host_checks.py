@@ -17,7 +17,7 @@ JAR = ROOT/'.cache/host/sqlite-jdbc-3.50.3.0.jar'
 PURE = ['Db', 'Schema', 'Ingest', 'Sources', 'SyncRunner', 'Search', 'Items', 'OmiTranscripts', 'ChatMessages', 'KnowledgeTools', 'Citations', 'LlmBackend', 'AskPrompts', 'LocalPrompt',
         'ComposioClient', 'ComposioToolkit', 'ComposioGmail', 'ComposioCalendar', 'ComposioDrive', 'ComposioSlack', 'ComposioTodoist', 'ComposioTickTick', 'ComposioPlugin',
         'MatrixClient', 'MatrixPlugin',
-        'TaskExtractor', 'Meta', 'FoundTasks', 'People', 'Digest', 'Portrait', 'Vault', 'Enrichment', 'Extraction', 'Updates', 'DueDates', 'Requests', 'TodoistSync', 'DriveVault']
+        'TaskExtractor', 'Meta', 'FoundTasks', 'People', 'Digest', 'Portrait', 'Vault', 'Enrichment', 'Extraction', 'Updates', 'DueDates', 'Requests', 'TodoistSync', 'DriveVault', 'Relevance']
 
 
 def jar():
@@ -36,7 +36,8 @@ def main():
     sources += [ROOT/f'sentient/src/main/java/br/gabriel/sentient/{name}.java' for name in PURE]
     sources += [ROOT/'tests/sentient/JdbcDb.java', ROOT/'tests/sentient/SentientHostTest.java',
                 ROOT/'tests/sentient/SourcesHostTest.java', ROOT/'tests/sentient/TaskExtractorChecks.java',
-                ROOT/'tests/sentient/EnrichmentHostTest.java', ROOT/'tests/sentient/UpdatesHostTest.java']
+                ROOT/'tests/sentient/EnrichmentHostTest.java', ROOT/'tests/sentient/UpdatesHostTest.java',
+                ROOT/'tests/sentient/RelevanceHostTest.java']
     with tempfile.TemporaryDirectory(prefix='sentient-host-') as work:
         subprocess.run(['javac', '--release', '17', '-Xlint:all', '-Werror', '-cp', classpath, '-d', work,
                         *map(str, sources)], check=True)
@@ -45,6 +46,7 @@ def main():
                         str(ROOT/'tests/sentient/fixtures')], check=True)
         subprocess.run(['java', '-cp', work + ':' + classpath, 'br.gabriel.sentient.EnrichmentHostTest'], check=True)
         subprocess.run(['java', '-cp', work + ':' + classpath, 'br.gabriel.sentient.UpdatesHostTest'], check=True)
+        subprocess.run(['java', '-cp', work + ':' + classpath, 'br.gabriel.sentient.RelevanceHostTest'], check=True)
 
 
 if __name__ == '__main__':

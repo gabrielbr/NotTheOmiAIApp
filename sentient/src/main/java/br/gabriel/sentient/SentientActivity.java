@@ -35,6 +35,8 @@ public final class SentientActivity extends Activity implements LiveSources.List
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private LinearLayout body;
     private TextView searchNote, attention;
+    /** This search also shows mail hidden from memory (marketing, automated); reset when the query changes. */
+    private boolean showHidden;
     private LiveSources sources;
     private String query = "";
     private int searchGeneration;
@@ -133,6 +135,7 @@ public final class SentientActivity extends Activity implements LiveSources.List
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 query = s.toString().trim();
+                showHidden = false;
                 final int generation = ++searchGeneration;
                 main.postDelayed(() -> { if (generation == searchGeneration) refresh(); }, 250);
             }
@@ -286,7 +289,13 @@ public final class SentientActivity extends Activity implements LiveSources.List
         final int generation = searchGeneration;
         io.execute(() -> {
             List<Search.Hit> hits;
-            try { hits = Search.find(KnowledgeStore.get(this), term, MAX_HITS); }
+            int hidden;
+            final boolean withHidden = showHidden;
+            try {
+                Db db = KnowledgeStore.get(this);
+                hits = Search.find(db, term, MAX_HITS, withHidden);
+                hidden = withHidden ? 0 : Search.hiddenMatches(db, term);
+            }
             catch (Exception failure) {
                 main.post(() -> {
                     if (destroyed || generation != searchGeneration) return;
@@ -295,11 +304,15 @@ public final class SentientActivity extends Activity implements LiveSources.List
                 });
                 return;
             }
-            main.post(() -> { if (!destroyed && generation == searchGeneration) showResults(term, hits); });
+            final int more = hidden;
+            main.post(() -> { if (!destroyed && generation == searchGeneration) showResults(term, hits, more); });
         });
     }
 
-    void showResults(String term, List<Search.Hit> hits) {
+    void showResults(String term, List<Search.Hit> hits) { showResults(term, hits, 0); }
+
+    /** {@code hidden}: further matches in mail hidden from memory, offered behind a tap. */
+    void showResults(String term, List<Search.Hit> hits, int hidden) {
         body.removeAllViews();
         searchNote.setVisibility(View.GONE);
         if (hits.isEmpty()) {
@@ -308,6 +321,7 @@ public final class SentientActivity extends Activity implements LiveSources.List
             TextView hint = Ui.text(this, "Try another word, or fewer words.", 15, Ui.MUTED, false);
             hint.setPadding(0, dp(8), 0, 0);
             body.addView(hint);
+            showHiddenRow(hidden);
             return;
         }
         if (hits.size() >= MAX_HITS) note("Showing the " + MAX_HITS + " best matches.", false);
@@ -318,6 +332,16 @@ public final class SentientActivity extends Activity implements LiveSources.List
                     metaOf(this, hit.source, hit.author, hit.fromMe, hit.ts), Ui.highlight(this, hit.snippet)));
         }
         body.addView(Ui.divider(this));
+        showHiddenRow(hidden);
+    }
+
+    private void showHiddenRow(int hidden) {
+        if (hidden <= 0) return;
+        TextView more = Ui.text(this, hidden + (hidden == 1 ? " more in hidden mail" : " more in hidden mail") + " · Show ›", 15, Ui.MUTED, true);
+        more.setPadding(0, dp(14), 0, dp(14));
+        more.setContentDescription("Show matches in mail hidden from memory");
+        more.setOnClickListener(v -> { showHidden = true; search(); });
+        body.addView(more, new LinearLayout.LayoutParams(-1, -2));
     }
 
     /** A search result or a recent item; opens the item, with the search words highlighted. */

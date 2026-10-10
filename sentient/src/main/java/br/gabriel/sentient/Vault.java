@@ -93,7 +93,7 @@ public final class Vault {
         // Names first, so every note can link to every other.
         for (Object[] p : db.query("SELECT people.id, people.display_name FROM people"
                 + " JOIN identities ON identities.person_id = people.id JOIN items ON items.author_identity_id = identities.id"
-                + " GROUP BY people.id HAVING SUM(items.kind = ?) > 0 OR COUNT(*) >= 2 OR MAX(people.is_me) = 1"
+                + " WHERE " + Relevance.visible() + " GROUP BY people.id HAVING SUM(items.kind = ?) > 0 OR COUNT(*) >= 2 OR MAX(people.is_me) = 1"
                 + " OR EXISTS (SELECT 1 FROM entities WHERE entities.canonical_key = 'person:' || people.id)"
                 + " ORDER BY MAX(people.is_me) DESC, COUNT(*) DESC LIMIT ?", RawItem.MESSAGE, MAX_PEOPLE))
             personNotes.put(((Number) p[0]).longValue(), unique((String) p[1]));

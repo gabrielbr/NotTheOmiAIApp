@@ -21,7 +21,7 @@ public final class EnrichmentHostTest {
     public static void main(String[] args) throws Exception {
         TaskExtractorChecks.run();
         Db db = fixture();
-        check(Schema.latest() == 3, "schema has the enrichment and watched-chats steps");
+        check(Schema.latest() == 4, "schema has the enrichment, watched-chats and memory steps");
         enrichment(db);
         people(db);
         foundTasks(db);
@@ -313,7 +313,7 @@ public final class EnrichmentHostTest {
                 "your note has your facts");
         Object schema = Extraction.SCHEMA;
         check(Boolean.FALSE.equals(br.gabriel.sentient.plugin.Json.at(schema, "additionalProperties"))
-                && br.gabriel.sentient.plugin.Json.list(br.gabriel.sentient.plugin.Json.at(schema, "required")).size() == 3
+                && br.gabriel.sentient.plugin.Json.list(br.gabriel.sentient.plugin.Json.at(schema, "required")).size() == 4
                 && Boolean.FALSE.equals(br.gabriel.sentient.plugin.Json.at(schema, "properties", "facts", "items", "additionalProperties")),
                 "strict schema");
     }
