@@ -30,7 +30,7 @@ public final class OmiSettingsActivity extends Activity {
     private final Set<String> seen=new HashSet<>();
     private LinearLayout page, devices;
     private TextView selected, scanStatus, live, led, desired, presses;
-    private Button scanButton, forgetButton, readButton, applyButton, singleButton, doubleButton, batteryButton, languageButton;
+    private Button scanButton, forgetButton, readButton, applyButton, singleButton, doubleButton, batteryButton, languageButton, micButton, vocabularyButton;
     private SeekBar brightness;
     private OmiBle scanner;
     private boolean resumed, scanning;
@@ -83,6 +83,9 @@ public final class OmiSettingsActivity extends Activity {
                 .setMessage((value==0?"This requests minimum brightness; firmware-owned indicators may remain. ":"")+"Audio recording continues, with a visible phone notification. Readback confirms the current value, not persistence after power-off.")
                 .setNegativeButton("Cancel",null).setPositiveButton("Apply",(d,w)->OmiCaptureService.setLedBrightness(value)).show();
         });
+        section("Microphone");
+        label("Raise it if quiet speech gets lost, lower it in loud places. Saved on the Omi when it next connects.",14,Ui.MUTED);
+        micButton=addButton("",this::chooseMicGain);
         section("Button");
         label("What a press does while recording. Set it before you start.",14,Ui.MUTED);
         singleButton=addButton("",()->chooseAction("single_action","Single press","bookmark"));
@@ -91,6 +94,7 @@ public final class OmiSettingsActivity extends Activity {
         section("Transcripts");
         label("The language you speak. Whisper rewrites each saved recording in it; the live draft stays Portuguese.",14,Ui.MUTED);
         languageButton=addButton("",this::chooseLanguage);
+        vocabularyButton=addButton("",this::editVocabulary);
         refresh();
     }
     @Override protected void onResume(){super.onResume();resumed=true;main.post(ticker);if(initialScan){initialScan=false;main.post(this::scan);}}
@@ -118,12 +122,40 @@ public final class OmiSettingsActivity extends Activity {
         singleButton.setEnabled(!active);doubleButton.setEnabled(!active);
         presses.setText(OmiCaptureService.lastButton);
         languageButton.setText("Language · "+languageLabel(language(this)));
+        String words=vocabulary(this);
+        vocabularyButton.setText("Words to expect · "+(words==null?"none":words.length()>28?words.substring(0,28)+"…":words));
+        micButton.setText("Gain · "+micLabel(p.getInt("mic_gain",-1)));
         batteryButton.setVisibility(Battery.unrestricted(this)?android.view.View.GONE:android.view.View.VISIBLE);
     }
     /** Whisper's language for saved transcripts: "pt" (default), "en", or "auto" (detected per 30 s). */
     static String language(Context context){
         String value=preferences(context).getString("language","pt");
         return "en".equals(value)||"auto".equals(value)?value:"pt";
+    }
+    private static final int[] MIC_LEVELS={-1,3,4,5,6,7,8};
+    private static final String[] MIC_LABELS={"Omi's own setting","0 dB","+6 dB","+10 dB","+20 dB (Omi default)","+30 dB","+40 dB"};
+    private static String micLabel(int level){for(int i=0;i<MIC_LEVELS.length;i++)if(MIC_LEVELS[i]==level)return MIC_LABELS[i];return MIC_LABELS[0];}
+    private void chooseMicGain(){
+        int current=preferences(this).getInt("mic_gain",-1),index=0;for(int i=0;i<MIC_LEVELS.length;i++)if(MIC_LEVELS[i]==current)index=i;
+        new AlertDialog.Builder(this).setTitle("Microphone gain").setSingleChoiceItems(MIC_LABELS,index,(d,w)->{preferences(this).edit().putInt("mic_gain",MIC_LEVELS[w]).apply();d.dismiss();refresh();}).setNegativeButton("Cancel",null).show();
+    }
+    /** Names and jargon Whisper should expect (its prompt); null when none. */
+    static String vocabulary(Context context){
+        String value=preferences(context).getString("vocabulary","").trim();
+        if(value.isEmpty())return null;
+        return value.length()>400?value.substring(0,400):value;
+    }
+    private void editVocabulary(){
+        android.widget.EditText field=new android.widget.EditText(this);
+        field.setText(preferences(this).getString("vocabulary",""));
+        field.setHint("Gabriel, Ana, Tatá Slings, Todoist");
+        field.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(400)});
+        field.setPadding(dp(20),dp(12),dp(20),dp(12));
+        new AlertDialog.Builder(this).setTitle("Words to expect")
+            .setMessage("Names and terms you say often, separated by commas. Whisper spells them this way.")
+            .setView(field)
+            .setPositiveButton("Save",(d,w)->{preferences(this).edit().putString("vocabulary",field.getText().toString().trim()).apply();refresh();})
+            .setNegativeButton("Cancel",null).show();
     }
     private static String languageLabel(String value){return "en".equals(value)?"English":"auto".equals(value)?"Detect (mixed languages)":"Portuguese";}
     private void chooseLanguage(){

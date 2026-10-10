@@ -47,7 +47,7 @@ public final class HybridSpeechIntegrationTest extends InstrumentationTestCase {
             String draft=store.find(session.id).text;assertTrue(draft.toLowerCase(Locale.ROOT).contains("country"));
             store.finish(session.id,"saved");finished=true;assertEquals("pending",store.find(session.id).transcriptState);
             try(WhisperModel model=new WhisperModel(ModelInstaller.prepare(getInstrumentation().getTargetContext()).getAbsolutePath())){
-                RefinementJobService.refine(store,store.refinement(session.id),model,"en",()->false); // English fixture
+                RefinementJobService.refine(store,store.refinement(session.id),model,"en",null,()->false); // English fixture
             }
             Recordings.Session finalSession=store.find(session.id);assertEquals("complete",finalSession.transcriptState);assertEquals(draft,finalSession.liveText);assertEquals(pcm.length,finalSession.bytes);
             assertTrue(finalSession.text.toLowerCase(Locale.ROOT).contains("country"));ByteArrayOutputStream text=new ByteArrayOutputStream();store.exportText(session.id,text);assertEquals(finalSession.text,text.toString("UTF-8"));

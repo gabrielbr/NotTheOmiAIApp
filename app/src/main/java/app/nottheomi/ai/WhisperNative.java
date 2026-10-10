@@ -18,12 +18,13 @@ public final class WhisperNative {
      * Transcribes 16kHz mono signed PCM16, at most 480000 samples (30 seconds).
      * Zero-length, sub-100ms, near-silent or cancelled input returns an empty string.
      * Threads are clamped to 1..4. Language is "pt", "en" or "auto" (detected per call);
-     * English-only weights always use "en". This method does not modify the caller's array;
+     * English-only weights always use "en". Prompt: optional words to expect (names, jargon),
+     * at most 400 characters; null or empty for none. This method does not modify the caller's array;
      * the caller must wipe it after return and must not mutate it during this call.
      * Native temporary raw PCM copies are wiped on success, error and cancellation.
      * No transcript, audio, or model path is logged by this adapter.
      */
-    public static native String transcribe(long handle, short[] pcm, int threads, String language) throws IOException;
+    public static native String transcribe(long handle, short[] pcm, int threads, String language, String prompt) throws IOException;
 
     /**
      * Cross-thread safe, non-blocking with respect to inference. Cancellation is

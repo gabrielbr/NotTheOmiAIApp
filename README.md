@@ -34,7 +34,8 @@ Obtainium checks in the background, notifies you of new releases and opens Andro
 - Bundled **Vosk** (Portuguese) for streaming drafts; CPU-only multilingual **Whisper medium Q5_0** with bundled **Silero VAD** refines each saved recording, in Portuguese by default (English or per-window detection in Omi settings › Transcripts). Refinement keeps running while you record, with fewer threads at background priority, and cuts its 18–30 s windows at pauses.
 - Playback, searchable library and explicit WAV/text export.
 - No Omi account, PC relay, cloud transcription, runtime model download or `INTERNET` permission.
-- Capability-gated battery, brightness and button controls. Long-press/power behavior stays firmware-owned.
+- Capability-gated battery, brightness, microphone gain and button controls. Long-press/power behavior stays firmware-owned.
+- Short Bluetooth losses (up to 200 ms) are filled by the Opus decoder instead of splitting the recording; "Words to expect" (Omi settings › Transcripts) helps Whisper spell names and jargon.
 - Explicit phone-microphone fallback; no automatic substitution when the wearable is absent.
 
 ## GMind companion (optional, in development)

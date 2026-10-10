@@ -122,6 +122,7 @@ public final class RefinementJobService extends JobService {
             work.model = new WhisperModel(path, vad);
             if (work.shouldPause()) { work.cancel(); retry = true; return; }
             String language = OmiSettingsActivity.language(this);
+            String vocabulary = OmiSettingsActivity.vocabulary(this);
             List<String> done = new ArrayList<>();
             for (Recordings.Refinement entry : pending) {
                 if (work.shouldPause()) { retry = true; break; }
@@ -129,7 +130,7 @@ public final class RefinementJobService extends JobService {
                     Recordings.Refinement fresh = store.refinement(entry.id);
                     if (fresh == null || !"pending".equals(fresh.state)) continue;
                     setState("Refining saved transcript · live draft and audio available");
-                    refine(store, fresh, work.model, language, work::shouldPause);
+                    refine(store, fresh, work.model, language, vocabulary, work::shouldPause);
                     done.add(fresh.id);
                     revision++;
                 } catch (Exception | LinkageError failure) {
@@ -176,10 +177,10 @@ public final class RefinementJobService extends JobService {
         }
     }
 
-    static void refine(Recordings store, Recordings.Refinement entry, WhisperModel model, String language,
+    static void refine(Recordings store, Recordings.Refinement entry, WhisperModel model, String language, String vocabulary,
                        java.util.function.BooleanSupplier cancelled) throws Exception {
         RefinementEngine.run(entry.totalBytes, entry.offsetBytes,
-                consumer -> store.forEachPcm(entry.id, consumer::accept), samples -> model.transcribe(samples, threads(), language),
+                consumer -> store.forEachPcm(entry.id, consumer::accept), samples -> model.transcribe(samples, threads(), language, vocabulary),
                 new RefinementEngine.Sink() {
                     public void commit(long before, long after, String text) throws Exception {
                         store.commitRefinementBatch(entry.id, before, after, text);

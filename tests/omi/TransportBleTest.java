@@ -86,11 +86,20 @@ public final class TransportBleTest {
         check(f.sink.pcm == 1 && Arrays.equals(f.sink.decoded.get(0), Arrays.copyOf(expected, count)), "actual decoder PCM exact after fragmentation and LE16 wrap");
         f.notify(f.audio, packet(0, 0, opus)); check(f.sink.pcm == 1, "duplicate cannot deliver PCM");
         f.notify(f.audio, packet(2, 0, opus));
-        check(f.sink.gaps == gaps + 1 && f.sink.pcm == 1, "missing sequence discards incomplete audio rather than joining");
+        check(f.sink.gaps == gaps && f.sink.pcm == 3, "one lost packet: frame before it decoded, then one concealed frame, no gap");
+        check(f.sink.decoded.get(2).length == OmiBle.FRAME_SAMPLES, "concealment fills exactly one 20 ms frame");
         f.notify(f.audio, packet(3, 0, opus));
-        check(f.sink.pcm == 2 && Arrays.equals(f.sink.decoded.get(1), Arrays.copyOf(expected, count)), "first post-gap frame uses fresh decoder");
+        check(f.sink.gaps == gaps && f.sink.pcm == 4, "audio continues on the same decoder after concealment");
+        int lostMax = OmiBle.MAX_CONCEALED_FRAMES;
+        f.notify(f.audio, packet(3 + lostMax + 1, 0, opus));
+        check(f.sink.gaps == gaps && f.sink.pcm == 5 + lostMax, "the longest concealed loss still keeps one recording");
+        int pcmBefore = f.sink.pcm;
+        f.notify(f.audio, packet(3 + lostMax + 1 + lostMax + 2, 0, opus));
+        check(f.sink.gaps == gaps + 1 && f.sink.pcm == pcmBefore, "a longer loss discards incomplete audio rather than joining");
+        f.notify(f.audio, packet(3 + lostMax + 1 + lostMax + 3, 0, opus));
+        check(f.sink.pcm == pcmBefore + 1 && Arrays.equals(f.sink.decoded.get(pcmBefore), Arrays.copyOf(expected, count)), "first post-gap frame uses fresh decoder");
         f.ble.stop(); Handler.drain();
-        check(f.sink.pcm == 2, "stop never flushes unbounded trailing frame");
+        check(f.sink.pcm == pcmBefore + 1, "stop never flushes unbounded trailing frame");
 
         scenario("parser rejects orphan, malformed, overflow and fragment discontinuity");
         OmiBle.FrameAssembler frames = new OmiBle.FrameAssembler();

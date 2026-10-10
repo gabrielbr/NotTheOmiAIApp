@@ -97,11 +97,30 @@ jlong open_file(JNIEnv *env, jstring name, jstring vad) {
     return handle;
 }
 
-jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads, jstring language) {
+// Optional vocabulary hint (names, jargon), at most kMaxPromptChars; empty when absent.
+constexpr jsize kMaxPromptChars = 400;
+bool prompt_utf8(JNIEnv *env, jstring prompt, std::string &out) {
+    out.clear();
+    if (!prompt) return true;
+    const jsize size = env->GetStringLength(prompt);
+    if (size == 0) return true;
+    if (size > kMaxPromptChars) return false;
+    std::vector<uint16_t> chars(size);
+    env->GetStringRegion(prompt, 0, size, reinterpret_cast<jchar *>(chars.data()));
+    if (env->ExceptionCheck()) return false;
+    out = nottheomi::path_utf8(chars.data(), chars.size());
+    return true;
+}
+
+jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads, jstring language, jstring prompt) {
     auto state = lookup(handle);
     if (!state || !samples) { fail(env, "Invalid Whisper input boundary"); return nullptr; }
     const char *requested = language_code(env, language);
     if (!requested) { fail(env, "Unsupported Whisper language"); return nullptr; }
+    std::string vocabulary;
+    try {
+        if (!prompt_utf8(env, prompt, vocabulary)) { fail(env, "Invalid Whisper vocabulary"); return nullptr; }
+    } catch (const std::invalid_argument &) { fail(env, "Invalid Whisper vocabulary"); return nullptr; }
     const jsize count = env->GetArrayLength(samples);
     if (env->ExceptionCheck()) return nullptr;
     if (count > nottheomi::kMaxSamples) {
@@ -150,6 +169,8 @@ jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads,
     p.entropy_thold = 2.4f;
     // Full model audio context (not experimental shortened-context decoding).
     p.audio_ctx = 0;
+    // Words the user expects (names, jargon): biases spelling, not content.
+    p.initial_prompt = vocabulary.empty() ? nullptr : vocabulary.c_str();
     // Silero VAD (bundled, offline): Whisper decodes only the speech in the window,
     // which stops it skipping sentences in noise and skips silence quickly.
     p.vad = !state->vad_path.empty();
@@ -195,8 +216,9 @@ Java_app_nottheomi_ai_WhisperNative_openFile(JNIEnv *env, jclass, jstring name, 
 }
 extern "C" JNIEXPORT jstring JNICALL
 Java_app_nottheomi_ai_WhisperNative_transcribe(JNIEnv *env, jclass, jlong handle,
-                                            jshortArray samples, jint threads, jstring language) {
-    try { return transcribe(env, handle, samples, threads, language); }
+                                            jshortArray samples, jint threads, jstring language,
+                                            jstring prompt) {
+    try { return transcribe(env, handle, samples, threads, language, prompt); }
     catch (const std::bad_alloc &) { fail(env, "Whisper memory allocation failed"); }
     catch (...) { fail(env, "Whisper inference failed"); }
     return nullptr;

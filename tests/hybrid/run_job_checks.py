@@ -41,7 +41,7 @@ public class Handler {
  public void onDestroy(){} public void jobFinished(JobParameters p,boolean r){finished.add(p);retry.add(r);}
 }''',
     'app/nottheomi/ai/CaptureService.java': '''package app.nottheomi.ai; public class CaptureService { public static volatile boolean active; }''',
-    'app/nottheomi/ai/OmiSettingsActivity.java': '''package app.nottheomi.ai; public class OmiSettingsActivity { static String language(android.content.Context c){return "pt";} }''',
+    'app/nottheomi/ai/OmiSettingsActivity.java': '''package app.nottheomi.ai; public class OmiSettingsActivity { static String language(android.content.Context c){return "pt";} static String vocabulary(android.content.Context c){return "Gabriel, Ana";} }''',
     'app/nottheomi/ai/OmiCaptureService.java': '''package app.nottheomi.ai; public class OmiCaptureService { public static volatile boolean active; }''',
     'app/nottheomi/ai/ModelInstaller.java': '''package app.nottheomi.ai; public class ModelInstaller {
  public static java.io.File prepare(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-model");}
@@ -69,7 +69,7 @@ public class WhisperModel {
  static volatile int owners,maxOwners,opens,cancels,threads; static volatile Thread inferenceThread,closeThread;
  static volatile String vad;
  public WhisperModel(String p,String v){vad=v;opens++;owners++;maxOwners=Math.max(owners,maxOwners);}
- public String transcribe(short[] s,int n,String language)throws Exception{if(!"pt".equals(language))throw new AssertionError("language");threads=n;inferenceThread=Thread.currentThread();ENTERED.countDown();if(!RELEASE.await(5,TimeUnit.SECONDS))throw new AssertionError("test release timeout");return "synthetic decoded";}
+ public String transcribe(short[] s,int n,String language,String prompt)throws Exception{if(!"pt".equals(language)||!"Gabriel, Ana".equals(prompt))throw new AssertionError("language/vocabulary");threads=n;inferenceThread=Thread.currentThread();ENTERED.countDown();if(!RELEASE.await(5,TimeUnit.SECONDS))throw new AssertionError("test release timeout");return "synthetic decoded";}
  public void cancel(){cancels++;}
  public void close(){closeThread=Thread.currentThread();owners--;CLOSED.countDown();}
 }'''

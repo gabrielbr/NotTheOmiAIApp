@@ -14,7 +14,7 @@ static std::atomic<int> mode{0};
 static std::atomic<bool> entered{false};
 static std::atomic<int> live{0};
 static std::atomic<bool> multilingual{false};
-static std::string last_language, last_vad;
+static std::string last_language, last_vad, last_prompt;
 extern "C" {
 void whisper_log_set(ggml_log_callback, void *) {}
 void ggml_log_set(ggml_log_callback, void *) {}
@@ -44,6 +44,7 @@ int whisper_full(whisper_context *ctx, whisper_full_params p, const float *sampl
         throw std::runtime_error("Unsafe inference parameters");
     last_language = p.language;
     last_vad = p.vad ? p.vad_model_path : "";
+    last_prompt = p.initial_prompt ? p.initial_prompt : "";
     ctx->mode = mode.load();
     entered.store(true);
     if (ctx->mode == 1) {
@@ -74,4 +75,5 @@ JNIEXPORT jint JNICALL Java_NativeSafetyTest_live(JNIEnv *, jclass) { return liv
 JNIEXPORT void JNICALL Java_NativeSafetyTest_setMultilingual(JNIEnv *, jclass, jboolean value) { multilingual.store(value); }
 JNIEXPORT jstring JNICALL Java_NativeSafetyTest_language(JNIEnv *env, jclass) { return env->NewStringUTF(last_language.c_str()); }
 JNIEXPORT jboolean JNICALL Java_NativeSafetyTest_vad(JNIEnv *, jclass) { return !last_vad.empty(); }
+JNIEXPORT jstring JNICALL Java_NativeSafetyTest_prompt(JNIEnv *env, jclass) { return env->NewStringUTF(last_prompt.c_str()); }
 }

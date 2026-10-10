@@ -49,6 +49,8 @@ public final class OmiBle {
             listener.onBattery(-1); listener.onGap(); quit=true;
         });
     }
+    public static volatile int micGain = -1;
+    public void setMicGain(int level) { micGain = level; }
     public void readLedBrightness() { ledReads++; }
     public void setLedBrightness(int value) { ledWrites++; }
     static void send(Runnable action) throws Exception {

@@ -118,10 +118,14 @@ public final class OmiCompositionHostTest {
         check(Recordings.text("segment-1").stream().filter(t -> t.startsWith("[Omi audio gap")).count() == (gap ? 1 : 0), "exact gap count without invented startup gap");
         check("saved".equals(Recordings.status("segment-1")), "valid PCM saved");
     }
-    static void splitSegments(int oldFrames) throws Exception {
+    static void splitSegments(int oldFrames) throws Exception { splitSegments(oldFrames, 0); }
+    /** {@code concealed}: filler frames the decoder added for short losses, after the old frames. */
+    static void splitSegments(int oldFrames, int concealed) throws Exception {
         check(Recordings.ids().equals(List.of("segment-1", "segment-2")), "recovered PCM must create a distinct ordered segment");
         check(Recordings.finishedIds().equals(Recordings.ids()), "segments finish in creation order");
-        check(Arrays.equals(Recordings.bytes("segment-1"), decoded(oldFrames)), "all earlier PCM retained exactly, no resumed splice");
+        byte[] old = Recordings.bytes("segment-1"), expected = decoded(oldFrames);
+        check(old.length == expected.length + concealed * 640
+                && Arrays.equals(Arrays.copyOf(old, expected.length), expected), "all earlier PCM retained exactly, no resumed splice");
         check(Arrays.equals(Recordings.bytes("segment-2"), decoded(1)), "resumed segment starts with fresh-decoder PCM, no loss or silence");
         check(Recordings.text("segment-1").stream().filter(t -> t.startsWith("[Omi audio gap")).count() == 1, "one old-segment gap marker");
         check(Recordings.text("segment-2").stream().noneMatch(t -> t.startsWith("[Omi audio gap")), "old gap not misfiled to new segment");
@@ -139,9 +143,13 @@ public final class OmiCompositionHostTest {
                 retry(); ready(); firstPcm(); stop(); oneSegment(1, false); break;
             case "sequence_loss":
                 ready(); firstPcm(); sequence++; frame(opus);
-                check(OmiCaptureService.state.contains("Recovering") && Recordings.total() == 640, "sequence loss enters service recovery without fabricated PCM");
+                until(() -> Recordings.total() == 640 + 1280);
+                check(!OmiCaptureService.state.contains("Recovering") && Recordings.ids().size() == 1,
+                        "one lost packet is concealed (previous frame + one filler frame), no recovery or new segment");
+                sequence += OmiBle.MAX_CONCEALED_FRAMES + 1; frame(opus);
+                check(OmiCaptureService.state.contains("Recovering") && Recordings.total() == 1920, "a long loss enters service recovery without fabricated PCM");
                 gapProcessedWithoutRollover();
-                frame(opus); until(() -> Recordings.total() == 1280); stop(); splitSegments(1);
+                frame(opus); until(() -> Recordings.total() == 2560); stop(); splitSegments(2, 1);
                 check(service.adapter.connections == 1, "same-link packet gap needs no reconnect"); break;
             case "malformed_opus":
                 ready(); firstPcm(); frame(new byte[]{3}); until(() -> Recordings.total() == 1280);

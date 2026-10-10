@@ -44,6 +44,7 @@ STUBS.update({
 'android/content/SharedPreferences.java': '''package android.content; public class SharedPreferences {
  public static final java.util.Map<String,String> values=new java.util.concurrent.ConcurrentHashMap<>();
  public String getString(String key,String def){return values.getOrDefault(key,def);}
+ public int getInt(String key,int def){String v=values.get(key);return v==null?def:Integer.parseInt(v);}
 }''',
 'android/content/Context.java': '''package android.content; public class Context {
  public static final int MODE_PRIVATE=0; public static String denied;
