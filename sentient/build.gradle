@@ -20,6 +20,8 @@ android {
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
  lint { abortOnError true }
  testOptions { unitTests { includeAndroidResources = true } }
+ // kotlinx-coroutines' debugger stub (via ML Kit): unused at runtime.
+ packaging { resources { excludes += ['DebugProbesKt.bin'] } }
 }
 dependencies {
  implementation project(':plugin-api')
