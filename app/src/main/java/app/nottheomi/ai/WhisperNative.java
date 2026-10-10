@@ -26,6 +26,9 @@ public final class WhisperNative {
      */
     public static native String transcribe(long handle, short[] pcm, int threads, String language, String prompt) throws IOException;
 
+    /** The current window's progress, 0..100 (0 before it starts or for an unknown handle). Any thread. */
+    public static native int progress(long handle);
+
     /**
      * Cross-thread safe, non-blocking with respect to inference. Cancellation is
      * sticky: discard/close this handle and open a new one to resume. Unknown or

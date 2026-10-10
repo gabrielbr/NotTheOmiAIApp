@@ -29,6 +29,12 @@ public final class WhisperModel implements AutoCloseable {
         return text.trim();
     }
 
+    /** The window being transcribed, 0..100. Safe from any thread, never blocks. */
+    public int progress() {
+        long current = handle;
+        return current == 0 ? 0 : WhisperNative.progress(current);
+    }
+
     public void cancel() {
         cancelled = true;
         long current = handle;

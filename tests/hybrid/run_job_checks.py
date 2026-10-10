@@ -57,7 +57,9 @@ public class Recordings {
  public List<Refinement> pendingRefinements(){return ENTRY.state.equals("pending")?List.of(ENTRY):List.of();}
  public Refinement refinement(String id){return ENTRY;}
  public void forEachPcm(String id,Consumer c)throws Exception{c.accept(new byte[]{1,0});}
- public void commitRefinementBatch(String id,long before,long after,String text){commits++;ENTRY.offsetBytes=after;}
+ static volatile boolean stale;
+ public static final class StaleCheckpointException extends IllegalStateException { StaleCheckpointException(){super("stale");} }
+ public void commitRefinementBatch(String id,long before,long after,String text){if(stale){stale=false;throw new StaleCheckpointException();}commits++;ENTRY.offsetBytes=after;}
  public void completeRefinement(String id){completes++;ENTRY.state="complete";}
  public void failRefinement(String id){failures++;ENTRY.state="failed";}
 }''',
@@ -71,6 +73,7 @@ public class WhisperModel {
  public WhisperModel(String p,String v){vad=v;opens++;owners++;maxOwners=Math.max(owners,maxOwners);}
  public String transcribe(short[] s,int n,String language,String prompt)throws Exception{if(!"pt".equals(language)||!"Gabriel, Ana".equals(prompt))throw new AssertionError("language/vocabulary");threads=n;inferenceThread=Thread.currentThread();ENTERED.countDown();if(!RELEASE.await(5,TimeUnit.SECONDS))throw new AssertionError("test release timeout");return "synthetic decoded";}
  public void cancel(){cancels++;}
+ public int progress(){return 40;}
  public void close(){closeThread=Thread.currentThread();owners--;CLOSED.countDown();}
 }'''
 }
@@ -82,6 +85,42 @@ public class RefinementJobHostTest {
  public static void main(String[] args)throws Exception{
   String mode=args[0];RefinementJobService service=new RefinementJobService();JobParameters start=new JobParameters(812);
   if(mode.equals("capture-active"))CaptureService.active=true;
+  if(mode.equals("in-process")){
+   // While capturing, schedule() runs the worker in this process: no job, no time limit.
+   CaptureService.active=true;RefinementJobService.schedule(service);
+   check(JobScheduler.INSTANCE.schedules==0,"no job while capturing");check(WhisperModel.ENTERED.await(5,TimeUnit.SECONDS),"in-process worker entered");
+   CaptureService.active=false; // capture ends mid-window: the window still finishes and is saved
+   WhisperModel.RELEASE.countDown();check(WhisperModel.CLOSED.await(5,TimeUnit.SECONDS),"worker closes native model");settled();
+   check(Recordings.commits==1&&Recordings.completes==1&&WhisperModel.cancels==0,"window finished after the capture ended, never discarded");
+   check(service.finished.isEmpty(),"no job to finish");
+   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
+  }
+  if(mode.equals("describe")){
+   long[] now={1_000_000L};RefinementProgress.clock=()->now[0];RefinementProgress.reset();
+   int[] window={0};long total=41L*60*1000*RefinementProgress.BYTES_PER_MS; // 41 minutes of audio
+   RefinementProgress.begin("r1",0,total,()->window[0]);
+   long w=30_000*RefinementProgress.BYTES_PER_MS;RefinementProgress.window(0,w);
+   now[0]+=60_000;window[0]=50;RefinementProgress.Snapshot mid=RefinementProgress.get();
+   check(mid.done==w/2&&mid.percent()==0,"half a window counts toward the total");
+   now[0]+=60_000;RefinementProgress.saved(w); // 30 s of audio took 2 min: 0.25x
+   RefinementProgress.Snapshot after=RefinementProgress.get();
+   check(Math.abs(after.speed-0.25)<1e-9,"speed from finished windows");
+   String line=RefinementProgress.describe(after,now[0]+20_000);
+   check(line.equals("Refining · 1% · 0:30 of 41:00 · about 2 h 42 min left · updated 20 s ago"),line);
+   check(!RefinementProgress.stalled(after,now[0]+RefinementProgress.STALL_MS-1)&&RefinementProgress.stalled(after,now[0]+RefinementProgress.STALL_MS),"stall after 5 minutes without movement");
+   RefinementProgress.window(w,w);now[0]+=400_000;window[0]=10;RefinementProgress.get();now[0]+=1;window[0]=20;
+   check(RefinementProgress.get().lastChangeAt==now[0],"a window's own progress counts as movement");
+   check(RefinementProgress.clock(3_725_000).equals("1:02:05")&&RefinementProgress.span(59_000).equals("59 s"),"formats");
+   RefinementProgress.idle("Waiting for Android to start it");check(RefinementProgress.get().id==null&&"Waiting for Android to start it".equals(RefinementProgress.get().waiting),"idle reason");
+   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
+  }
+  if(mode.equals("stale")){
+   Recordings.stale=true;check(service.onStartJob(start),"async start");check(WhisperModel.ENTERED.await(5,TimeUnit.SECONDS),"entered");
+   WhisperModel.RELEASE.countDown();check(WhisperModel.CLOSED.await(5,TimeUnit.SECONDS),"closed");settled();
+   check(Recordings.failures==0&&"pending".equals(Recordings.ENTRY.state),"a recording set to refine again is skipped, not failed");
+   check(service.finished.contains(start)&&JobScheduler.INSTANCE.schedules==1,"and picked up again right away");
+   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");return;
+  }
   {
    check(service.onStartJob(start),"async start");check(WhisperModel.ENTERED.await(5,TimeUnit.SECONDS),"real worker entered double");
    if(mode.equals("stop")){
@@ -89,8 +128,9 @@ public class RefinementJobHostTest {
     service.onStartJob(new JobParameters(812));Handler.drain();check(WhisperModel.opens==1&&WhisperModel.owners==1,"blocked older worker retains sole native ownership");check(!service.finished.contains(start),"stopped job not finished early");
    } else if(mode.equals("different-job")) {service.onStopJob(new JobParameters(999));check(WhisperModel.cancels==0,"different job not cancelled");}
    else if(mode.equals("destroy")){service.onDestroy();check(WhisperModel.cancels>0,"destroy cancels without freeing");check(WhisperModel.owners==1,"destroy retains native owner");}
-   else if(mode.equals("capture-start")){CaptureService.active=true;RefinementJobService.captureStarted();check(WhisperModel.cancels==0,"a capture starting does not cancel refinement");check(RefinementJobService.state.contains("slower while recording"),"state says refinement continues");}
-   else if(mode.equals("capture-active")){int cores=Math.max(1,Math.min(4,Runtime.getRuntime().availableProcessors()));check(WhisperModel.threads==Math.min(RefinementJobService.CAPTURE_THREADS,cores),"fewer threads while capturing");check(android.os.Process.priority==android.os.Process.THREAD_PRIORITY_BACKGROUND,"background priority");}
+   else if(mode.equals("capture-start")){CaptureService.active=true;RefinementJobService.captureStarted(service);check(WhisperModel.cancels==0&&WhisperModel.opens==1,"a capture starting neither cancels nor duplicates the running job");}
+   else if(mode.equals("capture-active")){int cores=Math.max(1,Math.min(4,Runtime.getRuntime().availableProcessors()));check(WhisperModel.threads==Math.min(RefinementJobService.CAPTURE_THREADS,cores),"fewer threads while capturing");check(android.os.Process.priority==RefinementJobService.WORKER_PRIORITY&&RefinementJobService.WORKER_PRIORITY<android.os.Process.THREAD_PRIORITY_BACKGROUND,"mild priority, not the background (little-core) group");}
+   else if(mode.equals("progress")){RefinementProgress.Snapshot snap=RefinementProgress.get();check("synthetic".equals(snap.id)&&snap.total==2,"progress names the recording being refined");check(snap.done==0,"a 2-byte window at 40% rounds down to nothing saved yet");}
    else if(mode.equals("success")){check(WhisperModel.threads==Math.max(1,Math.min(4,Runtime.getRuntime().availableProcessors())),"all cores when idle");}
    else throw new IllegalArgumentException(mode);
    WhisperModel.RELEASE.countDown();check(WhisperModel.CLOSED.await(5,TimeUnit.SECONDS),"worker closes native model");settled();
@@ -112,9 +152,9 @@ with tempfile.TemporaryDirectory(prefix='nottheomi-hybrid-job-') as directory:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
         sources.append(path)
-    sources += [ROOT/'app/src/main/java/app/nottheomi/ai'/name for name in ('RefinementJobService.java', 'RefinementEngine.java')]
+    sources += [ROOT/'app/src/main/java/app/nottheomi/ai'/name for name in ('RefinementJobService.java', 'RefinementEngine.java', 'RefinementProgress.java')]
     subprocess.run(['javac', '--release', '17', '-d', str(work), *map(str, sources)], check=True)
-    scenarios = ['stop', 'different-job', 'destroy', 'capture-start', 'capture-active', 'success']
+    scenarios = ['stop', 'different-job', 'destroy', 'capture-start', 'capture-active', 'progress', 'success', 'in-process', 'stale', 'describe']
     for case in scenarios:
         subprocess.run(['java', '-cp', str(work), 'app.nottheomi.ai.RefinementJobHostTest', case], check=True, timeout=15)
     print(f'JobService lifecycle PASS: {len(scenarios)} scenarios; Android/native/store doubles, not device lifecycle acceptance.')

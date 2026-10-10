@@ -192,7 +192,7 @@ public class AudioRecord {
 }''',
 'app/nottheomi/ai/RefinementJobService.java': '''package app.nottheomi.ai; public class RefinementJobService {
  public static volatile int pauses,schedules;
- public static void captureStarted(){if(!CaptureService.active&&!OmiCaptureService.active)throw new AssertionError("pause before capture active");pauses++;}
+ public static void captureStarted(android.content.Context context){if(!CaptureService.active&&!OmiCaptureService.active)throw new AssertionError("pause before capture active");pauses++;}
  public static void schedule(android.content.Context c){
   if(CaptureService.active||OmiCaptureService.active)throw new AssertionError("schedule while capture still active");
   if(PreviewModel.created!=PreviewModel.closed||PreviewRecognizer.created!=PreviewRecognizer.closed||android.os.PowerManager.held!=0)

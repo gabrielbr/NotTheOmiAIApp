@@ -38,6 +38,15 @@ public final class UiScreenshotTest {
     @After public void reset() { CaptureService.active = false; }
 
     @Test public void home() throws Exception {
+        // "Ideias no carro" (191 s) is being refined: a third saved, half of the current window done.
+        long[] now = {1_000_000L};
+        RefinementProgress.clock = () -> now[0];
+        RefinementProgress.reset();
+        int[] window = {50};
+        long total = 191 * 32_000L, saved = total / 3 / 2 * 2;
+        RefinementProgress.begin("s2", 0, total, () -> window[0]);
+        RefinementProgress.window(0, saved); now[0] += 90_000; RefinementProgress.saved(saved);
+        RefinementProgress.window(saved, 30 * 32_000L); RefinementProgress.get(); now[0] += 20_000;
         ActivityController<MainActivity> c = Robolectric.buildActivity(MainActivity.class).setup();
         MainActivity a = c.get();
         settle();
@@ -76,6 +85,15 @@ public final class UiScreenshotTest {
         detail.setAccessible(true);
         detail.invoke(a, samples()[0]);
         settle(); shot(a, "detail");
+
+        set(a, "selectedId", "s2");
+        detail.invoke(a, samples()[1]);
+        call(a, "refreshProgress");
+        settle(); shot(a, "detail-refining");
+
+        now[0] += 7 * 60_000L; // nothing moves for 7 minutes
+        call(a, "refreshProgress");
+        settle(); shot(a, "detail-stalled");
     }
 
     @Test public void omi() throws Exception {
@@ -103,9 +121,10 @@ public final class UiScreenshotTest {
         setField(m, "createdAt", System.currentTimeMillis() - hoursAgo * 3_600_000L);
         setField(m, "bytes", seconds * 32_000L);
         Constructor<Recordings.Session> sc = Recordings.Session.class.getDeclaredConstructor(
-                metaClass, String.class, String.class, String.class, boolean.class);
+                metaClass, String.class, String.class, String.class, boolean.class, long.class);
         sc.setAccessible(true);
-        return sc.newInstance(m, text, text, state, false);
+        // A pending recording is shown a third of the way through.
+        return sc.newInstance(m, text, text, state, false, "pending".equals(state) ? seconds * 32_000L / 3 / 2 * 2 : 0L);
     }
 
     static void setField(Object o, String name, Object value) throws Exception {

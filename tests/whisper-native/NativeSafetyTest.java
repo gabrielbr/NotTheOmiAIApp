@@ -71,7 +71,9 @@ public final class NativeSafetyTest {
         setMode(0);
         check(WhisperNative.transcribe(handle, pcm, 4, "pt", null).isEmpty());
         check(!entered());
+        check(WhisperNative.progress(handle) == 0); // a cancelled call never starts a window
         WhisperNative.close(handle);
+        check(WhisperNative.progress(handle) == 0 && WhisperNative.progress(0) == 0);
         WhisperNative.close(handle);
         WhisperNative.cancel(handle);
         WhisperNative.close(0);
@@ -91,6 +93,7 @@ public final class NativeSafetyTest {
             });
             worker.start();
             waitEntered();
+            check(WhisperNative.progress(current) == 40); // mid-window progress readable from another thread
             if (close) WhisperNative.close(current); else WhisperNative.cancel(current);
             worker.join(5000);
             check(!worker.isAlive());
@@ -101,7 +104,9 @@ public final class NativeSafetyTest {
         // Language: English-only weights stay "en"; multilingual weights take the caller's choice.
         setMode(0);
         long plain = open();
+        check(WhisperNative.progress(plain) == 0);
         check(!WhisperNative.transcribe(plain, audio(16000), 4, "pt", null).isEmpty() && language().equals("en") && !vad());
+        check(WhisperNative.progress(plain) == 100); // a finished window reads 100
         setMultilingual(true);
         for (String code : new String[]{"pt", "en", "auto"}) {
             check(!WhisperNative.transcribe(plain, audio(16000), 4, code, null).isEmpty() && language().equals(code));

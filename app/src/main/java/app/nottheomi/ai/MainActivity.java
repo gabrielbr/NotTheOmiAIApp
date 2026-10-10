@@ -58,9 +58,11 @@ public final class MainActivity extends Activity {
     private int viewGeneration, searchGeneration;
     private String query="", selectedId, exportId, exportKind;
     private long refinementRevision = -1;
-    private TextView detailTranscript, detailRefinement;
+    private TextView detailTranscript, detailRefinement, refiningLine;
+    /** The recording shown in detail, for the live refinement line. */
+    private Recordings.Session detailSession;
     private Button detailRetry;
-    private final Runnable ticker=new Runnable(){public void run(){if(resumed){refreshCapture();refreshRefinement();main.postDelayed(this,250);}}};
+    private final Runnable ticker=new Runnable(){public void run(){if(resumed){refreshCapture();refreshRefinement();refreshProgress();main.postDelayed(this,250);}}};
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -145,6 +147,8 @@ public final class MainActivity extends Activity {
         recentHead.addView(text("Recent",22,Ui.INK,true),new LinearLayout.LayoutParams(0,-2,1));
         Button all=button("See all",Ui.Style.QUIET,v -> {library=true;draw();});all.setTextSize(14);all.setMinHeight(dp(40));recentHead.addView(all,new LinearLayout.LayoutParams(-2,dp(40)));
         content.addView(recentHead);
+        refiningLine=text("",14,Ui.MUTED,false);refiningLine.setPadding(0,dp(10),0,0);refiningLine.setVisibility(View.GONE);
+        refiningLine.setOnClickListener(v->{RefinementProgress.Snapshot p=RefinementProgress.get();if(p.id!=null)detail(p.id);});content.addView(refiningLine);
         historyHint=text("",15,Ui.MUTED,false);historyHint.setPadding(0,dp(12),0,0);content.addView(historyHint);
         historyRows=column();content.addView(historyRows);
         refreshCapture();if(ready)loadHomeHistory();
@@ -208,6 +212,11 @@ public final class MainActivity extends Activity {
         r.setContentDescription("Open "+s.title);r.setOnClickListener(v->detail(s.id));return r;
     }
     private static String statusChip(Recordings.Session s){
+        if("pending".equals(s.transcriptState)&&!"recording".equals(s.status)){
+            RefinementProgress.Snapshot p=RefinementProgress.get();
+            if(s.id.equals(p.id))return "Refining "+p.percent()+"%";
+            return "Queued · "+(s.bytes<=0?0:s.refinedBytes*100/s.bytes)+"%";
+        }
         switch(s.status){
             case "recording": return "Recording";
             case "audio_only": return "Audio only";
@@ -320,15 +329,17 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams full=new LinearLayout.LayoutParams(-1,dp(52));actions.addView(play,full);content.addView(actions);
         }
         gap(content,28);content.addView(Ui.divider(this));gap(content,20);
+        detailSession=s;
         detailRefinement=text(refinementLabel(s),14,Ui.MUTED,false);detailRefinement.setVisibility(refinementLabel(s).isEmpty()?View.GONE:View.VISIBLE);content.addView(detailRefinement);
-        detailRetry=button("Refine again",Ui.Style.QUIET,v->retryRefinement(s.id));detailRetry.setTextSize(14);detailRetry.setPadding(0,0,dp(8),0);detailRetry.setMinHeight(dp(40));
+        detailRetry=button(retryLabel(s),Ui.Style.QUIET,v->refineAgain(detailSession));detailRetry.setTextSize(14);detailRetry.setPadding(0,0,dp(8),0);detailRetry.setMinHeight(dp(40));
         detailRetry.setVisibility(canRetry(s)?View.VISIBLE:View.GONE);content.addView(detailRetry,new LinearLayout.LayoutParams(-2,dp(40)));
         detailTranscript=text(transcriptText(s),18,Ui.INK,false);detailTranscript.setTextIsSelectable(true);detailTranscript.setLineSpacing(dp(5),1f);detailTranscript.setPadding(0,dp(8),0,0);content.addView(detailTranscript);
         final int generation=viewGeneration;ScrollView scroll=(ScrollView)content.getParent();
         scroll.post(()->{if(!destroyed&&generation==viewGeneration&&s.id.equals(selectedId))scroll.scrollTo(0,0);});
     }
     private void moreActions(Recordings.Session s){
-        new AlertDialog.Builder(this).setItems(new String[]{"Export text","Export audio","Original live draft","Rename","Delete"},(d,w)->{
+        new AlertDialog.Builder(this).setItems(new String[]{"Export text","Export audio","Original live draft","Rename","Delete","Refine again"},(d,w)->{
+            if(w==5){if(canRetry(s))refineAgain(s);else error("Refine it again once the recording is saved.");return;}
             if(w==0)confirmExport(s.id,"text");else if(w==1)confirmExport(s.id,"wav");
             else if(w==2)new AlertDialog.Builder(this).setTitle("Original live draft").setMessage(s.liveText.isEmpty()?"No live draft was saved.":s.liveText).setPositiveButton("Close",null).show();
             else if(w==3)rename(s);else delete(s);
@@ -336,12 +347,49 @@ public final class MainActivity extends Activity {
     }
     private void rename(Recordings.Session s){EditText name=new EditText(this);name.setText(s.title);name.setSingleLine();name.setSelectAllOnFocus(true);name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(120)});new AlertDialog.Builder(this).setTitle("Rename recording").setView(name).setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->{String title=name.getText().toString().trim();if(title.isEmpty()){error("Enter a title.");return;}io.execute(()->{try{Recordings.get(this).rename(s.id,title);main.post(()->{if(!destroyed)detail(s.id);});}catch(Exception e){main.post(()->error("Rename was not saved."));}});}).show();}
     private static String transcriptText(Recordings.Session s){return s.text.isEmpty()?"No speech was recognised. Your saved audio is still available.":s.text;}
-    private static boolean canRetry(Recordings.Session s){return !"recording".equals(s.status)&&("failed".equals(s.transcriptState)||"none".equals(s.transcriptState));}
+    private static boolean canRetry(Recordings.Session s){return !"recording".equals(s.status)&&s.bytes>0&&!"corrupt".equals(s.transcriptState);}
+    private static String retryLabel(Recordings.Session s){return "pending".equals(s.transcriptState)?"Start refining over":"Refine again";}
     private static String refinementLabel(Recordings.Session s){
         if("complete".equals(s.transcriptState))return "";
-        if("pending".equals(s.transcriptState))return "Refining. Showing the live draft for now.";
+        if("pending".equals(s.transcriptState)){
+            RefinementProgress.Snapshot p=RefinementProgress.get();long now=RefinementProgress.clock.getAsLong();
+            if(s.id.equals(p.id)){
+                String line=RefinementProgress.describe(p,now)+". Showing the live draft until it's done.";
+                return RefinementProgress.stalled(p,now)?"No progress for "+RefinementProgress.span(now-p.lastChangeAt)+". "+line:line;
+            }
+            long percent=s.bytes<=0?0:s.refinedBytes*100/s.bytes;
+            String why=p.id!=null?"Another recording is being refined first.":p.waiting!=null?p.waiting+".":"Waiting to start.";
+            return "Queued · "+percent+"% refined so far. "+why+" Showing the live draft for now.";
+        }
         if("failed".equals(s.transcriptState))return "Refinement failed. Showing the live draft.";
         return "Live draft. Not refined yet.";
+    }
+    /** Refine again: a failed or never-refined recording is queued; a refined (or running) one starts over. */
+    private void refineAgain(Recordings.Session s){
+        if(s==null)return;
+        boolean complete="complete".equals(s.transcriptState), pending="pending".equals(s.transcriptState);
+        if(!complete&&!pending){retryRefinement(s.id);return;}
+        new AlertDialog.Builder(this).setTitle(complete?"Refine this recording again?":"Start refining over?")
+            .setMessage(complete?"Whisper transcribes it again with the current language and words to expect. The refined transcript is replaced; the live draft is shown until the new one is ready."
+                :"Whisper starts this recording again from the beginning. The audio and live draft are kept.")
+            .setNegativeButton("Cancel",null).setPositiveButton(complete?"Refine again":"Start over",(d,w)->io.execute(()->{
+                try{Recordings.get(this).restartRefinement(s.id);RefinementJobService.schedule(this);main.post(()->{if(!destroyed&&s.id.equals(selectedId))detail(s.id);});}
+                catch(Exception failure){main.post(()->error("Couldn't start refining again. "+(failure instanceof IllegalStateException&&failure.getMessage()!=null?failure.getMessage():"The audio and draft were not changed.")));}
+            })).show();
+    }
+    /** Every tick: the detail line and the home "Refining" line follow Whisper's live progress. */
+    private void refreshProgress(){
+        RefinementProgress.Snapshot p=RefinementProgress.get();long now=RefinementProgress.clock.getAsLong();
+        if(refiningLine!=null){
+            String line=p.id!=null?"Whisper · "+RefinementProgress.describe(p,now).replace("Refining · ","refining · ")+" ›":p.waiting!=null?"Whisper · "+p.waiting:"";
+            setText(refiningLine,line);refiningLine.setVisibility(line.isEmpty()||library||selectedId!=null?View.GONE:View.VISIBLE);
+            refiningLine.setTextColor(p.id!=null&&RefinementProgress.stalled(p,now)?Ui.CORAL_TEXT:Ui.MUTED);
+        }
+        Recordings.Session s=detailSession;
+        if(s!=null&&selectedId!=null&&s.id.equals(selectedId)&&detailRefinement!=null&&"pending".equals(s.transcriptState)){
+            setText(detailRefinement,refinementLabel(s));
+            detailRefinement.setTextColor(s.id.equals(p.id)&&RefinementProgress.stalled(p,now)?Ui.CORAL_TEXT:Ui.MUTED);
+        }
     }
     private void retryRefinement(String id){
         io.execute(()->{try{Recordings.get(this).retryRefinement(id);RefinementJobService.schedule(this);main.post(()->{if(!destroyed&&id.equals(selectedId))detail(id);});}
@@ -353,7 +401,7 @@ public final class MainActivity extends Activity {
         final String id=selectedId;final int generation=viewGeneration;
         io.execute(()->{try{Recordings.Session s=Recordings.get(this).find(id);main.post(()->{
             if(destroyed||s==null||generation!=viewGeneration||!id.equals(selectedId)||detailTranscript==null)return;
-            setText(detailTranscript,transcriptText(s));setText(detailRefinement,refinementLabel(s));detailRefinement.setVisibility(refinementLabel(s).isEmpty()?View.GONE:View.VISIBLE);detailRetry.setVisibility(canRetry(s)?View.VISIBLE:View.GONE);
+            detailSession=s;setText(detailTranscript,transcriptText(s));setText(detailRefinement,refinementLabel(s));detailRefinement.setVisibility(refinementLabel(s).isEmpty()?View.GONE:View.VISIBLE);detailRetry.setVisibility(canRetry(s)?View.VISIBLE:View.GONE);setText(detailRetry,retryLabel(s));
         });}catch(Exception ignored){/* Do not replace retained UI with a failed read. */}});
     }
     private void delete(Recordings.Session s){new AlertDialog.Builder(this).setTitle("Delete this recording?").setMessage("Permanently removes its audio and transcript from this app. Files you previously exported are not removed.").setNegativeButton("Keep",null).setPositiveButton("Delete",(d,w)->playback.stop(()->{if(destroyed)return;io.execute(()->{try{Recordings.get(this).delete(s.id);if(s.id.equals(OmiCaptureService.display.snapshot().sessionId))OmiCaptureService.display.reset(null);if(s.id.equals(CaptureService.display.snapshot().sessionId))CaptureService.display.reset(null);main.post(()->{if(!destroyed){selectedId=null;draw();}});}catch(Exception e){main.post(()->error("Deletion could not be completed. Reopen the library to check its state."));}});})).show();}

@@ -167,6 +167,37 @@ public final class HybridRecordingsTest extends AndroidTestCase {
         assertEquals(nonces, count("nonces"));
     }
 
+    public void testRestartRefinementStartsOverKeepingAudioAndDraft() throws Exception {
+        String id = saved(640, DRAFT);
+        List<String> originals = originalRows();
+        byte[] audio = readAudio(id);
+        store.commitRefinementBatch(id, 0, 640, "Refined once");
+        store.completeRefinement(id);
+        assertEquals("Refined once", store.find(id).text);
+        store.restartRefinement(id);
+        reopen();
+        assertJob(id, "pending", 0, 640);
+        assertEquals("pending", store.find(id).transcriptState);
+        assertEquals(0, store.find(id).refinedBytes);
+        assertEquals("draft shown until the new transcript is done", DRAFT, store.find(id).text);
+        assertEquals(DRAFT, store.find(id).liveText);
+        assertEquals(originals, originalRows());
+        assertBytes(audio, readAudio(id));
+        // A worker still holding the old checkpoint is told it's stale, not allowed to write.
+        expect(Recordings.StaleCheckpointException.class, () -> store.commitRefinementBatch(id, 320, 640, "old pass"));
+        store.commitRefinementBatch(id, 0, 320, "Refined");
+        assertEquals(320, store.find(id).refinedBytes);
+        store.restartRefinement(id); // a pending one starts over too
+        assertJob(id, "pending", 0, 640);
+        store.commitRefinementBatch(id, 0, 640, "Refined again");
+        store.completeRefinement(id);
+        reopen();
+        assertEquals("Refined again", store.find(id).text);
+        String never = saved(320, DRAFT);
+        store.restartRefinement(never);
+        assertEquals("pending", store.find(never).transcriptState);
+    }
+
     public void testRefinementPreservesOriginalCiphertextAnnotationsAudioAndWav() throws Exception {
         String bookmark = "[Omi button bookmark]";
         String gap = "[Omi audio gap — audio missing; recovery attempted; earlier audio retained]";
