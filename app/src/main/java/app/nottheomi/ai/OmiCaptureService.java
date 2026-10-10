@@ -113,7 +113,7 @@ public final class OmiCaptureService extends Service {
             doubleAction = buttonAction(prefs.getString("double_action", "stop"));
             owner = this;
             active = true;
-            RefinementJobService.pauseForCapture();
+            RefinementJobService.captureStarted();
             cancelled = receivedPcm = recovering = hadGap = false;
             lastPcmAt = 0;
             stopDeadlineNanos = 0;

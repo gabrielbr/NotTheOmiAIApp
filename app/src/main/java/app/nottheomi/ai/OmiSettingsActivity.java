@@ -30,7 +30,7 @@ public final class OmiSettingsActivity extends Activity {
     private final Set<String> seen=new HashSet<>();
     private LinearLayout page, devices;
     private TextView selected, scanStatus, live, led, desired, presses;
-    private Button scanButton, forgetButton, readButton, applyButton, singleButton, doubleButton, batteryButton;
+    private Button scanButton, forgetButton, readButton, applyButton, singleButton, doubleButton, batteryButton, languageButton;
     private SeekBar brightness;
     private OmiBle scanner;
     private boolean resumed, scanning;
@@ -88,6 +88,9 @@ public final class OmiSettingsActivity extends Activity {
         singleButton=addButton("",()->chooseAction("single_action","Single press","bookmark"));
         doubleButton=addButton("",()->chooseAction("double_action","Double press","stop"));
         presses=label("",14,Ui.MUTED);
+        section("Transcripts");
+        label("The language you speak. Whisper rewrites each saved recording in it; the live draft stays Portuguese.",14,Ui.MUTED);
+        languageButton=addButton("",this::chooseLanguage);
         refresh();
     }
     @Override protected void onResume(){super.onResume();resumed=true;main.post(ticker);if(initialScan){initialScan=false;main.post(this::scan);}}
@@ -114,7 +117,19 @@ public final class OmiSettingsActivity extends Activity {
         doubleButton.setText("Double press · "+actionLabel(p.getString("double_action","stop")));
         singleButton.setEnabled(!active);doubleButton.setEnabled(!active);
         presses.setText(OmiCaptureService.lastButton);
+        languageButton.setText("Language · "+languageLabel(language(this)));
         batteryButton.setVisibility(Battery.unrestricted(this)?android.view.View.GONE:android.view.View.VISIBLE);
+    }
+    /** Whisper's language for saved transcripts: "pt" (default), "en", or "auto" (detected per 30 s). */
+    static String language(Context context){
+        String value=preferences(context).getString("language","pt");
+        return "en".equals(value)||"auto".equals(value)?value:"pt";
+    }
+    private static String languageLabel(String value){return "en".equals(value)?"English":"auto".equals(value)?"Detect (mixed languages)":"Portuguese";}
+    private void chooseLanguage(){
+        String[] values={"pt","en","auto"}, labels={"Portuguese","English","Detect (mixed languages, less accurate)"};
+        String current=language(this);int index=0;for(int i=0;i<values.length;i++)if(values[i].equals(current))index=i;
+        new AlertDialog.Builder(this).setTitle("Transcript language").setSingleChoiceItems(labels,index,(d,w)->{preferences(this).edit().putString("language",values[w]).apply();d.dismiss();refresh();}).setNegativeButton("Cancel",null).show();
     }
     private static String actionLabel(String value){return "bookmark".equals(value)?"Bookmark":"stop".equals(value)?"Stop & save":"No action";}
     private void chooseAction(String key,String title,String fallback){

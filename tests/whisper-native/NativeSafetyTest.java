@@ -7,6 +7,9 @@ public final class NativeSafetyTest {
     private static native void setMode(int mode);
     private static native boolean entered();
     private static native int live();
+    private static native void setMultilingual(boolean value);
+    private static native String language();
+    private static native boolean vad();
     private static int checks;
     interface Action { void run() throws Exception; }
     static void check(boolean value) {
@@ -19,7 +22,7 @@ public final class NativeSafetyTest {
             check(!expected.getMessage().contains("test-model"));
         }
     }
-    static long open() throws IOException { return WhisperNative.openFile("test-model-😀.bin"); }
+    static long open() throws IOException { return WhisperNative.openFile("test-model-😀.bin", null); }
     static short[] audio(int count) { short[] out = new short[count]; Arrays.fill(out, (short) 8192); return out; }
     static void waitEntered() throws Exception {
         long deadline = System.nanoTime() + 5_000_000_000L;
@@ -27,43 +30,45 @@ public final class NativeSafetyTest {
         check(entered());
     }
     public static void main(String[] args) throws Exception {
-        io(() -> WhisperNative.openFile(null));
-        io(() -> WhisperNative.openFile(""));
-        io(() -> WhisperNative.openFile("x".repeat(4097)));
-        io(() -> WhisperNative.openFile("bad\u0000path"));
-        io(() -> WhisperNative.openFile("bad\ud800path"));
-        io(() -> WhisperNative.openFile("bad\udc00path"));
-        io(() -> WhisperNative.openFile("bad-model"));
-        io(() -> WhisperNative.openFile("oom"));
+        io(() -> WhisperNative.openFile(null, null));
+        io(() -> WhisperNative.openFile("", null));
+        io(() -> WhisperNative.openFile("x".repeat(4097), null));
+        io(() -> WhisperNative.openFile("bad\u0000path", null));
+        io(() -> WhisperNative.openFile("bad\ud800path", null));
+        io(() -> WhisperNative.openFile("bad\udc00path", null));
+        io(() -> WhisperNative.openFile("bad-model", null));
+        io(() -> WhisperNative.openFile("oom", null));
         check(live() == 0);
         long handle = open();
         check(handle > 0 && live() == 1);
-        io(() -> WhisperNative.transcribe(0, audio(16000), 4));
-        io(() -> WhisperNative.transcribe(Long.MAX_VALUE, audio(16000), 4));
-        io(() -> WhisperNative.transcribe(handle, null, 4));
-        io(() -> WhisperNative.transcribe(handle, audio(480001), 4));
-        check(WhisperNative.transcribe(handle, new short[0], 4).isEmpty());
-        check(WhisperNative.transcribe(handle, audio(1599), 4).isEmpty());
-        check(WhisperNative.transcribe(handle, new short[480000], 4).isEmpty());
+        io(() -> WhisperNative.transcribe(0, audio(16000), 4, "pt"));
+        io(() -> WhisperNative.transcribe(Long.MAX_VALUE, audio(16000), 4, "pt"));
+        io(() -> WhisperNative.transcribe(handle, null, 4, "pt"));
+        io(() -> WhisperNative.transcribe(handle, audio(480001), 4, "pt"));
+        check(WhisperNative.transcribe(handle, new short[0], 4, "pt").isEmpty());
+        check(WhisperNative.transcribe(handle, audio(1599), 4, "pt").isEmpty());
+        check(WhisperNative.transcribe(handle, new short[480000], 4, "pt").isEmpty());
         check(!entered());
         short[] pcm = audio(1600);
         short[] copy = pcm.clone();
-        check(WhisperNative.transcribe(handle, pcm, Integer.MIN_VALUE).equals(" café 😀"));
+        check(WhisperNative.transcribe(handle, pcm, Integer.MIN_VALUE, "pt").equals(" café 😀"));
         check(Arrays.equals(copy, pcm));
-        check(WhisperNative.transcribe(handle, audio(480000), Integer.MAX_VALUE).equals(" café 😀"));
+        check(WhisperNative.transcribe(handle, audio(480000), Integer.MAX_VALUE, "pt").equals(" café 😀"));
         for (int mode : new int[]{2, 3, 4}) {
             setMode(mode);
-            io(() -> WhisperNative.transcribe(handle, pcm, 4));
+            io(() -> WhisperNative.transcribe(handle, pcm, 4, "pt"));
         }
         setMode(5);
-        check(WhisperNative.transcribe(handle, pcm, 4).equals("bad \ufffd\ufffd"));
+        check(WhisperNative.transcribe(handle, pcm, 4, "pt").equals("bad \ufffd\ufffd"));
         for (int mode : new int[]{6, 7}) {
             setMode(mode);
-            check(WhisperNative.transcribe(handle, pcm, 4).isEmpty());
+            // High or NaN no-speech probability alone no longer drops text.
+            check(!WhisperNative.transcribe(handle, pcm, 4, "pt").isEmpty());
         }
+        setMode(0);
         WhisperNative.cancel(handle);
         setMode(0);
-        check(WhisperNative.transcribe(handle, pcm, 4).isEmpty());
+        check(WhisperNative.transcribe(handle, pcm, 4, "pt").isEmpty());
         check(!entered());
         WhisperNative.close(handle);
         WhisperNative.close(handle);
@@ -71,7 +76,7 @@ public final class NativeSafetyTest {
         WhisperNative.close(0);
         WhisperNative.cancel(Long.MAX_VALUE);
         check(live() == 0);
-        io(() -> WhisperNative.transcribe(handle, pcm, 4));
+        io(() -> WhisperNative.transcribe(handle, pcm, 4, "pt"));
         for (boolean close : new boolean[]{false, true}) {
             long current = open();
             check(current != handle);
@@ -79,7 +84,7 @@ public final class NativeSafetyTest {
             AtomicReference<Throwable> failure = new AtomicReference<>();
             Thread worker = new Thread(() -> {
                 try {
-                    if (!WhisperNative.transcribe(current, audio(16000), 4).isEmpty())
+                    if (!WhisperNative.transcribe(current, audio(16000), 4, "pt").isEmpty())
                         failure.set(new AssertionError("Cancelled transcript published"));
                 } catch (Throwable error) { failure.set(error); }
             });
@@ -92,6 +97,26 @@ public final class NativeSafetyTest {
             WhisperNative.close(current);
             check(live() == 0);
         }
+        // Language: English-only weights stay "en"; multilingual weights take the caller's choice.
+        setMode(0);
+        long plain = open();
+        check(!WhisperNative.transcribe(plain, audio(16000), 4, "pt").isEmpty() && language().equals("en") && !vad());
+        setMultilingual(true);
+        for (String code : new String[]{"pt", "en", "auto"}) {
+            check(!WhisperNative.transcribe(plain, audio(16000), 4, code).isEmpty() && language().equals(code));
+        }
+        for (String bad : new String[]{null, "", "de", "pt-BR", "autox", "p\u0000"}) {
+            io(() -> WhisperNative.transcribe(plain, audio(16000), 4, bad));
+        }
+        WhisperNative.close(plain);
+        io(() -> WhisperNative.openFile("test-model-😀.bin", ""));
+        io(() -> WhisperNative.openFile("test-model-😀.bin", "bad\ud800vad"));
+        check(live() == 0);
+        long withVad = WhisperNative.openFile("test-model-😀.bin", "vad-😀.bin");
+        check(!WhisperNative.transcribe(withVad, audio(16000), 4, "pt").isEmpty() && vad() && language().equals("pt"));
+        WhisperNative.close(withVad);
+        setMultilingual(false);
+        check(live() == 0);
         System.out.println("JNI mock-backend safety checks passed: " + checks);
     }
 }

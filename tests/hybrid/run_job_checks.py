@@ -7,7 +7,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 STUBS = {
     'android/content/Context.java': '''package android.content;
-public class Context { public <T> T getSystemService(Class<T> type) { return type.cast(android.app.job.JobScheduler.INSTANCE); } }''',
+public class Context { public Context getApplicationContext(){return this;} public <T> T getSystemService(Class<T> type) { return type.cast(android.app.job.JobScheduler.INSTANCE); } }''',
     'android/content/ComponentName.java': '''package android.content;
 public class ComponentName { public ComponentName(Context c, Class<?> type) {} }''',
     'android/os/Looper.java': '''package android.os; public class Looper { public static Looper getMainLooper(){return new Looper();} }''',
@@ -19,6 +19,8 @@ public class Handler {
  public void removeCallbacks(Runnable r){QUEUE.remove(r);}
  public static void drain(){Runnable r; while((r=QUEUE.poll())!=null)r.run();}
 }''',
+    'android/os/Process.java': '''package android.os; public class Process { public static final int THREAD_PRIORITY_BACKGROUND=10;
+ public static volatile int priority; public static void setThreadPriority(int p){priority=p;} }''',
     'android/os/SystemClock.java': '''package android.os; public class SystemClock { public static long elapsedRealtime(){return System.nanoTime()/1000000;} }''',
     'android/app/job/JobParameters.java': '''package android.app.job; public class JobParameters {
  private final int id; public JobParameters(int n){id=n;} public int getJobId(){return id;} }''',
@@ -39,9 +41,11 @@ public class Handler {
  public void onDestroy(){} public void jobFinished(JobParameters p,boolean r){finished.add(p);retry.add(r);}
 }''',
     'app/nottheomi/ai/CaptureService.java': '''package app.nottheomi.ai; public class CaptureService { public static volatile boolean active; }''',
+    'app/nottheomi/ai/OmiSettingsActivity.java': '''package app.nottheomi.ai; public class OmiSettingsActivity { static String language(android.content.Context c){return "pt";} }''',
     'app/nottheomi/ai/OmiCaptureService.java': '''package app.nottheomi.ai; public class OmiCaptureService { public static volatile boolean active; }''',
     'app/nottheomi/ai/ModelInstaller.java': '''package app.nottheomi.ai; public class ModelInstaller {
- public static java.io.File prepare(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-model");} }''',
+ public static java.io.File prepare(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-model");}
+ public static java.io.File prepareVad(android.content.Context c,java.util.function.BooleanSupplier stop){return new java.io.File("fake-vad");} }''',
     'app/nottheomi/ai/Recordings.java': '''package app.nottheomi.ai;
 import java.util.*;
 public class Recordings {
@@ -62,9 +66,10 @@ public class Recordings {
 import java.util.concurrent.*;
 public class WhisperModel {
  static final CountDownLatch ENTERED=new CountDownLatch(1), RELEASE=new CountDownLatch(1), CLOSED=new CountDownLatch(1);
- static volatile int owners,maxOwners,opens,cancels; static volatile Thread inferenceThread,closeThread;
- public WhisperModel(String p){opens++;owners++;maxOwners=Math.max(owners,maxOwners);}
- public String transcribe(short[] s)throws Exception{inferenceThread=Thread.currentThread();ENTERED.countDown();if(!RELEASE.await(5,TimeUnit.SECONDS))throw new AssertionError("test release timeout");return "synthetic decoded";}
+ static volatile int owners,maxOwners,opens,cancels,threads; static volatile Thread inferenceThread,closeThread;
+ static volatile String vad;
+ public WhisperModel(String p,String v){vad=v;opens++;owners++;maxOwners=Math.max(owners,maxOwners);}
+ public String transcribe(short[] s,int n,String language)throws Exception{if(!"pt".equals(language))throw new AssertionError("language");threads=n;inferenceThread=Thread.currentThread();ENTERED.countDown();if(!RELEASE.await(5,TimeUnit.SECONDS))throw new AssertionError("test release timeout");return "synthetic decoded";}
  public void cancel(){cancels++;}
  public void close(){closeThread=Thread.currentThread();owners--;CLOSED.countDown();}
 }'''
@@ -76,22 +81,25 @@ public class RefinementJobHostTest {
  static void settled()throws Exception{long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);while(System.nanoTime()<deadline){Handler.drain();java.lang.reflect.Field f=RefinementJobService.class.getDeclaredField("owner");f.setAccessible(true);if(f.get(null)==null)return;Thread.sleep(5);}throw new AssertionError("worker did not exit");}
  public static void main(String[] args)throws Exception{
   String mode=args[0];RefinementJobService service=new RefinementJobService();JobParameters start=new JobParameters(812);
-  if(mode.equals("capture-active")){CaptureService.active=true;check(service.onStartJob(start),"async start");settled();check(WhisperModel.opens==0,"capture blocks model loading");check(Recordings.commits==0,"no capture-time commit");check(service.finished.size()==1&&service.retry.get(0),"idle retry");}
-  else {
+  if(mode.equals("capture-active"))CaptureService.active=true;
+  {
    check(service.onStartJob(start),"async start");check(WhisperModel.ENTERED.await(5,TimeUnit.SECONDS),"real worker entered double");
    if(mode.equals("stop")){
     JobParameters stop=new JobParameters(812);check(start!=stop,"distinct Binder objects");check(service.onStopJob(stop),"reschedule requested");check(WhisperModel.cancels>0,"same job ID cancelled immediately");
     service.onStartJob(new JobParameters(812));Handler.drain();check(WhisperModel.opens==1&&WhisperModel.owners==1,"blocked older worker retains sole native ownership");check(!service.finished.contains(start),"stopped job not finished early");
    } else if(mode.equals("different-job")) {service.onStopJob(new JobParameters(999));check(WhisperModel.cancels==0,"different job not cancelled");}
    else if(mode.equals("destroy")){service.onDestroy();check(WhisperModel.cancels>0,"destroy cancels without freeing");check(WhisperModel.owners==1,"destroy retains native owner");}
-   else if(mode.equals("capture-preempt")){CaptureService.active=true;RefinementJobService.pauseForCapture();check(WhisperModel.cancels>0,"capture preempts immediately");check(WhisperModel.owners==1,"capture cancellation never frees worker");}
-   else if(!mode.equals("success"))throw new IllegalArgumentException(mode);
+   else if(mode.equals("capture-start")){CaptureService.active=true;RefinementJobService.captureStarted();check(WhisperModel.cancels==0,"a capture starting does not cancel refinement");check(RefinementJobService.state.contains("slower while recording"),"state says refinement continues");}
+   else if(mode.equals("capture-active")){int cores=Math.max(1,Math.min(4,Runtime.getRuntime().availableProcessors()));check(WhisperModel.threads==Math.min(RefinementJobService.CAPTURE_THREADS,cores),"fewer threads while capturing");check(android.os.Process.priority==android.os.Process.THREAD_PRIORITY_BACKGROUND,"background priority");}
+   else if(mode.equals("success")){check(WhisperModel.threads==Math.max(1,Math.min(4,Runtime.getRuntime().availableProcessors())),"all cores when idle");}
+   else throw new IllegalArgumentException(mode);
    WhisperModel.RELEASE.countDown();check(WhisperModel.CLOSED.await(5,TimeUnit.SECONDS),"worker closes native model");settled();
+   check(WhisperModel.vad!=null&&WhisperModel.vad.endsWith("fake-vad"),"VAD model passed to Whisper");
    check(WhisperModel.maxOwners==1&&WhisperModel.owners==0,"serialized native ownership");check(WhisperModel.inferenceThread==WhisperModel.closeThread,"inference thread owns close");
-   boolean cancelled=mode.equals("stop")||mode.equals("destroy")||mode.equals("capture-preempt");
+   boolean cancelled=mode.equals("stop")||mode.equals("destroy");
    check(Recordings.commits==(cancelled?0:1),"cancelled inference never publishes checkpoint");check(Recordings.completes==(cancelled?0:1),"cancelled inference never completes");check(Recordings.failures==0,"cancellation is not durable failure");check(ReadyNotifier.ready==(cancelled?0:1),"ready notification only for completed refinement");
    if(mode.equals("stop")||mode.equals("destroy"))check(!service.finished.contains(start),"no jobFinished after platform stop");
-   else {check(service.finished.contains(start),"live job finishes");check(service.retry.get(service.finished.indexOf(start))==mode.equals("capture-preempt"),"correct retry disposition");}
+   else {check(service.finished.contains(start),"live job finishes");check(!service.retry.get(service.finished.indexOf(start)),"completed pass needs no retry");}
   }
   System.out.println("RefinementJobHostTest PASS "+mode+": "+assertions+" assertions; production service with controlled doubles");
  }
@@ -106,7 +114,7 @@ with tempfile.TemporaryDirectory(prefix='nottheomi-hybrid-job-') as directory:
         sources.append(path)
     sources += [ROOT/'app/src/main/java/app/nottheomi/ai'/name for name in ('RefinementJobService.java', 'RefinementEngine.java')]
     subprocess.run(['javac', '--release', '17', '-d', str(work), *map(str, sources)], check=True)
-    scenarios = ['stop', 'different-job', 'destroy', 'capture-preempt', 'capture-active', 'success']
+    scenarios = ['stop', 'different-job', 'destroy', 'capture-start', 'capture-active', 'success']
     for case in scenarios:
         subprocess.run(['java', '-cp', str(work), 'app.nottheomi.ai.RefinementJobHostTest', case], check=True, timeout=15)
     print(f'JobService lifecycle PASS: {len(scenarios)} scenarios; Android/native/store doubles, not device lifecycle acceptance.')

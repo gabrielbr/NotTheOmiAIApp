@@ -32,17 +32,17 @@ public final class WhisperDeviceProbe {
         short[] pcm = new short[bytes / 2];
         for (int i = 0; i < pcm.length; i++) pcm[i] = b.getShort(offset + i * 2);
         Arrays.fill(wave, (byte) 0);
-        long began = System.nanoTime(), handle = WhisperNative.openFile(args[0]), loaded = System.nanoTime();
+        long began = System.nanoTime(), handle = WhisperNative.openFile(args[0], null), loaded = System.nanoTime();
         if (handle == 0) throw new AssertionError("Native model load failed");
         JSONObject proof = new JSONObject();
         try {
-            String text = WhisperNative.transcribe(handle, pcm, 4).trim();
+            String text = WhisperNative.transcribe(handle, pcm, 4, "en").trim();
             long inferred = System.nanoTime();
             requirePhrase(text);
-            if (!WhisperNative.transcribe(handle, new short[16000], 4).isEmpty()) throw new AssertionError("Silence hallucination");
-            if (!WhisperNative.transcribe(handle, new short[0], 4).isEmpty()) throw new AssertionError("Empty input");
+            if (!WhisperNative.transcribe(handle, new short[16000], 4, "en").isEmpty()) throw new AssertionError("Silence hallucination");
+            if (!WhisperNative.transcribe(handle, new short[0], 4, "en").isEmpty()) throw new AssertionError("Empty input");
             boolean oversizedRejected = false;
-            try { WhisperNative.transcribe(handle, new short[480001], 4); }
+            try { WhisperNative.transcribe(handle, new short[480001], 4, "en"); }
             catch (java.io.IOException expected) { oversizedRejected = true; }
             if (!oversizedRejected) throw new AssertionError("Oversized input accepted");
             AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -50,7 +50,7 @@ public final class WhisperDeviceProbe {
             Thread inference = new Thread(() -> {
                 try {
                     started.countDown();
-                    if (!WhisperNative.transcribe(handle, pcm, 4).isEmpty()) throw new AssertionError("Cancelled call returned transcript");
+                    if (!WhisperNative.transcribe(handle, pcm, 4, "en").isEmpty()) throw new AssertionError("Cancelled call returned transcript");
                 } catch (Throwable e) { failure.set(e); }
             }, "public-cancel-probe");
             inference.start(); started.await(); Thread.sleep(250);
@@ -58,7 +58,7 @@ public final class WhisperDeviceProbe {
             long cancelAt = System.nanoTime(); WhisperNative.cancel(handle); inference.join(20000);
             if (inference.isAlive()) throw new AssertionError("Native cancellation exceeded 20 seconds");
             if (failure.get() != null) throw new AssertionError("Native cancellation failed", failure.get());
-            if (!WhisperNative.transcribe(handle, pcm, 4).isEmpty()) throw new AssertionError("Cancellation not sticky");
+            if (!WhisperNative.transcribe(handle, pcm, 4, "en").isEmpty()) throw new AssertionError("Cancellation not sticky");
             proof.put("public_fixture_text", text);
             proof.put("load_seconds", (loaded - began) / 1e9);
             proof.put("inference_seconds", (inferred - loaded) / 1e9);

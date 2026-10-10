@@ -14,7 +14,7 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.function.BooleanSupplier;
 
-/** Copies only the pinned bundled Whisper model; never downloads or touches recordings. */
+/** Copies only the pinned bundled Whisper and VAD models; never downloads or touches recordings. */
 public final class ModelInstaller {
     public static final String MODEL_FILE = "ggml-medium-q5_0.bin";
     public static final String MODEL_SHA256 =
@@ -22,6 +22,11 @@ public final class ModelInstaller {
     public static final long MODEL_BYTES = 539212467L;
     /** Earlier pinned Whisper weights. Superseded copies only waste private storage. */
     static final String[] SUPERSEDED = {"ggml-small.en-q5_1.bin", "ggml-small-q5_1.bin"};
+    /** Silero voice-activity model: Whisper only hears the parts of each window with speech. */
+    public static final String VAD_FILE = "ggml-silero-v5.1.2.bin";
+    public static final String VAD_SHA256 =
+            "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf";
+    public static final long VAD_BYTES = 885098L;
     private ModelInstaller() { }
 
     public static File prepare(Context context) throws Exception {
@@ -33,25 +38,34 @@ public final class ModelInstaller {
                 () -> context.getAssets().open(MODEL_FILE), cancelled);
     }
 
+    public static File prepareVad(Context context, BooleanSupplier cancelled) throws Exception {
+        return install(new File(context.getNoBackupFilesDir(), "speech-model"), VAD_FILE, VAD_SHA256, VAD_BYTES,
+                new String[0], () -> context.getAssets().open(VAD_FILE), cancelled);
+    }
+
     interface AssetSource { InputStream open() throws IOException; }
 
-    static synchronized File prepare(File base, AssetSource source, BooleanSupplier cancelled)
-            throws Exception {
+    static File prepare(File base, AssetSource source, BooleanSupplier cancelled) throws Exception {
+        return install(base, MODEL_FILE, MODEL_SHA256, MODEL_BYTES, SUPERSEDED, source, cancelled);
+    }
+
+    static synchronized File install(File base, String name, String sha256, long bytes, String[] superseded,
+                                     AssetSource source, BooleanSupplier cancelled) throws Exception {
         checkCancelled(cancelled);
         if (Files.isSymbolicLink(base.toPath())) throw new IOException("Unsafe model directory");
         if (!base.isDirectory() && !base.mkdirs()) throw new IOException("Model directory unavailable");
-        File installed = new File(base, MODEL_FILE);
-        File staging = new File(base, MODEL_FILE + ".installing");
+        File installed = new File(base, name);
+        File staging = new File(base, name + ".installing");
         // Fully hash existing content on every preparation, rather than trusting a marker.
-        if (verify(installed, cancelled)) return installed;
+        if (verify(installed, sha256, bytes, cancelled)) return installed;
         Files.deleteIfExists(staging.toPath()); // Unlinks symlinks, never follows them.
         // Free the old model's space before checking for room. Only these exact model
         // files (and their staging copies) are removed; recordings live elsewhere.
-        for (String old : SUPERSEDED) {
+        for (String old : superseded) {
             Files.deleteIfExists(new File(base, old).toPath());
             Files.deleteIfExists(new File(base, old + ".installing").toPath());
         }
-        if (base.getUsableSpace() < MODEL_BYTES + 8L * 1024 * 1024)
+        if (base.getUsableSpace() < bytes + 8L * 1024 * 1024)
             throw new IOException("Insufficient space for offline model");
         boolean published = false;
         try {
@@ -65,11 +79,11 @@ public final class ModelInstaller {
                 while ((count = in.read(buffer)) != -1) {
                     checkCancelled(cancelled);
                     length += count;
-                    if (length > MODEL_BYTES) throw new IOException("Oversized bundled model");
+                    if (length > bytes) throw new IOException("Oversized bundled model");
                     digest.update(buffer, 0, count);
                     out.write(buffer, 0, count);
                 }
-                if (length != MODEL_BYTES || !MODEL_SHA256.equals(hex(digest.digest())))
+                if (length != bytes || !sha256.equals(hex(digest.digest())))
                     throw new IOException("Bundled model checksum mismatch");
                 out.getFD().sync();
             }
@@ -85,9 +99,13 @@ public final class ModelInstaller {
     }
 
     static boolean verify(File file, BooleanSupplier cancelled) throws Exception {
+        return verify(file, MODEL_SHA256, MODEL_BYTES, cancelled);
+    }
+
+    static boolean verify(File file, String sha256, long bytes, BooleanSupplier cancelled) throws Exception {
         checkCancelled(cancelled);
         if (!Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)
-                || file.length() != MODEL_BYTES) return false;
+                || file.length() != bytes) return false;
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] buffer = new byte[64 * 1024];
         try (InputStream in = new BufferedInputStream(new FileInputStream(file))) {
@@ -98,7 +116,7 @@ public final class ModelInstaller {
             }
         }
         checkCancelled(cancelled);
-        return MODEL_SHA256.equals(hex(digest.digest()));
+        return sha256.equals(hex(digest.digest()));
     }
 
     private static String hex(byte[] bytes) {

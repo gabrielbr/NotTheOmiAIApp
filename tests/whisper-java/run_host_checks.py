@@ -12,8 +12,8 @@ public final class WhisperNative {
  static int calls, closes, cancels; static short[] held; static short first,last;
  static boolean fail, block; static volatile boolean cancelled;
  static CountDownLatch entered=new CountDownLatch(1), released=new CountDownLatch(1);
- public static long openFile(String path) {cancelled=false; return 1;}
- public static String transcribe(long h,short[] pcm,int threads) throws IOException {
+ public static long openFile(String path,String vad) {cancelled=false; return 1;}
+ public static String transcribe(long h,short[] pcm,int threads,String language) throws IOException {
   calls++; held=pcm; first=pcm.length==0?0:pcm[0]; last=pcm.length==0?0:pcm[pcm.length-1];
   if(fail)throw new IOException("forced");
   if(block){entered.countDown();try{released.await();}catch(InterruptedException e){throw new IOException(e);}}
