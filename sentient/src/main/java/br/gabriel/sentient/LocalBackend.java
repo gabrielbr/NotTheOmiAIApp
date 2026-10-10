@@ -96,6 +96,41 @@ final class LocalBackend implements LlmBackend {
         return handle;
     }
 
+    /**
+     * A plain completion with the loaded model (the overnight review): {@code prompt} is a full
+     * ChatML prompt. Null when it was stopped or the prompt didn't fit.
+     */
+    String complete(String prompt, int maxTokens, BooleanSupplier cancelled) throws Exception {
+        Listener quiet = new Listener() {
+            @Override public void status(String s) { }
+            @Override public void partial(String s) { }
+        };
+        synchronized (LOCK) {
+            LlamaNative.loadLibrary();
+            int pinned = LlamaNative.pinFastCores();
+            if (pinned > 0) fastCores = pinned;
+            long h = load(quiet);
+            StringBuilder text = new StringBuilder();
+            int result = LlamaNative.generate(h, prompt.getBytes(java.nio.charset.StandardCharsets.UTF_8), maxTokens, 0f, 42,
+                    sink(text, cancelled));
+            if (result < 0 || cancelled.getAsBoolean()) return null;
+            return text.toString();
+        }
+    }
+
+    private static LlamaNative.TokenSink sink(StringBuilder text, BooleanSupplier cancelled) {
+        java.io.ByteArrayOutputStream utf8 = new java.io.ByteArrayOutputStream();
+        return new LlamaNative.TokenSink() {
+            @Override public boolean accept(byte[] chunk) {
+                utf8.write(chunk, 0, chunk.length);
+                text.setLength(0);
+                text.append(new String(utf8.toByteArray(), java.nio.charset.StandardCharsets.UTF_8));
+                return !cancelled.getAsBoolean();
+            }
+            @Override public boolean progress(int done, int total) { return !cancelled.getAsBoolean(); }
+        };
+    }
+
     /** Frees the model's memory (e.g. before deleting it). */
     static void release() {
         synchronized (LOCK) {

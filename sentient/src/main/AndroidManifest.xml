@@ -38,6 +38,7 @@
    <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>
   </service>
   <service android:name=".SyncJobService" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true"/>
+  <service android:name=".NightJobService" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true"/>
   <!-- ML Kit (Gemini Nano) brings Google's usage logging; its upload backend is removed, so nothing is sent. -->
   <service android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery" tools:node="merge">
    <meta-data android:name="backend:com.google.android.datatransport.cct.CctBackendFactory" tools:node="remove"/>

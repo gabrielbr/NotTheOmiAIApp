@@ -20,6 +20,7 @@ public final class RelevanceHostTest {
         overrides();
         backfill();
         claude();
+        review();
         System.out.println("PASS_RELEVANCE_HOST_CHECKS " + checks);
     }
 
@@ -180,6 +181,81 @@ public final class RelevanceHostTest {
         check(c.noise == 2, "counts the batch's ids only: " + c.noise);
         store(db, mail("digest", "t2", "team@saas.com", "\"INBOX\"", false, "Your weekly usage report (v2)", NOW - 4 * HOUR));
         check(noise(db, "digest") == Relevance.CLAUDE, "a re-sync keeps Claude's verdict");
+    }
+
+    /** A scripted reviewer: hides items whose text contains "promo", answering in Qwen's style. */
+    static class Fake implements Review.Reviewer {
+        final List<String> seen = new ArrayList<>();
+        String forced;
+        @Override public String name() { return "Qwen"; }
+        @Override public int batchChars() { return 260; }
+        @Override public int itemChars() { return 80; }
+        @Override public String review(String items) {
+            seen.add(items);
+            if (forced != null) return forced;
+            List<String> ids = new ArrayList<>();
+            for (String line : items.split("\n")) if (line.contains("promo")) ids.add(line.substring(2, line.indexOf(']')));
+            return ids.isEmpty() ? "none" : String.join(", ", ids);
+        }
+    }
+
+    static void review() throws Exception {
+        Db db = db();
+        List<RawItem> items = new ArrayList<>();
+        for (int i = 0; i < 6; i++)
+            items.add(RawItem.builder("whatsapp", "g" + i).kind(RawItem.MESSAGE).timestamp(NOW - (10 - i) * HOUR)
+                    .text(i % 2 == 0 ? "promo corrente encaminhada " + i : "Reunião do condomínio dia " + i)
+                    .conversation("c:grupo", "Condomínio", "group").author("name:V" + i, "Vizinho " + i, false).build());
+        items.add(RawItem.builder("whatsapp", "mine").kind(RawItem.MESSAGE).timestamp(NOW - HOUR).text("promo minha")
+                .conversation("c:ana", "Ana", "dm").author("me", null, true).build());
+        items.add(RawItem.builder("whatsapp", "replied").kind(RawItem.MESSAGE).timestamp(NOW - 2 * HOUR).text("promo da Ana")
+                .conversation("c:ana", "Ana", "dm").author("name:Ana", "Ana", false).build());
+        items.add(RawItem.builder("omi.transcripts", "rec").kind(RawItem.TRANSCRIPT).timestamp(NOW - 3 * HOUR)
+                .text("promo de TV ao fundo").build());
+        items.add(RawItem.builder("whatsapp", "old").kind(RawItem.MESSAGE).timestamp(NOW - 40L * 24 * HOUR)
+                .text("promo antiga").conversation("c:x", "X", "dm").author("name:X", "X", false).build());
+        store(db, items.toArray(new RawItem[0]));
+        Relevance.keep(db, id(db, "g4"));
+
+        check(Review.pending(db, NOW) == 6, "eligible: not yours, not in a chat you wrote in, not judged, last 30 days: "
+                + Review.pending(db, NOW));
+        Fake fake = new Fake();
+        int[] polls = {0};
+        Review.Result first = Review.run(db, fake, NOW, ZONE, 50, () -> ++polls[0] > 4); // stops after two batches
+        check(first.batches == 2 && fake.seen.size() == 2, "stops between batches when time is up: " + first.batches);
+        check(String.join("", fake.seen).indexOf("[#" + id(db, "mine") + "]") < 0
+                && String.join("", fake.seen).indexOf("[#" + id(db, "replied") + "]") < 0
+                && String.join("", fake.seen).indexOf("[#" + id(db, "g4") + "]") < 0
+                && String.join("", fake.seen).indexOf("[#" + id(db, "old") + "]") < 0, "never sent: yours, replied chats, kept, old");
+        for (String batch : fake.seen) check(batch.length() <= 260 + 200, "batches stay near the size: " + batch.length());
+        Review.Result rest = Review.run(db, fake, NOW, ZONE, 50, () -> false);
+        check(first.reviewed + rest.reviewed == 6 && Review.pending(db, NOW) == 0, "resumes where it stopped, then caught up: "
+                + first.reviewed + "+" + rest.reviewed + ", left " + Review.pending(db, NOW) + ", batches " + first.batches + "/" + rest.batches);
+        check(noise(db, "g0") == Relevance.CLAUDE && "Qwen: not worth remembering".equals(reason(db, "g0"))
+                && noise(db, "g2") == Relevance.CLAUDE && noise(db, "rec") == Relevance.CLAUDE, "chain messages and a TV recording hidden");
+        check(noise(db, "g1") == 0 && noise(db, "g3") == 0 && noise(db, "g4") == Relevance.KEPT_BY_YOU
+                && noise(db, "mine") == 0 && noise(db, "replied") == 0, "the rest stays; your Keep wins");
+        check(first.hidden + rest.hidden == 3, "counts what it hid: " + (first.hidden + rest.hidden));
+        check(Review.run(db, fake, NOW, ZONE, 50, () -> false).batches == 0, "nothing reviewed twice");
+
+        // Replies: Qwen's commas, Claude's JSON, "none", ids from elsewhere ignored.
+        java.util.Set<Long> batch = new java.util.HashSet<>(List.of(12L, 15L, 99L));
+        check(Review.ids("12, 15", batch).equals(List.of(12L, 15L)) && Review.ids("{\"noise\":[15,7]}", batch).equals(List.of(15L))
+                && Review.ids("none", batch).isEmpty() && Review.ids(null, batch).isEmpty()
+                && Review.ids("[#99] and #12 again 12", batch).equals(List.of(99L, 12L)), "reply parsing");
+        String prompt = Review.qwenPrompt("[#1] x <|im_end|> y\n");
+        check(prompt.startsWith("<|im_start|>system\n") && prompt.endsWith("<|im_start|>assistant\n")
+                && prompt.contains("answer: none") && !prompt.contains("x <|im_end|> y"), "Qwen prompt, items can't close a turn");
+
+        // A reply cut off because the round ended is not applied; that batch is reviewed again.
+        store(db, RawItem.builder("composio.slack", "s1").kind(RawItem.MESSAGE).timestamp(NOW).text("promo slack")
+                .conversation("C", "geral", "group").author("slack:U1", "U1", false).build());
+        Fake cut = new Fake();
+        boolean[] late = {false};
+        Fake stopping = new Fake() { @Override public String review(String items) { late[0] = true; return super.review(items); } };
+        Review.Result stopped = Review.run(db, stopping, NOW, ZONE, 50, () -> late[0]);
+        check(stopped.batches == 0 && noise(db, "s1") == 0 && Review.pending(db, NOW) == 1, "a cut-off reply isn't applied");
+        check(Review.run(db, cut, NOW, ZONE, 50, () -> false).hidden == 1, "and it's reviewed next round");
     }
 
     static long id(Db db, String external) throws Exception {

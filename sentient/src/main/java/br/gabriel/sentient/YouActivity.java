@@ -141,7 +141,7 @@ public final class YouActivity extends Activity {
 
     private void enrichment() {
         section("AI enrichment");
-        content.addView(Ui.text(this, "After each sync, Claude Haiku 5.5 reads what came in and notes the people, projects, "
+        content.addView(Ui.text(this, "While the phone charges, Claude Haiku 5.5 reads what came in and notes the people, projects, "
                 + "places and facts in it, so the portrait, the vault and Ask know more. This sends your new messages, emails "
                 + "and transcripts to Anthropic in batches, with your Claude key; usually a few US cents a day.", 14, Ui.MUTED, false));
         if (!AskSettings.hasKey(this)) {
