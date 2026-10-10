@@ -19,6 +19,7 @@ public final class WhisperNative {
   if(block){entered.countDown();try{released.await();}catch(InterruptedException e){throw new IOException(e);}}
   return cancelled?"":" ask \"not\"\\\n\t café 🐈 ";
  }
+ public static int progress(long h){return h==0?0:42;}
  public static void cancel(long h){cancels++;cancelled=true;released.countDown();}
  public static void close(long h){closes++;}
 }'''
@@ -68,7 +69,9 @@ public final class WrapperTest {
   t.start();check(WhisperNative.entered.await(2,TimeUnit.SECONDS),"entered native inference");
   long started=System.nanoTime();m.cancel();check(System.nanoTime()-started<500000000L,"cancel never waits for Java inference monitor");
   t.join(2000);check(!t.isAlive()&&failure.get()==null,"in-flight cancellation rejected");
+  check(m.progress()==42,"window progress read through the open handle");
   reject(()->m.transcribe(new short[]{8}));m.close();m.close();
+  check(m.progress()==0,"no progress once closed");
   check(WhisperNative.closes==1,"native context closed exactly once");
   reject(()->m.transcribe(new short[]{9}));
   System.out.println("WhisperJavaWrapperTest PASS: "+assertions+" assertions; mocked JNI, production wrappers");

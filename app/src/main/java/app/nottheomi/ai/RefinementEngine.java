@@ -19,6 +19,8 @@ final class RefinementEngine {
     interface Consumer { void accept(byte[] pcm) throws Exception; }
     interface Source { void stream(Consumer consumer) throws Exception; }
     interface Decoder { String transcribe(short[] samples) throws Exception; }
+    /** A window is about to be transcribed: it covers saved bytes [start, start + length). */
+    interface Windows { void started(long startBytes, long lengthBytes); }
     interface Sink {
         void commit(long expectedOffset, long nextOffset, String text) throws Exception;
         void complete() throws Exception;
@@ -32,25 +34,39 @@ final class RefinementEngine {
 
     static void run(long totalBytes, long offsetBytes, Source source, Decoder decoder,
                     Sink sink, BooleanSupplier cancelled) throws Exception {
+        run(totalBytes, offsetBytes, source, decoder, sink, cancelled, () -> false, (start, length) -> { });
+    }
+
+    /**
+     * {@code cancelled} stops at once and discards the window in progress (Android stopped the
+     * job, or Stop). {@code stopBeforeWindow} only stops before the next window starts, so a
+     * window that has begun is always finished and saved (a pass reaching its time limit).
+     */
+    static void run(long totalBytes, long offsetBytes, Source source, Decoder decoder,
+                    Sink sink, BooleanSupplier cancelled, BooleanSupplier stopBeforeWindow,
+                    Windows windows) throws Exception {
         if (totalBytes <= 0 || offsetBytes < 0 || offsetBytes > totalBytes
                 || ((totalBytes | offsetBytes) & 1) != 0) {
             throw new IOException("Invalid saved PCM checkpoint");
         }
-        new Pass(totalBytes, offsetBytes, decoder, sink, cancelled).run(source);
+        new Pass(totalBytes, offsetBytes, decoder, sink, cancelled, stopBeforeWindow, windows).run(source);
     }
 
     private static final class Pass {
         final long total, resume;
         final Decoder decoder;
         final Sink sink;
-        final BooleanSupplier cancelled;
+        final BooleanSupplier cancelled, stopBeforeWindow;
+        final Windows windows;
         final short[] window = new short[WINDOW_SAMPLES];
         long seen, committed;
         int count;
 
-        Pass(long total, long resume, Decoder decoder, Sink sink, BooleanSupplier cancelled) {
+        Pass(long total, long resume, Decoder decoder, Sink sink, BooleanSupplier cancelled,
+             BooleanSupplier stopBeforeWindow, Windows windows) {
             this.total = total; this.resume = resume; this.committed = resume;
             this.decoder = decoder; this.sink = sink; this.cancelled = cancelled;
+            this.stopBeforeWindow = stopBeforeWindow; this.windows = windows;
         }
 
         void check() throws Paused {
@@ -100,7 +116,9 @@ final class RefinementEngine {
 
         void flush() throws Exception {
             check();
+            if (stopBeforeWindow.getAsBoolean()) throw new Paused();
             int used = cut(window, count);
+            windows.started(committed, used * 2L);
             short[] samples = Arrays.copyOf(window, used);
             String text;
             try { text = decoder.transcribe(samples); }

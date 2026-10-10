@@ -46,6 +46,9 @@ int whisper_full(whisper_context *ctx, whisper_full_params p, const float *sampl
     last_vad = p.vad ? p.vad_model_path : "";
     last_prompt = p.initial_prompt ? p.initial_prompt : "";
     ctx->mode = mode.load();
+    if (!p.progress_callback || !p.encoder_begin_callback) throw std::runtime_error("Progress callbacks missing");
+    p.encoder_begin_callback(ctx, nullptr, p.encoder_begin_callback_user_data);
+    p.progress_callback(ctx, nullptr, 40, p.progress_callback_user_data);
     entered.store(true);
     if (ctx->mode == 1) {
         for (int i = 0; i < 10000; ++i) {

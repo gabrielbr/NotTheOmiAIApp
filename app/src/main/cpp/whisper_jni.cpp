@@ -15,6 +15,8 @@ struct Engine {
     whisper_context *ctx = nullptr;
     std::string vad_path; // Bundled Silero model; empty disables VAD.
     std::atomic<bool> cancelled{false};
+    // Current window, 0..100: 1 once the encoder starts, then Whisper's decoding progress.
+    std::atomic<int> progress{0};
     std::mutex inference;
     ~Engine() { if (ctx) whisper_free(ctx); }
 };
@@ -43,7 +45,16 @@ bool cancelled(void *data) {
     return static_cast<Engine *>(data)->cancelled.load(std::memory_order_acquire);
 }
 bool begin_encoder(whisper_context *, whisper_state *, void *data) {
+    auto *engine = static_cast<Engine *>(data);
+    int expected = 0;
+    engine->progress.compare_exchange_strong(expected, 1);
     return !cancelled(data);
+}
+void on_progress(whisper_context *, whisper_state *, int percent, void *data) {
+    auto *engine = static_cast<Engine *>(data);
+    const int value = std::clamp(percent, 1, 99);  // 100 only once the window is done
+    int seen = engine->progress.load();
+    while (value > seen && !engine->progress.compare_exchange_weak(seen, value)) {}
 }
 jstring empty(JNIEnv *env) { return env->NewString(nullptr, 0); }
 
@@ -127,6 +138,7 @@ jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads,
         fail(env, "Whisper input exceeds 30 seconds"); return nullptr;
     }
     std::lock_guard<std::mutex> lock(state->inference);
+    state->progress.store(0);
     if (cancelled(state.get()) || count == 0) return empty(env);
     // Never pin a Java array across inference. Caller retains and wipes its own
     // short[]; all native raw PCM copies are overwritten on every exit path.
@@ -179,11 +191,14 @@ jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads,
     p.abort_callback_user_data = state.get();
     p.encoder_begin_callback = begin_encoder;
     p.encoder_begin_callback_user_data = state.get();
+    p.progress_callback = on_progress;
+    p.progress_callback_user_data = state.get();
     const int result = whisper_full(state->ctx, p, audio.value.data(),
                                    static_cast<int>(audio.value.size()));
     nottheomi::wipe(audio.value);
     if (cancelled(state.get())) return empty(env); // Never publish a cancelled partial.
     if (result != 0) { fail(env, "Whisper inference failed"); return nullptr; }
+    state->progress.store(100);
     Wiped<std::string> text;
     const int segments = whisper_full_n_segments(state->ctx);
     for (int i = 0; i < segments; ++i) {
@@ -222,6 +237,12 @@ Java_app_nottheomi_ai_WhisperNative_transcribe(JNIEnv *env, jclass, jlong handle
     catch (const std::bad_alloc &) { fail(env, "Whisper memory allocation failed"); }
     catch (...) { fail(env, "Whisper inference failed"); }
     return nullptr;
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_app_nottheomi_ai_WhisperNative_progress(JNIEnv *, jclass, jlong handle) {
+    try { if (auto state = lookup(handle)) return state->progress.load(); }
+    catch (...) { }
+    return 0;
 }
 extern "C" JNIEXPORT void JNICALL
 Java_app_nottheomi_ai_WhisperNative_cancel(JNIEnv *env, jclass, jlong handle) {

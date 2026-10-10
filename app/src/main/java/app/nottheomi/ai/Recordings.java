@@ -133,12 +133,15 @@ public final class Recordings {
     public static final class Session {
         public final String id, title, text, status, transcriptState, liveText;
         public final long createdAt, durationMs, bytes;
+        /** Saved audio already refined (the durable checkpoint); 0 when not refining. */
+        public final long refinedBytes;
         public final boolean truncated;
         private Session(Metadata metadata, String transcript) {
-            this(metadata, transcript, transcript, "none", false);
+            this(metadata, transcript, transcript, "none", false, 0);
         }
         private Session(Metadata metadata, String transcript, String draft, String state,
-                        boolean previewTruncated) {
+                        boolean previewTruncated, long refined) {
+            refinedBytes = refined;
             id = metadata.id;
             title = metadata.title;
             status = metadata.status;
@@ -165,6 +168,12 @@ public final class Recordings {
     }
 
     public interface PcmConsumer { void accept(byte[] pcm) throws Exception; }
+
+    /** The checkpoint moved on (e.g. the recording was set to refine again): skip, don't fail. */
+    public static final class StaleCheckpointException extends IllegalStateException {
+        private static final long serialVersionUID = 1L;
+        StaleCheckpointException(String message) { super(message); }
+    }
 
     public static final class CorruptRecordingException extends IOException {
         private static final long serialVersionUID = 1L;
@@ -354,7 +363,7 @@ public final class Recordings {
                     RefinementMetadata item = loadRefinement(metadata, true);
                     if (item == null || !PENDING.equals(item.state)
                             || item.offsetBytes != expectedOffset) {
-                        throw new IllegalStateException("Refinement checkpoint is no longer pending/current.");
+                        throw new StaleCheckpointException("Refinement checkpoint is no longer pending/current.");
                     }
                     if (nextOffset > item.totalBytes) {
                         throw new IllegalArgumentException("Checkpoint exceeds saved audio.");
@@ -386,7 +395,7 @@ public final class Recordings {
                 if (item != null && COMPLETE.equals(item.state)) return;
                 if (item == null || !PENDING.equals(item.state)
                         || item.offsetBytes != item.totalBytes) {
-                    throw new IllegalStateException("Refinement has not processed all saved audio.");
+                    throw new StaleCheckpointException("Refinement has not processed all saved audio.");
                 }
                 boolean nonblank = false;
                 for (long sequence = 0; sequence < item.textCount; sequence++) {
@@ -432,6 +441,36 @@ public final class Recordings {
                     checkFreeSpace(0);
                     saveRefinement(item, false);
                 }
+            });
+        }
+    }
+
+    /**
+     * Refine again from the start (after changing language or words to expect, or when stuck).
+     * Removes only this recording's refined text; its audio and live draft are untouched, and
+     * the draft is shown until the new transcript is complete.
+     */
+    public void restartRefinement(String id) throws Exception {
+        synchronized (lock) {
+            if (readers.containsKey(id)) {
+                throw new IllegalStateException("Stop playback or wait for export before refining again.");
+            }
+            transaction(() -> {
+                Metadata metadata = loadMetadata(id);
+                requireRefinable(metadata);
+                RefinementMetadata item = loadRefinement(metadata, false);
+                checkFreeSpace(0);
+                if (item == null) {
+                    enqueueRefinement(metadata);
+                    saveMetadata(metadata, false);
+                    return;
+                }
+                db.delete("refinement_chunks", "session_id=?", new String[]{id});
+                item.state = PENDING;
+                item.offsetBytes = 0;
+                item.textCount = 0;
+                item.textBytes = 0;
+                saveRefinement(item, false);
             });
         }
     }
@@ -661,22 +700,23 @@ public final class Recordings {
 
     private Session snapshot(Metadata metadata, RefinementMetadata item, boolean corruptDerivative) throws Exception {
         String live = transcript(metadata.id, metadata.textCount, false);
-        if (corruptDerivative) return new Session(metadata, live, live, CORRUPT, false);
+        if (corruptDerivative) return new Session(metadata, live, live, CORRUPT, false, 0);
         try {
             String selected = item != null && COMPLETE.equals(item.state)
                     ? withAnnotations(transcript(metadata.id, item.textCount, true), live) : live;
-            return new Session(metadata, selected, live, item == null ? "none" : item.state, false);
+            return new Session(metadata, selected, live, item == null ? "none" : item.state, false,
+                    item == null ? 0 : item.offsetBytes);
         } catch (CorruptRecordingException damaged) {
             // A derivative must never hide an intact original. Original failures above
             // still propagate, and strict checkpoint APIs never accept this fallback.
-            return new Session(metadata, live, live, CORRUPT, false);
+            return new Session(metadata, live, live, CORRUPT, false, 0);
         }
     }
 
     private Session preview(Metadata metadata, RefinementMetadata item, boolean corruptDerivative) throws Exception {
         // Like the original preview, do not scan/decrypt omitted chunks or audio.
         TextPreview live = textPreview(metadata.id, metadata.textCount, false);
-        if (corruptDerivative) return new Session(metadata, live.text, live.text, CORRUPT, live.truncated);
+        if (corruptDerivative) return new Session(metadata, live.text, live.text, CORRUPT, live.truncated, 0);
         try {
             TextPreview selected = live;
             if (item != null && COMPLETE.equals(item.state)) {
@@ -686,9 +726,9 @@ public final class Recordings {
                         || combined.length() > MAX_PREVIEW_CHARS);
             }
             return new Session(metadata, selected.text, live.text, item == null ? "none" : item.state,
-                    selected.truncated);
+                    selected.truncated, item == null ? 0 : item.offsetBytes);
         } catch (CorruptRecordingException damaged) {
-            return new Session(metadata, live.text, live.text, CORRUPT, live.truncated);
+            return new Session(metadata, live.text, live.text, CORRUPT, live.truncated, 0);
         }
     }
 

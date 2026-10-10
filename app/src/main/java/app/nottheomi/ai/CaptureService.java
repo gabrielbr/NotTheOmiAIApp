@@ -103,7 +103,7 @@ public final class CaptureService extends Service {
             }
             owner = this;
             active = true;
-            RefinementJobService.captureStarted();
+            RefinementJobService.captureStarted(this);
             cancelled = false;
             stopDeadlineNanos = 0;
             microphoneStarted = false;

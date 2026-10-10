@@ -83,6 +83,19 @@ public final class RefinementEngineHostTest {
         rejected(() -> RefinementEngine.run(longPcm.length, 0, chunks(longPcm, 32000), samples -> "one", checkpointThenStop, stopAfterCommit::get), RefinementEngine.Paused.class);
         check(midway.offset == retained.get(0).length * 2L && midway.text.size() == 1, "Durable checkpoint retained before pause"); scenarios++;
 
+        // A pass reaching its time limit finishes and saves the window it started, then pauses.
+        AtomicBoolean timeUp = new AtomicBoolean(); Sink soft = new Sink(0); List<long[]> started = new ArrayList<>();
+        rejected(() -> RefinementEngine.run(longPcm.length, 0, chunks(longPcm, 32000), samples -> { timeUp.set(true); return "kept"; },
+                soft, () -> false, timeUp::get, (start, length) -> started.add(new long[]{start, length})), RefinementEngine.Paused.class);
+        check(soft.text.equals(List.of("kept")) && soft.offset == retained.get(0).length * 2L, "soft stop never discards the started window");
+        check(started.size() == 1 && started.get(0)[0] == 0 && started.get(0)[1] == soft.offset, "window start and length reported");
+        Sink resumedSoft = new Sink(soft.offset); List<long[]> later = new ArrayList<>();
+        RefinementEngine.run(longPcm.length, soft.offset, chunks(longPcm, 32000), samples -> "rest", resumedSoft,
+                () -> false, () -> false, (start, length) -> later.add(new long[]{start, length}));
+        check(resumedSoft.complete == 1 && later.get(0)[0] == soft.offset, "next pass resumes where the soft stop saved");
+        long covered = soft.offset; for (long[] w : later) { check(w[0] == covered, "windows are contiguous"); covered += w[1]; }
+        check(covered == longPcm.length, "windows cover all audio"); scenarios++;
+
         byte[] shortPcm = pcm(127); Sink invalid = new Sink(0);
         rejected(() -> RefinementEngine.run(0, 0, chunks(shortPcm, 100), s -> "", invalid, () -> false), IOException.class);
         rejected(() -> RefinementEngine.run(254, 3, chunks(shortPcm, 100), s -> "", invalid, () -> false), IOException.class);
