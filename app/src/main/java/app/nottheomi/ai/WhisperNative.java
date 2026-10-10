@@ -4,7 +4,37 @@ import java.io.IOException;
 
 /** CPU-only, offline JNI. The owner serializes open/transcribe/close off the UI thread. */
 public final class WhisperNative {
-    static { System.loadLibrary("nottheomi-whisper"); }
+    /** "fast" (ARMv8.2 dot-product + fp16 build) or "compatible" (portable armv8-a build). */
+    public static final String BUILD;
+
+    static {
+        String chosen = "compatible";
+        if (fastCpu(cpuinfo())) {
+            try { System.loadLibrary("nottheomi-whisper-dotprod"); chosen = "fast"; }
+            catch (UnsatisfiedLinkError unavailable) { System.loadLibrary("nottheomi-whisper"); }
+        } else System.loadLibrary("nottheomi-whisper");
+        BUILD = chosen;
+    }
+
+    /** True when every core lists both the dot-product and half-precision SIMD features. */
+    public static boolean fastCpu(String cpuinfo) {
+        if (cpuinfo == null) return false;
+        boolean any = false;
+        for (String line : cpuinfo.split("\n")) {
+            if (!line.startsWith("Features")) continue;
+            any = true;
+            java.util.Set<String> features = new java.util.HashSet<>(
+                    java.util.Arrays.asList(line.substring(line.indexOf(':') + 1).trim().split("\\s+")));
+            if (!features.contains("asimddp") || !features.contains("asimdhp")) return false;
+        }
+        return any;
+    }
+
+    private static String cpuinfo() {
+        try { return new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("/proc/cpuinfo")),
+                java.nio.charset.StandardCharsets.US_ASCII); }
+        catch (Exception | LinkageError unreadable) { return null; }
+    }
 
     private WhisperNative() { }
 

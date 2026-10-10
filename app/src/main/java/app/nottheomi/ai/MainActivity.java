@@ -212,6 +212,10 @@ public final class MainActivity extends Activity {
         r.setContentDescription("Open "+s.title);r.setOnClickListener(v->detail(s.id));return r;
     }
     private static String statusChip(Recordings.Session s){
+        if("complete".equals(s.transcriptState)&&Recordings.SMALL.equals(s.model)){
+            RefinementProgress.Snapshot p=RefinementProgress.get();
+            return s.id.equals(p.id)&&p.accurate?"Improving "+p.percent()+"%":"Quick";
+        }
         if("pending".equals(s.transcriptState)&&!"recording".equals(s.status)){
             RefinementProgress.Snapshot p=RefinementProgress.get();
             if(s.id.equals(p.id))return "Refining "+p.percent()+"%";
@@ -349,7 +353,17 @@ public final class MainActivity extends Activity {
     private static String transcriptText(Recordings.Session s){return s.text.isEmpty()?"No speech was recognised. Your saved audio is still available.":s.text;}
     private static boolean canRetry(Recordings.Session s){return !"recording".equals(s.status)&&s.bytes>0&&!"corrupt".equals(s.transcriptState);}
     private static String retryLabel(Recordings.Session s){return "pending".equals(s.transcriptState)?"Start refining over":"Refine again";}
-    private static String refinementLabel(Recordings.Session s){
+    private String refinementLabel(Recordings.Session s){
+        if("complete".equals(s.transcriptState)&&Recordings.SMALL.equals(s.model)){
+            RefinementProgress.Snapshot p=RefinementProgress.get();long now=RefinementProgress.clock.getAsLong();
+            if(s.id.equals(p.id)&&p.accurate){
+                String line=RefinementProgress.describe(p,now).replaceFirst("^Improving · ","Improving with the accurate model · ")+". Showing the quick transcript until it's done.";
+                return RefinementProgress.stalled(p,now)?"No progress for "+RefinementProgress.span(now-p.lastChangeAt)+". "+line:line;
+            }
+            if(!OmiSettingsActivity.betterWhileCharging(this))return "Quick transcript (small model).";
+            long done=s.improvingBytes>0&&s.bytes>0?s.improvingBytes*100/s.bytes:0;
+            return "Quick transcript (small model). The accurate one is made the next time the phone charges"+(done>0?" · "+done+"% done":"")+".";
+        }
         if("complete".equals(s.transcriptState))return "";
         if("pending".equals(s.transcriptState)){
             RefinementProgress.Snapshot p=RefinementProgress.get();long now=RefinementProgress.clock.getAsLong();
@@ -381,12 +395,15 @@ public final class MainActivity extends Activity {
     private void refreshProgress(){
         RefinementProgress.Snapshot p=RefinementProgress.get();long now=RefinementProgress.clock.getAsLong();
         if(refiningLine!=null){
-            String line=p.id!=null?"Whisper · "+RefinementProgress.describe(p,now).replace("Refining · ","refining · ")+" ›":p.waiting!=null?"Whisper · "+p.waiting:"";
+            String head="Whisper"+(RefinementProgress.build!=null?" ("+RefinementProgress.build+")":"")+" · ";
+            String described=p.id!=null?RefinementProgress.describe(p,now):null;
+            String line=described!=null?head+Character.toLowerCase(described.charAt(0))+described.substring(1)+" ›":p.waiting!=null?head+p.waiting:"";
             setText(refiningLine,line);refiningLine.setVisibility(line.isEmpty()||library||selectedId!=null?View.GONE:View.VISIBLE);
             refiningLine.setTextColor(p.id!=null&&RefinementProgress.stalled(p,now)?Ui.CORAL_TEXT:Ui.MUTED);
         }
         Recordings.Session s=detailSession;
-        if(s!=null&&selectedId!=null&&s.id.equals(selectedId)&&detailRefinement!=null&&"pending".equals(s.transcriptState)){
+        if(s!=null&&selectedId!=null&&s.id.equals(selectedId)&&detailRefinement!=null
+                &&("pending".equals(s.transcriptState)||Recordings.SMALL.equals(s.model))){
             setText(detailRefinement,refinementLabel(s));
             detailRefinement.setTextColor(s.id.equals(p.id)&&RefinementProgress.stalled(p,now)?Ui.CORAL_TEXT:Ui.MUTED);
         }

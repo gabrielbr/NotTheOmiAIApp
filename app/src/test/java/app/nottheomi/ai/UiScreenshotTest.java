@@ -94,6 +94,18 @@ public final class UiScreenshotTest {
         now[0] += 7 * 60_000L; // nothing moves for 7 minutes
         call(a, "refreshProgress");
         settle(); shot(a, "detail-stalled");
+
+        // A quick transcript waiting for the charger, then being improved.
+        RefinementProgress.idle("Quick transcripts done · the accurate ones are made while the phone charges");
+        set(a, "selectedId", "s4");
+        detail.invoke(a, samples()[3]);
+        settle(); shot(a, "detail-quick");
+        long total4 = 407 * 32_000L;
+        RefinementProgress.begin("s4", 0, total4, () -> window[0], true);
+        RefinementProgress.window(0, 30 * 32_000L); now[0] += 40_000; RefinementProgress.saved(30 * 32_000L);
+        RefinementProgress.window(30 * 32_000L, 30 * 32_000L); RefinementProgress.get(); now[0] += 10_000;
+        call(a, "refreshProgress");
+        settle(); shot(a, "detail-improving");
     }
 
     @Test public void omi() throws Exception {
@@ -108,6 +120,8 @@ public final class UiScreenshotTest {
             session("s2", "Ideias no carro", "saved", "pending", 191, 20,
                 "Tenho que revisar o orçamento da viagem e ver hotéis perto do centro."),
             session("s3", "Recording 9 Oct", "interrupted", "failed", 48, 30, ""),
+            session("s4", "Almoço com a Ana", "saved", "quick", 407, 26,
+                "Ela disse que chega às oito e que traz o bolo. Combinamos de ver o apartamento no sábado."),
         };
     }
 
@@ -121,10 +135,13 @@ public final class UiScreenshotTest {
         setField(m, "createdAt", System.currentTimeMillis() - hoursAgo * 3_600_000L);
         setField(m, "bytes", seconds * 32_000L);
         Constructor<Recordings.Session> sc = Recordings.Session.class.getDeclaredConstructor(
-                metaClass, String.class, String.class, String.class, boolean.class, long.class);
+                metaClass, String.class, String.class, String.class, boolean.class, long.class, String.class, long.class);
         sc.setAccessible(true);
-        // A pending recording is shown a third of the way through.
-        return sc.newInstance(m, text, text, state, false, "pending".equals(state) ? seconds * 32_000L / 3 / 2 * 2 : 0L);
+        // A pending recording is shown a third of the way through; "quick" is a small-model transcript.
+        boolean quick = "quick".equals(state);
+        return sc.newInstance(m, text, text, quick ? "complete" : state, false,
+                "pending".equals(state) ? seconds * 32_000L / 3 / 2 * 2 : quick ? seconds * 32_000L : 0L,
+                quick ? Recordings.SMALL : "complete".equals(state) ? Recordings.MEDIUM : null, quick ? 0L : -1L);
     }
 
     static void setField(Object o, String name, Object value) throws Exception {

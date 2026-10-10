@@ -16,6 +16,8 @@ parser.add_argument('--service-only', action='store_true', help='run service fix
 parser.add_argument('--model', type=pathlib.Path,
                     default=ROOT / 'app/src/main/assets/ggml-medium-q5_0.bin',
                     help='real Whisper model file (defaults to the packaged asset)')
+parser.add_argument('--small-model', type=pathlib.Path,
+                    default=ROOT / 'app/src/main/assets/ggml-small-q5_1.bin', help='pinned Whisper small model')
 parser.add_argument('--vad-model', type=pathlib.Path,
                     default=ROOT / 'app/src/main/assets/ggml-silero-v5.1.2.bin', help='pinned Silero VAD model')
 parser.add_argument('--preview-model', type=pathlib.Path,
@@ -45,7 +47,7 @@ if not args.service_only:
         fixture = directory / 'fixture'
         fixture.mkdir()
         subprocess.run(['java', '-cp', f'{classes}:{android}', 'app.nottheomi.ai.ModelInstallerHostTest',
-                        str(args.model), str(fixture), str(args.vad_model)], check=True, timeout=120)
+                        str(args.model), str(fixture), str(args.vad_model), str(args.small_model)], check=True, timeout=120)
         preview_fixture = directory / 'preview-fixture'
         preview_fixture.mkdir()
         subprocess.run(['java', '-cp', f'{classes}:{android}', 'app.nottheomi.ai.PreviewModelInstallerHostTest',

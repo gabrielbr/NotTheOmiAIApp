@@ -636,7 +636,7 @@ public final class HybridRecordingsTest extends AndroidTestCase {
         List<String> originals = originalRows();
         long nonces = count("nonces");
         store = new Recordings(getContext(), databaseName, alias);
-        try (SQLiteDatabase database = raw()) { assertEquals(3, database.getVersion()); }
+        try (SQLiteDatabase database = raw()) { assertEquals(4, database.getVersion()); }
         assertEquals(originals, originalRows());
         assertEquals(nonces, count("nonces"));
         assertEquals(0L, count("refinements"));
@@ -665,6 +665,76 @@ public final class HybridRecordingsTest extends AndroidTestCase {
         assertJob(fresh, "pending", 0, 2);
     }
 
+    public void testQuickTranscriptThenAccuratePassSwapsOnlyWhenComplete() throws Exception {
+        String id = saved(640, DRAFT);
+        List<String> originals = originalRows();
+        store.commitRefinementBatch(id, 0, 640, "Quick words");
+        store.completeRefinement(id, Recordings.SMALL);
+        Recordings.Session quick = store.find(id);
+        assertEquals("Quick words", quick.text);
+        assertEquals(Recordings.SMALL, quick.model);
+        assertEquals("accurate pass queued", 0, quick.improvingBytes);
+        assertEquals(1, store.pendingFinals().size());
+        store.commitFinalBatch(id, 0, 320, "Accurate first half");
+        assertEquals("quick text stays until the accurate pass is done", "Quick words", store.find(id).text);
+        assertEquals(320, store.find(id).improvingBytes);
+        reopen();
+        expect(Recordings.StaleCheckpointException.class, () -> store.commitFinalBatch(id, 0, 320, "old"));
+        store.commitFinalBatch(id, 320, 640, "Accurate second half");
+        store.completeFinal(id);
+        reopen();
+        Recordings.Session done = store.find(id);
+        assertEquals("Accurate first half\nAccurate second half", done.text);
+        assertEquals(Recordings.MEDIUM, done.model);
+        assertEquals(-1, done.improvingBytes);
+        assertEquals(DRAFT, done.liveText);
+        assertEquals(done.text, exportedText(id));
+        assertTrue(store.pendingFinals().isEmpty());
+        assertEquals(0, count("final_refinements"));
+        assertEquals(0, count("final_chunks"));
+        assertEquals(originals, originalRows());
+
+        // A failed accurate pass keeps the quick transcript; refining again clears a pass in progress.
+        String other = saved(320, DRAFT);
+        store.commitRefinementBatch(other, 0, 320, "Quick");
+        store.completeRefinement(other, Recordings.SMALL);
+        store.failFinal(other);
+        assertEquals("Quick", store.find(other).text);
+        assertEquals(-1, store.find(other).improvingBytes);
+        store.restartRefinement(other);
+        store.commitRefinementBatch(other, 0, 320, "Quick again");
+        store.completeRefinement(other, Recordings.SMALL);
+        store.commitFinalBatch(other, 0, 160, "partial accurate");
+        store.restartRefinement(other);
+        assertEquals(0, count("final_chunks"));
+        assertEquals("pending", store.find(other).transcriptState);
+        // A medium transcript (the default) queues no accurate pass.
+        String direct = saved(320, DRAFT);
+        store.commitRefinementBatch(direct, 0, 320, "Medium words");
+        store.completeRefinement(direct);
+        assertEquals(Recordings.MEDIUM, store.find(direct).model);
+        assertNull(store.finalRefinement(direct));
+    }
+
+    public void testV3MigrationAddsAccuratePassTablesKeepingEveryRow() throws Exception {
+        String saved = saved(640, DRAFT);
+        store.commitRefinementBatch(saved, 0, 320, "Synthetic checkpoint");
+        List<String> before = allStoredRows();
+        store.closeForTest(); store = null;
+        try (SQLiteDatabase database = raw()) {
+            database.execSQL("DROP TABLE final_chunks");
+            database.execSQL("DROP TABLE final_refinements");
+            database.setVersion(3);
+        }
+        store = new Recordings(getContext(), databaseName, alias);
+        try (SQLiteDatabase database = raw()) { assertEquals(4, database.getVersion()); }
+        assertEquals(before, allStoredRows());
+        assertJob(saved, "pending", 320, 640);
+        store.commitRefinementBatch(saved, 320, 640, "rest");
+        store.completeRefinement(saved, Recordings.SMALL);
+        assertEquals(1, store.pendingFinals().size());
+    }
+
     public void testV2ShapeIndexMigrationPreservesAllEncryptedRowsAndCheckpoints() throws Exception {
         String saved = saved(640, DRAFT);
         store.commitRefinementBatch(saved, 0, 320, "Synthetic checkpoint");
@@ -678,7 +748,7 @@ public final class HybridRecordingsTest extends AndroidTestCase {
             database.setVersion(2);
         }
         store = new Recordings(getContext(), databaseName, alias);
-        try (SQLiteDatabase database = raw()) { assertEquals(3, database.getVersion()); }
+        try (SQLiteDatabase database = raw()) { assertEquals(4, database.getVersion()); }
         assertEquals(before, allStoredRows());
         assertBytes(pcm(640), readAudio(saved));
         assertBytes(pcm(320), readAudio(active));

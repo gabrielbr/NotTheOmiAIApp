@@ -19,11 +19,15 @@ from prepare_whisper import (ROOT, CACHE, SOURCE, COMMIT, SOURCE_SHA, SOURCE_URL
                              ARCHIVE_NAME, MODEL, MODEL_SHA, MODEL_BYTES, MODEL_URL,
                              REVISION, MODEL_LICENSE, MODEL_LICENSE_SHA,
                              VAD_MODEL, VAD_SHA, VAD_BYTES, VAD_URL, VAD_REVISION, VAD_LICENSE,
+                             SMALL_MODEL, SMALL_SHA, SMALL_BYTES, SMALL_URL,
                              require_hash, sha, verify_source)
 
 NDK_VERSION = "27.2.12479018"
 ABIS = ("arm64-v8a", "x86_64")
 LIBRARY = "libnottheomi-whisper.so"
+# arm64 also ships an ARMv8.2 dot-product + fp16 build, picked at runtime (WhisperNative).
+DOTPROD_LIBRARY = "libnottheomi-whisper-dotprod.so"
+DOTPROD_ARCH = "-march=armv8.2-a+dotprod+fp16"
 CPP = ROOT / "app/src/main/cpp"
 RECEIPT = ROOT / "verification/whisper-native-build.json"
 
@@ -77,32 +81,38 @@ def audit_elf(library, abi, tools):
             "sha256": sha(library), "bytes": library.stat().st_size}
 
 
-def build_one(abi, directory, ndk, jobs, env):
+def build_one(abi, directory, ndk, jobs, env, variant="portable"):
     directory.mkdir(parents=True, exist_ok=True)
     command = ["cmake", "-S", str(CPP), "-B", str(directory), "-G", "Unix Makefiles",
                f"-DCMAKE_TOOLCHAIN_FILE={ndk}/build/cmake/android.toolchain.cmake",
                f"-DANDROID_ABI={abi}", "-DANDROID_PLATFORM=android-26",
                "-DANDROID_STL=c++_static", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
                "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_C_FLAGS_RELEASE=-O3 -DNDEBUG -g0",
-               "-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG -g0", f"-DWHISPER_SOURCE={SOURCE}"]
+               "-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG -g0", f"-DWHISPER_SOURCE={SOURCE}",
+               f"-DNOTTHEOMI_VARIANT={variant}"]
     run(command, env, directory / "configure.log")
     compile_command = ["cmake", "--build", str(directory), "--target", "nottheomi-whisper",
                        "--parallel", str(jobs)]
     run(compile_command, env, directory / "build.log")
     tools = ndk / "toolchains/llvm/prebuilt/linux-x86_64/bin"
-    library = directory / LIBRARY
+    library = directory / (DOTPROD_LIBRARY if variant == "dotprod" else LIBRARY)
     if not library.is_file():
         raise ValueError("Expected JNI output was not built")
     run([tools / "llvm-strip", "--strip-unneeded", library])
     entries = json.loads((directory / "compile_commands.json").read_text())
     commands = "\n".join(entry["command"] for entry in entries)
-    prohibited = ("-march=native", "-mcpu=native", "+dotprod", "+fp16", "-mavx", "-mfma", "-mf16c", "-mbmi")
+    prohibited = ["-march=native", "-mcpu=native", "-mavx", "-mfma", "-mf16c", "-mbmi", "+i8mm", "+sve"]
+    if variant == "portable":
+        prohibited += ["+dotprod", "+fp16"]
     if any(flag in commands for flag in prohibited):
         raise ValueError("Unsafe distributed CPU flags")
-    if abi == "arm64-v8a" and "-march=armv8-a" not in commands:
+    if variant == "portable" and abi == "arm64-v8a" and "-march=armv8-a" not in commands:
         raise ValueError("Portable ARM baseline missing")
+    if variant == "dotprod" and (abi != "arm64-v8a" or DOTPROD_ARCH not in commands):
+        raise ValueError("dotprod build must be arm64 with exactly " + DOTPROD_ARCH)
     summary = audit_elf(library, abi, tools)
-    summary.update({"cpu_baseline": "armv8-a (NEON), no optional dotprod/fp16/i8mm" if abi == "arm64-v8a"
+    summary.update({"cpu_baseline": "armv8.2-a + dotprod + fp16 (chosen at runtime when the CPU has them)"
+                    if variant == "dotprod" else "armv8-a (NEON), no optional dotprod/fp16/i8mm" if abi == "arm64-v8a"
                     else "NDK x86_64 baseline, no optional AVX/FMA/F16C/BMI",
                     "configure_command": command, "build_command": compile_command,
                     "compile_commands_sha256": sha(directory / "compile_commands.json")})
@@ -129,6 +139,10 @@ def main():
     require_hash(model, MODEL_SHA)
     if model.stat().st_size != MODEL_BYTES:
         raise ValueError("Pinned model size mismatch")
+    small = CACHE / "whisper-models" / SMALL_MODEL
+    require_hash(small, SMALL_SHA)
+    if small.stat().st_size != SMALL_BYTES:
+        raise ValueError("Pinned small model size mismatch")
     vad = CACHE / "whisper-models" / VAD_MODEL
     require_hash(vad, VAD_SHA)
     if vad.stat().st_size != VAD_BYTES:
@@ -144,20 +158,23 @@ def main():
     for variable in ("CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS", "CC", "CXX"):
         env.pop(variable, None)
     abis = list(dict.fromkeys(args.abi or ABIS))
-    results, artifacts = {}, {}
-    for abi in abis:
-        print(f"Building CPU-only {abi}", flush=True)
-        library, result = build_one(abi, CACHE / "whisper-android-build" / abi, ndk, args.jobs, env)
+    results, artifacts, dotprod = {}, {}, {}
+    builds = [(abi, "portable") for abi in abis] + [("arm64-v8a", "dotprod")] * ("arm64-v8a" in abis)
+    for abi, variant in builds:
+        print(f"Building CPU-only {abi} ({variant})", flush=True)
+        name = abi if variant == "portable" else abi + "-dotprod"
+        library, result = build_one(abi, CACHE / "whisper-android-build" / name, ndk, args.jobs, env, variant)
         if args.verify_reproducible:
             with tempfile.TemporaryDirectory(prefix="whisper-rebuild-", dir=CACHE) as temporary:
-                rebuilt, _ = build_one(abi, Path(temporary), ndk, args.jobs, env)
+                rebuilt, _ = build_one(abi, Path(temporary), ndk, args.jobs, env, variant)
                 if sha(rebuilt) != sha(library):
-                    raise ValueError(f"Independent rebuild differs for {abi}")
+                    raise ValueError(f"Independent rebuild differs for {name}")
             result["independent_rebuild_byte_identical"] = True
         else:
             result["independent_rebuild_byte_identical"] = None
-        results[abi], artifacts[abi] = result, library
-        print(json.dumps({"abi": abi, "sha256": result["sha256"], "bytes": result["bytes"],
+        if variant == "portable": results[abi], artifacts[abi] = result, library
+        else: dotprod[abi] = (result, library)
+        print(json.dumps({"abi": name, "sha256": result["sha256"], "bytes": result["bytes"],
                           "reproducible": result["independent_rebuild_byte_identical"]}), flush=True)
     if native_inputs() != inputs:
         raise ValueError("Native inputs changed during compilation; retry a stable build")
@@ -168,11 +185,19 @@ def main():
         shutil.copyfile(library, dest)
         require_hash(dest, results[abi]["sha256"])
         results[abi]["path"] = dest.relative_to(ROOT).as_posix()
+    for abi, (result, library) in dotprod.items():
+        dest = ROOT / "app/src/main/jniLibs" / abi / DOTPROD_LIBRARY
+        shutil.copyfile(library, dest)
+        require_hash(dest, result["sha256"])
+        result["path"] = dest.relative_to(ROOT).as_posix()
     assets = ROOT / "app/src/main/assets"
     assets.mkdir(parents=True, exist_ok=True)
     if not (assets / MODEL).is_file() or sha(assets / MODEL) != MODEL_SHA:
         shutil.copyfile(model, assets / MODEL)
     require_hash(assets / MODEL, MODEL_SHA)
+    if not (assets / SMALL_MODEL).is_file() or sha(assets / SMALL_MODEL) != SMALL_SHA:
+        shutil.copyfile(small, assets / SMALL_MODEL)
+    require_hash(assets / SMALL_MODEL, SMALL_SHA)
     if not (assets / VAD_MODEL).is_file() or sha(assets / VAD_MODEL) != VAD_SHA:
         shutil.copyfile(vad, assets / VAD_MODEL)
     require_hash(assets / VAD_MODEL, VAD_SHA)
@@ -186,6 +211,8 @@ def main():
                "source_archive_sha256": SOURCE_SHA, "source_files_verified": count,
                "model": MODEL, "model_revision": REVISION, "model_url": MODEL_URL,
                "model_sha256": sha(assets / MODEL), "model_bytes": MODEL_BYTES,
+               "small_model": SMALL_MODEL, "small_url": SMALL_URL,
+               "small_sha256": sha(assets / SMALL_MODEL), "small_bytes": SMALL_BYTES,
                "vad_model": VAD_MODEL, "vad_revision": VAD_REVISION, "vad_url": VAD_URL,
                "vad_sha256": sha(assets / VAD_MODEL), "vad_bytes": VAD_BYTES,
                "licenses": {p.relative_to(ROOT).as_posix(): sha(p) for p in sorted(licenses.glob("whisper*"))},
@@ -195,6 +222,7 @@ def main():
                "clang_sha256": sha(tools / "clang"), "cpu_only": True,
                "network_backend": False, "dynamic_backends": False,
                "native_input_sha256": inputs, "abis": results,
+               "dotprod": {abi: result for abi, (result, _) in dotprod.items()},
                "runtime_inference_verified": False,
                "verification_boundary": "Cross-compiled and ELF-audited; device/JNI inference is a separate gate."}
     RECEIPT.parent.mkdir(exist_ok=True)

@@ -28,7 +28,7 @@ public final class RefinementJobService extends JobService {
     private static final long PASS_MS = 7 * 60 * 1000L;
     private static final Object LOCK = new Object();
     private static Work owner;
-    /** Threads while a capture is active, leaving cores for live speech and the audio pipeline. */
+    /** Threads while a capture is active on phones with fewer than 8 cores. */
     static final int CAPTURE_THREADS = 2;
     /** Slightly below normal, but not THREAD_PRIORITY_BACKGROUND, which moves threads to the little cores. */
     static final int WORKER_PRIORITY = 4;
@@ -37,8 +37,12 @@ public final class RefinementJobService extends JobService {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private Work current;
 
+    /** Starts the accurate (medium) pass when the phone is next plugged in. */
+    static final int JOB_ID_CHARGING = 41009;
+
     /** Queue is in encrypted SQLite; requests may be safely repeated. */
     public static void schedule(Context context) {
+        scheduleCharging(context);
         synchronized (LOCK) {
             if (owner != null) { owner.rescheduleRequested = true; return; }
             if (capturing()) { startInProcess(context.getApplicationContext()); return; }
@@ -61,16 +65,34 @@ public final class RefinementJobService extends JobService {
         }
     }
 
+    private static void scheduleCharging(Context context) {
+        if (!OmiSettingsActivity.betterWhileCharging(context)) return;
+        try {
+            JobScheduler scheduler = context.getSystemService(JobScheduler.class);
+            if (scheduler != null) scheduler.schedule(new JobInfo.Builder(JOB_ID_CHARGING,
+                    new ComponentName(context, RefinementJobService.class))
+                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NONE)
+                    .setRequiresCharging(true)
+                    .setRequiresStorageNotLow(true)
+                    .build());
+        } catch (RuntimeException unavailable) { /* The quick transcripts stand. */ }
+    }
+
     private static void setState(String value) { state = value; revision++; }
     private static boolean capturing() { return CaptureService.active || OmiCaptureService.active; }
 
     /** A capture started: refine saved recordings alongside it, in this process. Any thread. */
     public static void captureStarted(Context context) { schedule(context); }
 
-    /** Whisper threads for the next window: fewer while capturing, re-read every window. */
-    static int threads() {
-        int cores = Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors()));
-        return capturing() ? Math.min(CAPTURE_THREADS, cores) : cores;
+    /**
+     * Whisper threads for the next window, re-read every window: up to 4; while capturing, leave
+     * room for live speech and the audio pipeline (2 on phones with fewer than 8 cores).
+     */
+    static int threads() { return threads(Runtime.getRuntime().availableProcessors(), capturing()); }
+
+    static int threads(int processors, boolean capturing) {
+        int cores = Math.max(1, Math.min(4, processors));
+        return capturing && processors < 8 ? Math.min(CAPTURE_THREADS, cores) : cores;
     }
 
     private static void startInProcess(Context context) {
@@ -125,49 +147,50 @@ public final class RefinementJobService extends JobService {
         try {
             if (work.shouldPause()) { retry = true; return; }
             Recordings store = Recordings.get(context);
-            List<Recordings.Refinement> pending = store.pendingRefinements();
-            if (pending.isEmpty()) { setState("Saved transcripts up to date"); RefinementProgress.idle(null); return; }
+            boolean better = OmiSettingsActivity.betterWhileCharging(context);
+            List<Recordings.Refinement> quick = store.pendingRefinements();
+            boolean accurate = better && charging(context) && !store.pendingFinals().isEmpty();
+            if (quick.isEmpty() && !accurate) {
+                setState("Saved transcripts up to date");
+                RefinementProgress.idle(better && !store.pendingFinals().isEmpty()
+                        ? "Quick transcripts done · the accurate ones are made while the phone charges" : null);
+                return;
+            }
             setState("Preparing Whisper for saved recordings");
-            String path = ModelInstaller.prepare(context, work::cancelledNow).getAbsolutePath();
             String vad = ModelInstaller.prepareVad(context, work::cancelledNow).getAbsolutePath();
-            if (work.shouldPause()) { retry = true; return; }
-            work.model = new WhisperModel(path, vad);
-            if (work.cancelledNow()) { work.cancel(); retry = true; return; }
             String language = OmiSettingsActivity.language(context);
             String vocabulary = OmiSettingsActivity.vocabulary(context);
             List<String> done = new ArrayList<>();
-            for (Recordings.Refinement entry : pending) {
-                if (work.shouldPause()) { retry = true; break; }
-                try {
-                    Recordings.Refinement fresh = store.refinement(entry.id);
-                    if (fresh == null || !"pending".equals(fresh.state)) continue;
-                    setState("Refining saved transcript · live draft and audio available");
-                    WhisperModel model = work.model;
-                    RefinementProgress.begin(fresh.id, fresh.offsetBytes, fresh.totalBytes, model::progress);
-                    refine(store, fresh, model, language, vocabulary, work::cancelledNow, work::softStop);
-                    done.add(fresh.id);
-                    revision++;
-                } catch (Recordings.StaleCheckpointException restarted) {
-                    // Set to refine again meanwhile: it's pending from the start; pick it up next.
-                    retry = true;
-                    revision++;
-                } catch (Exception | LinkageError failure) {
-                    if (work.shouldPause() || failure instanceof RefinementEngine.Paused) {
-                        retry = true;
-                        break;
-                    }
-                    // A failed item is not retried forever. The user can explicitly retry.
-                    try { store.failRefinement(entry.id); }
-                    catch (Exception missingOrDamaged) { /* Preserve original archive; no destructive repair. */ }
-                    setState("Whisper refinement failed · live draft and audio kept; retry in Library");
+            // Quick pass: Whisper small, while recording too.
+            if (!quick.isEmpty()) {
+                String small = ModelInstaller.prepareSmall(context, work::cancelledNow).getAbsolutePath();
+                if (work.shouldPause()) { retry = true; return; }
+                work.model = new WhisperModel(small, vad);
+                RefinementProgress.build = WhisperNative.BUILD + " build";
+                if (work.cancelledNow()) { work.cancel(); retry = true; return; }
+                retry |= pass(work, store, quick, false, language, vocabulary, done);
+                closeModel(work);
+            }
+            // Accurate pass: Whisper medium, only while charging; it replaces the quick text when done.
+            if (!work.shouldPause() && better && charging(context)) {
+                List<Recordings.Refinement> finals = store.pendingFinals();
+                if (!finals.isEmpty()) {
+                    String medium = ModelInstaller.prepare(context, work::cancelledNow).getAbsolutePath();
+                    if (work.shouldPause()) { retry = true; return; }
+                    work.model = new WhisperModel(medium, vad);
+                    RefinementProgress.build = WhisperNative.BUILD + " build";
+                    if (work.cancelledNow()) { work.cancel(); retry = true; return; }
+                    retry |= pass(work, store, finals, true, language, vocabulary, done);
                 }
             }
             try { ReadyNotifier.refined(context, done); }
             catch (RuntimeException notificationUnavailable) { /* Transcripts are saved either way. */ }
             if (!work.cancelledNow() && !store.pendingRefinements().isEmpty()) retry = true;
+            if (!work.cancelledNow() && better && charging(context) && !store.pendingFinals().isEmpty()) retry = true;
             if (!retry) {
                 setState("Whisper pass finished · check each recording's transcript status");
-                RefinementProgress.idle(null);
+                RefinementProgress.idle(better && !store.pendingFinals().isEmpty()
+                        ? "Quick transcripts done · the accurate ones are made while the phone charges" : null);
             }
         } catch (Exception | LinkageError failure) {
             if (work.shouldPause()) retry = true;
@@ -207,23 +230,85 @@ public final class RefinementJobService extends JobService {
         }
     }
 
+    /** One lane over its recordings with the loaded model. Returns true when more is left to do. */
+    private static boolean pass(Work work, Recordings store, List<Recordings.Refinement> entries, boolean accurate,
+                                String language, String vocabulary, List<String> done) {
+        boolean retry = false;
+        for (Recordings.Refinement entry : entries) {
+            if (work.shouldPause() || (accurate && !charging(work.context))) { retry = true; break; }
+            try {
+                Recordings.Refinement fresh = accurate ? store.finalRefinement(entry.id) : store.refinement(entry.id);
+                if (fresh == null || !"pending".equals(fresh.state)) continue;
+                setState(accurate ? "Improving a quick transcript while charging" : "Refining saved transcript · live draft and audio available");
+                WhisperModel model = work.model;
+                RefinementProgress.begin(fresh.id, fresh.offsetBytes, fresh.totalBytes, model::progress, accurate);
+                refine(store, fresh, model, language, vocabulary, work::cancelledNow,
+                        accurate ? () -> work.softStop() || !charging(work.context) : work::softStop);
+                if (!accurate) done.add(fresh.id);
+                revision++;
+            } catch (Recordings.StaleCheckpointException restarted) {
+                // Set to refine again meanwhile: it's pending from the start; pick it up next.
+                retry = true;
+                revision++;
+            } catch (Exception | LinkageError failure) {
+                if (work.shouldPause() || failure instanceof RefinementEngine.Paused) {
+                    retry = true;
+                    break;
+                }
+                // A failed item is not retried forever. The user can explicitly retry.
+                try { if (accurate) store.failFinal(entry.id); else store.failRefinement(entry.id); }
+                catch (Exception missingOrDamaged) { /* Preserve original archive; no destructive repair. */ }
+                setState(accurate ? "The accurate pass failed for a recording · its quick transcript stays"
+                        : "Whisper refinement failed · live draft and audio kept; retry in Library");
+            }
+        }
+        return retry;
+    }
+
+    private static void closeModel(Work work) {
+        WhisperModel model = work.model;
+        work.model = null;
+        if (model != null) {
+            try { model.close(); } catch (RuntimeException | LinkageError ignored) { }
+        }
+    }
+
+    /** Plugged in (or full on the charger). Any thread. */
+    static boolean charging(Context context) {
+        try {
+            android.os.BatteryManager battery = context.getSystemService(android.os.BatteryManager.class);
+            return battery != null && battery.isCharging();
+        } catch (RuntimeException unavailable) { return false; }
+    }
+
     static void refine(Recordings store, Recordings.Refinement entry, WhisperModel model, String language, String vocabulary,
                        java.util.function.BooleanSupplier cancelled) throws Exception {
-        refine(store, entry, model, language, vocabulary, cancelled, () -> false);
+        refine(store, entry, model, language, vocabulary, cancelled, () -> false, Recordings.MEDIUM);
     }
 
     static void refine(Recordings store, Recordings.Refinement entry, WhisperModel model, String language, String vocabulary,
                        java.util.function.BooleanSupplier cancelled, java.util.function.BooleanSupplier stopBeforeWindow)
             throws Exception {
+        refine(store, entry, model, language, vocabulary, cancelled, stopBeforeWindow, Recordings.SMALL);
+    }
+
+    /** {@code quickModel}: what made a main (non-final) pass, recorded on completion. */
+    static void refine(Recordings store, Recordings.Refinement entry, WhisperModel model, String language, String vocabulary,
+                       java.util.function.BooleanSupplier cancelled, java.util.function.BooleanSupplier stopBeforeWindow,
+                       String quickModel) throws Exception {
         RefinementEngine.run(entry.totalBytes, entry.offsetBytes,
                 consumer -> store.forEachPcm(entry.id, consumer::accept), samples -> model.transcribe(samples, threads(), language, vocabulary),
                 new RefinementEngine.Sink() {
                     public void commit(long before, long after, String text) throws Exception {
-                        store.commitRefinementBatch(entry.id, before, after, text);
+                        if (entry.finalPass) store.commitFinalBatch(entry.id, before, after, text);
+                        else store.commitRefinementBatch(entry.id, before, after, text);
                         RefinementProgress.saved(after);
                         revision++;
                     }
-                    public void complete() throws Exception { store.completeRefinement(entry.id); }
+                    public void complete() throws Exception {
+                        if (entry.finalPass) store.completeFinal(entry.id);
+                        else store.completeRefinement(entry.id, quickModel);
+                    }
                 }, cancelled, stopBeforeWindow, RefinementProgress::window);
     }
 

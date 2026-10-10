@@ -8,7 +8,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Upstream is a verified, immutable library input, not a package installer.
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(GGML_CPU ON CACHE BOOL "" FORCE)
-set(GGML_CPU_ARM_ARCH "armv8-a" CACHE STRING "Portable Android arm64 baseline" FORCE)
+# Two arm64 builds: "portable" (armv8-a, any 64-bit phone) and "dotprod" (ARMv8.2 dot-product and
+# half-precision instructions, most phones since ~2018), chosen at runtime by WhisperNative.
+set(NOTTHEOMI_VARIANT "portable" CACHE STRING "portable or dotprod")
+if(NOTTHEOMI_VARIANT STREQUAL "dotprod")
+    set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16" CACHE STRING "ARMv8.2 dotprod+fp16 build" FORCE)
+elseif(NOTTHEOMI_VARIANT STREQUAL "portable")
+    set(GGML_CPU_ARM_ARCH "armv8-a" CACHE STRING "Portable Android arm64 baseline" FORCE)
+else()
+    message(FATAL_ERROR "NOTTHEOMI_VARIANT must be portable or dotprod")
+endif()
 foreach(option
     WHISPER_BUILD_TESTS WHISPER_BUILD_EXAMPLES WHISPER_BUILD_SERVER WHISPER_CURL
     WHISPER_SDL2 WHISPER_COREML WHISPER_OPENVINO WHISPER_VITISAI
@@ -44,6 +53,12 @@ target_link_options(nottheomi-whisper PRIVATE -Wl,--exclude-libs,ALL
     -Wl,-z,defs -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack)
 set_target_properties(nottheomi-whisper PROPERTIES
     LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/exports.map")
+if(NOTTHEOMI_VARIANT STREQUAL "dotprod")
+    if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
+        message(FATAL_ERROR "The dotprod build is arm64-only")
+    endif()
+    set_target_properties(nottheomi-whisper PROPERTIES OUTPUT_NAME "nottheomi-whisper-dotprod")
+endif()
 
 option(NOTTHEOMI_HOST_TEST "Build host JNI for safety tests, never packaged" OFF)
 if(ANDROID)

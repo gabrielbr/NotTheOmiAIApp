@@ -31,6 +31,13 @@ public final class NativeSafetyTest {
         check(entered());
     }
     public static void main(String[] args) throws Exception {
+        // Library choice: the fast build only when every core has dotprod and fp16 SIMD.
+        check(WhisperNative.fastCpu("processor : 0\nFeatures : fp asimd evtstrm aes asimdhp cpuid asimdrdm asimddp\n"
+                + "processor : 1\nFeatures : fp asimd asimdhp asimddp lrcpc\n"));
+        check(!WhisperNative.fastCpu("Features : fp asimd asimddp\n"));          // no fp16
+        check(!WhisperNative.fastCpu("Features : fp asimd asimdhp asimddp\nFeatures : fp asimd\n")); // one core lacks it
+        check(!WhisperNative.fastCpu("flags : fpu sse avx2\n") && !WhisperNative.fastCpu(null)); // x86, unreadable
+        check(WhisperNative.BUILD.equals("compatible")); // this x86 host loads the portable build
         io(() -> WhisperNative.openFile(null, null));
         io(() -> WhisperNative.openFile("", null));
         io(() -> WhisperNative.openFile("x".repeat(4097), null));

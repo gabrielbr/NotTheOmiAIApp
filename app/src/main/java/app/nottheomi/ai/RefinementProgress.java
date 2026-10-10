@@ -15,6 +15,8 @@ final class RefinementProgress {
     static final long BYTES_PER_MS = 32; // 16 kHz mono PCM16
 
     static LongSupplier clock = System::currentTimeMillis;
+    /** Which native Whisper build runs ("fast build" / "compatible build"); null until loaded. */
+    static volatile String build;
 
     private static String id;
     private static long saved, total, windowStart, windowBytes, windowStartedAt, lastChangeAt;
@@ -23,23 +25,34 @@ final class RefinementProgress {
     private static double speed;
     private static IntSupplier windowPercent = () -> 0;
     private static String waiting;
+    /** The current pass is the accurate (medium) one, made while charging. */
+    private static boolean accurate;
 
     private RefinementProgress() {}
 
     /** A snapshot for display. */
     static final class Snapshot {
         final String id, waiting;
+        final boolean accurate;
         final long saved, total, done, lastChangeAt;
         final double speed;
-        Snapshot(String id, String waiting, long saved, long total, long done, long lastChangeAt, double speed) {
-            this.id = id; this.waiting = waiting; this.saved = saved; this.total = total; this.done = done;
+        Snapshot(String id, String waiting, long saved, long total, long done, long lastChangeAt, double speed,
+                 boolean accurate) {
+            this.id = id; this.waiting = waiting; this.accurate = accurate; this.saved = saved; this.total = total; this.done = done;
             this.lastChangeAt = lastChangeAt; this.speed = speed;
         }
         int percent() { return total <= 0 ? 0 : (int) Math.min(100, done * 100 / total); }
     }
 
     static synchronized void begin(String recording, long savedBytes, long totalBytes, IntSupplier percent) {
-        id = recording; saved = savedBytes; total = totalBytes; windowBytes = 0;
+        begin(recording, savedBytes, totalBytes, percent, false);
+    }
+
+    static synchronized void begin(String recording, long savedBytes, long totalBytes, IntSupplier percent,
+                                   boolean accuratePass) {
+        id = recording; accurate = accuratePass;
+        if (accuratePass) speed = 0; // a different model: its own speed
+        saved = savedBytes; total = totalBytes; windowBytes = 0;
         windowPercent = percent == null ? () -> 0 : percent;
         waiting = null; lastPercent = -1; lastChangeAt = clock.getAsLong();
         RefinementJobService.revision++;
@@ -75,12 +88,12 @@ final class RefinementProgress {
             lastPercent = percent;
         }
         long done = saved + windowBytes * percent / 100;
-        return new Snapshot(id, waiting, saved, total, done, lastChangeAt, speed);
+        return new Snapshot(id, waiting, saved, total, done, lastChangeAt, speed, accurate);
     }
 
     /** "Refining · 34% · 12:30 of 41:00 · about 25 min left · updated 20 s ago". */
     static String describe(Snapshot s, long now) {
-        StringBuilder line = new StringBuilder("Refining · ").append(s.percent()).append("% · ")
+        StringBuilder line = new StringBuilder(s.accurate ? "Improving · " : "Refining · ").append(s.percent()).append("% · ")
                 .append(clock(s.done / BYTES_PER_MS)).append(" of ").append(clock(s.total / BYTES_PER_MS));
         if (s.speed > 0) {
             long leftMs = (long) ((s.total - s.done) / (double) BYTES_PER_MS / s.speed);
@@ -111,6 +124,6 @@ final class RefinementProgress {
     /** Tests only. */
     static synchronized void reset() {
         id = null; saved = total = windowStart = windowBytes = windowStartedAt = lastChangeAt = 0;
-        lastPercent = -1; speed = 0; windowPercent = () -> 0; waiting = null;
+        lastPercent = -1; speed = 0; windowPercent = () -> 0; waiting = null; accurate = false;
     }
 }
