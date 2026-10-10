@@ -6,12 +6,14 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <unordered_map>
 
 namespace {
 using nottheomi::Wiped;
 struct Engine {
     whisper_context *ctx = nullptr;
+    std::string vad_path; // Bundled Silero model; empty disables VAD.
     std::atomic<bool> cancelled{false};
     std::mutex inference;
     ~Engine() { if (ctx) whisper_free(ctx); }
@@ -45,18 +47,42 @@ bool begin_encoder(whisper_context *, whisper_state *, void *data) {
 }
 jstring empty(JNIEnv *env) { return env->NewString(nullptr, 0); }
 
-jlong open_file(JNIEnv *env, jstring name) {
-    if (!name) { fail(env, "Missing Whisper model path"); return 0; }
+// Java path -> UTF-8. False (with a pending exception) when missing or malformed.
+bool utf8_path(JNIEnv *env, jstring name, std::string &out) {
+    if (!name) { fail(env, "Missing Whisper model path"); return false; }
     const jsize size = env->GetStringLength(name);
-    if (size == 0 || size > 4096) { fail(env, "Invalid Whisper model path"); return 0; }
+    if (size == 0 || size > 4096) { fail(env, "Invalid Whisper model path"); return false; }
     Wiped<std::vector<uint16_t>> chars;
     chars.value.resize(size);
     env->GetStringRegion(name, 0, size, reinterpret_cast<jchar *>(chars.value.data()));
-    if (env->ExceptionCheck()) return 0;
+    if (env->ExceptionCheck()) return false;
+    out = nottheomi::path_utf8(chars.value.data(), chars.value.size());
+    return true;
+}
+
+// Only these languages; anything else is a caller error, not a model choice.
+const char *language_code(JNIEnv *env, jstring language) {
+    if (!language) return nullptr;
+    const jsize size = env->GetStringLength(language);
+    if (size < 2 || size > 4) return nullptr;
+    jchar chars[4];
+    env->GetStringRegion(language, 0, size, chars);
+    if (env->ExceptionCheck()) return nullptr;
+    const std::u16string value(reinterpret_cast<const char16_t *>(chars), size);
+    if (value == u"pt") return "pt";
+    if (value == u"en") return "en";
+    if (value == u"auto") return "auto";
+    return nullptr;
+}
+
+jlong open_file(JNIEnv *env, jstring name, jstring vad) {
     Wiped<std::string> path;
-    path.value = nottheomi::path_utf8(chars.value.data(), chars.value.size());
+    if (!utf8_path(env, name, path.value)) return 0;
+    std::string vad_path;
+    if (vad && !utf8_path(env, vad, vad_path)) return 0;
     std::call_once(quiet_once, [] { whisper_log_set(quiet, nullptr); ggml_log_set(quiet, nullptr); });
     auto state = std::make_shared<Engine>();
+    state->vad_path = std::move(vad_path);
     auto options = whisper_context_default_params();
     options.use_gpu = false;
     options.flash_attn = false;
@@ -71,9 +97,30 @@ jlong open_file(JNIEnv *env, jstring name) {
     return handle;
 }
 
-jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads) {
+// Optional vocabulary hint (names, jargon), at most kMaxPromptChars; empty when absent.
+constexpr jsize kMaxPromptChars = 400;
+bool prompt_utf8(JNIEnv *env, jstring prompt, std::string &out) {
+    out.clear();
+    if (!prompt) return true;
+    const jsize size = env->GetStringLength(prompt);
+    if (size == 0) return true;
+    if (size > kMaxPromptChars) return false;
+    std::vector<uint16_t> chars(size);
+    env->GetStringRegion(prompt, 0, size, reinterpret_cast<jchar *>(chars.data()));
+    if (env->ExceptionCheck()) return false;
+    out = nottheomi::path_utf8(chars.data(), chars.size());
+    return true;
+}
+
+jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads, jstring language, jstring prompt) {
     auto state = lookup(handle);
     if (!state || !samples) { fail(env, "Invalid Whisper input boundary"); return nullptr; }
+    const char *requested = language_code(env, language);
+    if (!requested) { fail(env, "Unsupported Whisper language"); return nullptr; }
+    std::string vocabulary;
+    try {
+        if (!prompt_utf8(env, prompt, vocabulary)) { fail(env, "Invalid Whisper vocabulary"); return nullptr; }
+    } catch (const std::invalid_argument &) { fail(env, "Invalid Whisper vocabulary"); return nullptr; }
     const jsize count = env->GetArrayLength(samples);
     if (env->ExceptionCheck()) return nullptr;
     if (count > nottheomi::kMaxSamples) {
@@ -101,9 +148,10 @@ jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads)
     if (count < 1600 || energy / count < 0.00000064 || cancelled(state.get())) return empty(env);
     auto p = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
     p.n_threads = std::clamp<int>(threads, 1, 4);
-    // Mixed Portuguese/English speech: multilingual weights detect the language per
-    // 30-second window. English-only (.en) weights keep the fixed English path.
-    p.language = whisper_is_multilingual(state->ctx) ? "auto" : "en";
+    // A fixed language (Portuguese by default) is far more accurate than detecting
+    // it per window on noisy wearable audio; "auto" stays available for mixed speech.
+    // English-only (.en) weights keep the fixed English path.
+    p.language = whisper_is_multilingual(state->ctx) ? requested : "en";
     p.detect_language = false;
     p.translate = false;
     p.no_context = true;
@@ -121,7 +169,12 @@ jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads)
     p.entropy_thold = 2.4f;
     // Full model audio context (not experimental shortened-context decoding).
     p.audio_ctx = 0;
-    p.vad = false; // No secondary model, model download or network path.
+    // Words the user expects (names, jargon): biases spelling, not content.
+    p.initial_prompt = vocabulary.empty() ? nullptr : vocabulary.c_str();
+    // Silero VAD (bundled, offline): Whisper decodes only the speech in the window,
+    // which stops it skipping sentences in noise and skips silence quickly.
+    p.vad = !state->vad_path.empty();
+    p.vad_model_path = p.vad ? state->vad_path.c_str() : nullptr;
     p.abort_callback = cancelled;
     p.abort_callback_user_data = state.get();
     p.encoder_begin_callback = begin_encoder;
@@ -134,8 +187,8 @@ jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads)
     Wiped<std::string> text;
     const int segments = whisper_full_n_segments(state->ctx);
     for (int i = 0; i < segments; ++i) {
-        // Comparison also excludes NaN probabilities.
-        if (!(whisper_full_get_segment_no_speech_prob(state->ctx, i) < 0.6f)) continue;
+        // No extra no-speech filter: in wearable noise it dropped most real speech.
+        // Whisper's own rule (no-speech AND low confidence) and VAD handle silence.
         const char *part = whisper_full_get_segment_text(state->ctx, i);
         if (!part) { fail(env, "Invalid Whisper text result"); return nullptr; }
         const size_t remaining = nottheomi::kMaxTextBytes - text.value.size();
@@ -155,16 +208,17 @@ jstring transcribe(JNIEnv *env, jlong handle, jshortArray samples, jint threads)
 // C++ exceptions must never unwind into the JVM. Errors deliberately contain no
 // model paths, transcripts, audio or implementation exception messages.
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_nottheomi_ai_WhisperNative_openFile(JNIEnv *env, jclass, jstring name) {
-    try { return open_file(env, name); }
+Java_app_nottheomi_ai_WhisperNative_openFile(JNIEnv *env, jclass, jstring name, jstring vad) {
+    try { return open_file(env, name, vad); }
     catch (const std::bad_alloc &) { fail(env, "Whisper memory allocation failed"); }
     catch (...) { fail(env, "Whisper model initialization failed"); }
     return 0;
 }
 extern "C" JNIEXPORT jstring JNICALL
 Java_app_nottheomi_ai_WhisperNative_transcribe(JNIEnv *env, jclass, jlong handle,
-                                            jshortArray samples, jint threads) {
-    try { return transcribe(env, handle, samples, threads); }
+                                            jshortArray samples, jint threads, jstring language,
+                                            jstring prompt) {
+    try { return transcribe(env, handle, samples, threads, language, prompt); }
     catch (const std::bad_alloc &) { fail(env, "Whisper memory allocation failed"); }
     catch (...) { fail(env, "Whisper inference failed"); }
     return nullptr;

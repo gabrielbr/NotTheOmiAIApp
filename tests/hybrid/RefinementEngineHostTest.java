@@ -45,14 +45,27 @@ public final class RefinementEngineHostTest {
             for (short value : samples) { check(value == (short) (decoded[0] % 32000 - 16000), "PCM byte order and continuity"); decoded[0]++; }
             retained.add(samples); return " batch-" + decoded[0] + " ";
         }, full, () -> false);
-        check(full.complete == 1 && full.offset == longPcm.length && full.text.size() == 3, "All windows committed before publication");
+        check(full.complete == 1 && full.offset == longPcm.length && full.text.size() == retained.size() && retained.size() >= 3, "All windows committed before publication");
+        for (int i = 0; i + 1 < retained.size(); i++) check(retained.get(i).length >= RefinementEngine.MIN_WINDOW_SAMPLES, "Windows cut no earlier than 18 s");
         for (short[] samples : retained) for (short value : samples) check(value == 0, "Native input wiped"); scenarios++;
 
-        long resume = window * 2L; Sink resumed = new Sink(resume); int[] n = {(int) resume / 2};
+        long resume = retained.get(0).length * 2L; Sink resumed = new Sink(resume); int[] n = {(int) resume / 2};
+        List<Integer> resumedSizes = new ArrayList<>();
         RefinementEngine.run(longPcm.length, resume, chunks(longPcm, 1002), samples -> {
+            resumedSizes.add(samples.length);
             for (short value : samples) { check(value == (short) (n[0] % 32000 - 16000), "Resume prefix not duplicated"); n[0]++; } return "resumed";
         }, resumed, () -> false);
-        check(resumed.complete == 1 && resumed.text.size() == 2 && resumed.offset == longPcm.length, "Resume exact offset"); scenarios++;
+        check(resumed.complete == 1 && resumed.text.size() == retained.size() - 1 && resumed.offset == longPcm.length, "Resume exact offset");
+        for (int i = 0; i < resumedSizes.size(); i++) check(resumedSizes.get(i) == retained.get(i + 1).length, "Resumed pass cuts where the first pass did"); scenarios++;
+
+        // Speech-like audio with one silent 100 ms at 25 s: the first window ends in that silence.
+        byte[] gap = pcm(window + 16000);
+        int quiet = 25 * 16000;
+        for (int i = quiet; i < quiet + 1600; i++) { gap[i * 2] = 0; gap[i * 2 + 1] = 0; }
+        List<Integer> sizes = new ArrayList<>(); Sink cut = new Sink(0);
+        RefinementEngine.run(gap.length, 0, chunks(gap, 3200), samples -> { sizes.add(samples.length); return "x"; }, cut, () -> false);
+        check(sizes.size() == 2 && sizes.get(0) == quiet + 800 && sizes.get(0) + sizes.get(1) == window + 16000, "Window ends in the pause");
+        check(cut.complete == 1 && cut.offset == gap.length, "Pause-cut windows cover all audio"); scenarios++;
 
         Sink done = new Sink(longPcm.length);
         RefinementEngine.run(longPcm.length, longPcm.length, chunks(longPcm, 32000), samples -> { throw new AssertionError("Completed checkpoint must not decode again"); }, done, () -> false);
@@ -68,7 +81,7 @@ public final class RefinementEngineHostTest {
             public void complete() { throw new AssertionError("Paused stream marked complete"); }
         };
         rejected(() -> RefinementEngine.run(longPcm.length, 0, chunks(longPcm, 32000), samples -> "one", checkpointThenStop, stopAfterCommit::get), RefinementEngine.Paused.class);
-        check(midway.offset == window * 2L && midway.text.size() == 1, "Durable checkpoint retained before pause"); scenarios++;
+        check(midway.offset == retained.get(0).length * 2L && midway.text.size() == 1, "Durable checkpoint retained before pause"); scenarios++;
 
         byte[] shortPcm = pcm(127); Sink invalid = new Sink(0);
         rejected(() -> RefinementEngine.run(0, 0, chunks(shortPcm, 100), s -> "", invalid, () -> false), IOException.class);

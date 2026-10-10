@@ -5,9 +5,17 @@ import java.io.InterruptedIOException;
 import java.util.Arrays;
 import java.util.function.BooleanSupplier;
 
-/** Bounded, restartable PCM16 refinement. Neither plaintext files nor whole-session buffers. */
+/**
+ * Bounded, restartable PCM16 refinement. Neither plaintext files nor whole-session buffers.
+ * Windows end at the quietest moment between 18 and 30 seconds, so a sentence is rarely cut in
+ * two; the rest of the window starts the next one. Checkpoints sit on those cuts, and the cut
+ * depends only on the audio, so a resumed pass windows exactly like an uninterrupted one.
+ */
 final class RefinementEngine {
     static final int WINDOW_SAMPLES = 30 * 16000;
+    static final int MIN_WINDOW_SAMPLES = 18 * 16000;
+    /** 100 ms frames, searched every 50 ms. */
+    static final int FRAME = 1600, STEP = 800;
     interface Consumer { void accept(byte[] pcm) throws Exception; }
     interface Source { void stream(Consumer consumer) throws Exception; }
     interface Decoder { String transcribe(short[] samples) throws Exception; }
@@ -62,6 +70,19 @@ final class RefinementEngine {
             } finally { Arrays.fill(window, (short) 0); }
         }
 
+        /** End of the window: the middle of its quietest 100 ms after 18 s. */
+        static int cut(short[] window, int count) {
+            if (count < WINDOW_SAMPLES) return count;
+            long best = Long.MAX_VALUE;
+            int at = count;
+            for (int start = MIN_WINDOW_SAMPLES; start + FRAME <= count; start += STEP) {
+                long energy = 0;
+                for (int i = start; i < start + FRAME; i++) energy += (long) window[i] * window[i];
+                if (energy < best) { best = energy; at = start + FRAME / 2; }
+            }
+            return at;
+        }
+
         void accept(byte[] pcm) throws Exception {
             if (pcm == null) throw new IOException("Missing saved PCM chunk");
             try {
@@ -79,14 +100,16 @@ final class RefinementEngine {
 
         void flush() throws Exception {
             check();
-            short[] samples = count == window.length ? window : Arrays.copyOf(window, count);
-            int used = count;
+            int used = cut(window, count);
+            short[] samples = Arrays.copyOf(window, used);
             String text;
             try { text = decoder.transcribe(samples); }
             finally {
                 Arrays.fill(samples, (short) 0);
-                Arrays.fill(window, (short) 0);
-                count = 0;
+                // The audio after the cut opens the next window.
+                System.arraycopy(window, used, window, 0, count - used);
+                Arrays.fill(window, count - used, window.length, (short) 0);
+                count -= used;
             }
             check(); // Never commit a result from preempted native work.
             if (text == null) throw new IOException("Refinement returned no result");

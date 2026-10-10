@@ -26,6 +26,34 @@ MODEL = "ggml-medium-q5_0.bin"
 MODEL_SHA = "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f"
 MODEL_BYTES = 539212467
 MODEL_URL = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/{REVISION}/{MODEL}"
+# Silero VAD v5.1.2 converted for whisper.cpp (MIT, snakers4/silero-vad).
+VAD_REVISION = "9ffd54a1e1ee413ddf265af9913beaf518d1639b"
+VAD_MODEL = "ggml-silero-v5.1.2.bin"
+VAD_SHA = "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf"
+VAD_BYTES = 885098
+VAD_URL = f"https://huggingface.co/ggml-org/whisper-vad/resolve/{VAD_REVISION}/{VAD_MODEL}"
+VAD_LICENSE = '''MIT License
+
+Copyright (c) 2020-present Silero Team
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+'''
 MODEL_LICENSE_SHA = "b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d"
 MODEL_LICENSE = '''MIT License
 
@@ -153,10 +181,16 @@ def prepare(offline=False, cache_from=()):
           [p / "whisper-models" / MODEL for p in cache_from], offline)
     if model.stat().st_size != MODEL_BYTES:
         raise ValueError("Pinned model size mismatch")
+    vad = CACHE / "whisper-models" / VAD_MODEL
+    fetch(VAD_URL, vad, VAD_SHA,
+          [p / "whisper-models" / VAD_MODEL for p in cache_from], offline)
+    if vad.stat().st_size != VAD_BYTES:
+        raise ValueError("Pinned VAD model size mismatch")
     return {"source_commit": COMMIT, "source_url": SOURCE_URL,
             "source_archive_sha256": sha(archive), "source_files_verified": count,
             "model_revision": REVISION, "model_url": MODEL_URL,
-            "model_sha256": sha(model), "model_bytes": model.stat().st_size}
+            "model_sha256": sha(model), "model_bytes": model.stat().st_size,
+            "vad_revision": VAD_REVISION, "vad_url": VAD_URL, "vad_sha256": sha(vad)}
 
 
 def main():

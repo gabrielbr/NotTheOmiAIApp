@@ -47,6 +47,21 @@ public final class LlamaNativeHostTest {
             check(true, "sink exception propagates and stops generation");
         }
         check(LlamaNative.generate(h, utf8("Once upon a time"), 4, 0f, 1, c -> true) > 0, "usable after a sink exception");
+        // Reading the prompt reports progress and can be stopped before any answer.
+        StringBuilder longish = new StringBuilder();
+        for (int i = 0; i < 18; i++) longish.append("Once upon a time there was a cat. "); // ~150 tokens: two read steps, under the 256 context
+        int[] steps = {0}; int[] last = {0, 0};
+        check(LlamaNative.generate(h, utf8(longish.toString()), 4, 0f, 1, new LlamaNative.TokenSink() {
+            public boolean accept(byte[] c) { return true; }
+            public boolean progress(int done, int total) { steps[0]++; last[0] = done; last[1] = total; return true; }
+        }) > 0, "answers after reading the prompt");
+        check(steps[0] >= 2 && last[0] == last[1], "progress reported per chunk, ending at the full prompt");
+        byte[][] got = {null};
+        check(LlamaNative.generate(h, utf8(longish.toString()), 8, 0f, 1, new LlamaNative.TokenSink() {
+            public boolean accept(byte[] c) { got[0] = c; return true; }
+            public boolean progress(int done, int total) { return false; }
+        }) == 0 && got[0] == null, "stop while reading the prompt: no answer, 0 tokens");
+        check(LlamaNative.generate(h, utf8("Once upon a time"), 4, 0f, 1, c -> true) > 0, "usable after stopping mid-prompt");
         LlamaNative.close(h);
         LlamaNative.close(0);
         check(true, "close is safe, including on 0");

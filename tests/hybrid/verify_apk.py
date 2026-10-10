@@ -40,7 +40,7 @@ def main():
         names = archive.namelist()
         assert len(names) == len(set(names)), 'Duplicate APK members'
         assert not any(n.endswith('/jfk.wav') or n.endswith('/test.wav') for n in names), 'Test fixture in release'
-        for key in ['model', 'preview_model']:
+        for key in ['model', 'vad_model', 'preview_model']:
             model = metadata[key]
             member = 'assets/'+model['filename']
             info = archive.getinfo(member)
@@ -50,9 +50,9 @@ def main():
                 for block in iter(lambda: source.read(1024 * 1024), b''):
                     digest.update(block)
                 assert digest.hexdigest() == model['sha256'], 'Wrong model bytes'
-            if key == 'model':
+            if key in ('model', 'vad_model'):
                 assert info.compress_type == zipfile.ZIP_STORED, 'Whisper model compressed'
-        for name in ['whisper.cpp-MIT.txt','whisper-model-MIT.txt','vosk-license.txt','jna-license.txt','concentus-license.txt','omi-license.txt']:
+        for name in ['whisper.cpp-MIT.txt','whisper-model-MIT.txt','whisper-silero-vad-MIT.txt','vosk-license.txt','jna-license.txt','concentus-license.txt','omi-license.txt']:
             assert len(archive.read('assets/licenses/'+name)) > 100, 'Missing license'
         abis = sorted({n.split('/')[1] for n in names if n.startswith('lib/') and n.endswith('.so')})
         assert abis and set(abis) <= {'arm64-v8a','x86_64'}, 'Unintended ABI'

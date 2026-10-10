@@ -18,6 +18,7 @@ import tempfile
 from prepare_whisper import (ROOT, CACHE, SOURCE, COMMIT, SOURCE_SHA, SOURCE_URL,
                              ARCHIVE_NAME, MODEL, MODEL_SHA, MODEL_BYTES, MODEL_URL,
                              REVISION, MODEL_LICENSE, MODEL_LICENSE_SHA,
+                             VAD_MODEL, VAD_SHA, VAD_BYTES, VAD_URL, VAD_REVISION, VAD_LICENSE,
                              require_hash, sha, verify_source)
 
 NDK_VERSION = "27.2.12479018"
@@ -128,6 +129,10 @@ def main():
     require_hash(model, MODEL_SHA)
     if model.stat().st_size != MODEL_BYTES:
         raise ValueError("Pinned model size mismatch")
+    vad = CACHE / "whisper-models" / VAD_MODEL
+    require_hash(vad, VAD_SHA)
+    if vad.stat().st_size != VAD_BYTES:
+        raise ValueError("Pinned VAD model size mismatch")
     if hashlib.sha256(MODEL_LICENSE.encode()).hexdigest() != MODEL_LICENSE_SHA:
         raise ValueError("Model license text checksum mismatch")
     inputs = native_inputs()
@@ -168,15 +173,21 @@ def main():
     if not (assets / MODEL).is_file() or sha(assets / MODEL) != MODEL_SHA:
         shutil.copyfile(model, assets / MODEL)
     require_hash(assets / MODEL, MODEL_SHA)
+    if not (assets / VAD_MODEL).is_file() or sha(assets / VAD_MODEL) != VAD_SHA:
+        shutil.copyfile(vad, assets / VAD_MODEL)
+    require_hash(assets / VAD_MODEL, VAD_SHA)
     licenses = assets / "licenses"
     licenses.mkdir(exist_ok=True)
     shutil.copyfile(SOURCE / "LICENSE", licenses / "whisper.cpp-MIT.txt")
     (licenses / "whisper-model-MIT.txt").write_text(MODEL_LICENSE)
+    (licenses / "whisper-silero-vad-MIT.txt").write_text(VAD_LICENSE)
     tools = ndk / "toolchains/llvm/prebuilt/linux-x86_64/bin"
     receipt = {"schema_version": 1, "source_commit": COMMIT, "source_url": SOURCE_URL,
                "source_archive_sha256": SOURCE_SHA, "source_files_verified": count,
                "model": MODEL, "model_revision": REVISION, "model_url": MODEL_URL,
                "model_sha256": sha(assets / MODEL), "model_bytes": MODEL_BYTES,
+               "vad_model": VAD_MODEL, "vad_revision": VAD_REVISION, "vad_url": VAD_URL,
+               "vad_sha256": sha(assets / VAD_MODEL), "vad_bytes": VAD_BYTES,
                "licenses": {p.relative_to(ROOT).as_posix(): sha(p) for p in sorted(licenses.glob("whisper*"))},
                "ndk": NDK_VERSION, "android_api": 26, "cxx_runtime": "c++_static",
                "cmake_version": run(["cmake", "--version"]).splitlines()[0],

@@ -47,7 +47,7 @@ public final class HybridSpeechIntegrationTest extends InstrumentationTestCase {
             String draft=store.find(session.id).text;assertTrue(draft.toLowerCase(Locale.ROOT).contains("country"));
             store.finish(session.id,"saved");finished=true;assertEquals("pending",store.find(session.id).transcriptState);
             try(WhisperModel model=new WhisperModel(ModelInstaller.prepare(getInstrumentation().getTargetContext()).getAbsolutePath())){
-                RefinementJobService.refine(store,store.refinement(session.id),model,()->false);
+                RefinementJobService.refine(store,store.refinement(session.id),model,"en",null,()->false); // English fixture
             }
             Recordings.Session finalSession=store.find(session.id);assertEquals("complete",finalSession.transcriptState);assertEquals(draft,finalSession.liveText);assertEquals(pcm.length,finalSession.bytes);
             assertTrue(finalSession.text.toLowerCase(Locale.ROOT).contains("country"));ByteArrayOutputStream text=new ByteArrayOutputStream();store.exportText(session.id,text);assertEquals(finalSession.text,text.toString("UTF-8"));
@@ -55,19 +55,20 @@ public final class HybridSpeechIntegrationTest extends InstrumentationTestCase {
             System.out.println("HYBRID_INTEGRATION first_partial_input_ms="+(firstPartialBytes*1000L/32000)+" changed_partials="+partialUpdates+" final=complete encrypted_audio_unchanged=true");
         }finally{Arrays.fill(pcm,(byte)0);if(!finished)store.finish(session.id,"test cleanup");store.delete(session.id);}
     }
-    public void testAndroidSchedulerDefersDuringCaptureAndRefinesSavedAudio() throws Exception {
+    public void testAndroidSchedulerRefinesSavedAudioDuringCapture() throws Exception {
         android.content.Context context=getInstrumentation().getTargetContext();Recordings store=Recordings.get(context);byte[] pcm=fixture();Recordings.Session session=store.create();boolean finished=false;
         JobScheduler scheduler=context.getSystemService(JobScheduler.class);
         try{
             append(store,session.id,pcm);store.appendText(session.id,"Original scheduler live draft");store.finish(session.id,"saved");finished=true;
+            OmiSettingsActivity.preferences(context).edit().putString("language","en").commit(); // English fixture
             scheduler.cancel(RefinementJobService.JOB_ID);CaptureService.active=true;
-            RefinementJobService.schedule(context);assertNull("No new work scheduled during capture",scheduler.getPendingJob(RefinementJobService.JOB_ID));assertEquals("pending",store.refinement(session.id).state);
-            CaptureService.active=false;RefinementJobService.schedule(context);
+            RefinementJobService.schedule(context); // Refines while a capture is active, with fewer threads.
             long end=android.os.SystemClock.elapsedRealtime()+120000;
             while(android.os.SystemClock.elapsedRealtime()<end&&"pending".equals(store.refinement(session.id).state))Thread.sleep(100);
-            assertEquals("complete",store.refinement(session.id).state);assertFalse(CaptureService.active);assertFalse(OmiCaptureService.active);
+            assertEquals("Refined during capture","complete",store.refinement(session.id).state);
+            CaptureService.active=false;assertFalse(CaptureService.active);assertFalse(OmiCaptureService.active);
             assertEquals("Original scheduler live draft",store.find(session.id).liveText);assertTrue(store.find(session.id).text.toLowerCase(Locale.ROOT).contains("country"));
-        }finally{CaptureService.active=false;Arrays.fill(pcm,(byte)0);scheduler.cancel(RefinementJobService.JOB_ID);RefinementJobService.pauseForCapture();if(!finished)store.finish(session.id,"test cleanup");
+        }finally{OmiSettingsActivity.preferences(context).edit().remove("language").commit();CaptureService.active=false;Arrays.fill(pcm,(byte)0);scheduler.cancel(RefinementJobService.JOB_ID);if(!finished)store.finish(session.id,"test cleanup");
             for(int i=0;i<100;i++)try{store.delete(session.id);break;}catch(IllegalStateException leased){Thread.sleep(100);}
         }
     }

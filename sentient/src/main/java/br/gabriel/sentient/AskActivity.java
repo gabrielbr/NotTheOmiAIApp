@@ -4,8 +4,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextPaint;
@@ -20,27 +18,27 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Ask questions of your knowledge; answers cite the messages and recordings they came from. */
-public final class AskActivity extends Activity {
+/**
+ * Ask questions of your knowledge; answers cite the messages and recordings they came from. The
+ * chat lives in AskSession, so it's still here after leaving the screen, and an answer still being
+ * written carries on; only Stop cancels it.
+ */
+public final class AskActivity extends Activity implements AskSession.Observer {
     private static final Pattern NUMBERED = Pattern.compile("\\[(\\d{1,3})\\]");
 
-    private final Handler main = new Handler(Looper.getMainLooper());
-    private final ExecutorService io = Executors.newSingleThreadExecutor();
-    private final List<LlmBackend.Turn> history = new ArrayList<>();
+    private AskSession session;
     private LinearLayout thread, setup;
     private ScrollView scroll;
     private EditText question;
     private Button send;
-    private TextView status, footer;
-    private volatile boolean running, cancelled;
-    private boolean destroyed;
+    private TextView status, footer, newChat;
+    /** The view showing the running answer's text, updated as it streams. */
+    private TextView live;
+    private int shownCount = -1;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -56,6 +54,12 @@ public final class AskActivity extends Activity {
         scroll.addView(content);
         page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         content.addView(Ui.title(this, "Ask your knowledge", "Ask"));
+        newChat = Ui.text(this, "New chat", 14, Ui.MUTED, true);
+        newChat.setPadding(0, dp(10), 0, 0);
+        newChat.setContentDescription("Start a new chat");
+        newChat.setOnClickListener(v -> session.clear());
+        newChat.setVisibility(View.GONE);
+        content.addView(newChat, new LinearLayout.LayoutParams(-2, -2));
         setup = Ui.column(this);
         content.addView(setup);
         thread = Ui.column(this);
@@ -83,7 +87,7 @@ public final class AskActivity extends Activity {
         question.setBackground(field);
         question.setPadding(dp(14), dp(12), dp(14), dp(12));
         row.addView(question, new LinearLayout.LayoutParams(0, -2, 1));
-        send = Ui.button(this, "Ask", Ui.Style.PRIMARY, v -> { if (running) cancelled = true; else submit(); });
+        send = Ui.button(this, "Ask", Ui.Style.PRIMARY, v -> { if (session.running()) session.stop(); else submit(); });
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, dp(52));
         sp.leftMargin = dp(8);
         row.addView(send, sp);
@@ -92,24 +96,63 @@ public final class AskActivity extends Activity {
         footer.setPadding(0, dp(8), 0, 0);
         bottom.addView(footer);
         page.addView(bottom);
+        session = AskSession.get(this);
     }
 
     @Override protected void onResume() {
         super.onResume();
+        session.observe(this);
+        shownCount = -1;
+        changed();
+    }
+
+    @Override protected void onPause() {
+        session.observe(null); // the answer keeps going; it's shown when you come back
+        super.onPause();
+    }
+
+    /** Redraws the chat when exchanges are added or finish; streams text into the live answer. */
+    @Override public void changed() {
+        List<AskSession.Exchange> all = session.exchanges();
+        AskSession.Exchange last = all.isEmpty() ? null : all.get(all.size() - 1);
+        int finished = 0;
+        for (AskSession.Exchange e : all) if (!e.running) finished++;
+        int key = all.size() * 1000 + finished;
+        if (key != shownCount) {
+            shownCount = key;
+            render(all);
+            scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
+        } else if (last != null && last.running && live != null) {
+            live.setText(last.partial);
+        }
+        boolean running = session.running();
+        send.setText(running ? "Stop" : "Ask");
+        if (running && last.status != null) { status.setText(last.status); status.setVisibility(View.VISIBLE); }
+        else status.setVisibility(View.GONE);
+        newChat.setVisibility(all.isEmpty() ? View.GONE : View.VISIBLE);
         refreshSetup();
     }
 
-    @Override protected void onDestroy() {
-        destroyed = true;
-        cancelled = true;
-        io.shutdownNow();
-        super.onDestroy();
+    private void render(List<AskSession.Exchange> all) {
+        thread.removeAllViews();
+        live = null;
+        for (AskSession.Exchange e : all) {
+            TextView asked = Ui.text(this, e.question, 17, Ui.INK, true);
+            asked.setPadding(0, dp(24), 0, dp(8));
+            thread.addView(asked);
+            TextView answer = Ui.text(this, "", 16, Ui.INK, false);
+            thread.addView(answer);
+            if (e.running) { answer.setText(e.partial); live = answer; }
+            else if (e.error != null) { answer.setText(e.error); answer.setTextColor(Ui.CORAL_TEXT); }
+            else if (e.answer != null) showAnswer(answer, new LlmBackend.Answer(e.answer, e.notice), e.ids, e.sources, e.question);
+        }
     }
 
     void refreshSetup() {
         setup.removeAllViews();
         String missing = AskBackends.missingSetup(this);
         footer.setText(missing == null ? AskBackends.footer(this) : "");
+        boolean running = session.running();
         send.setEnabled(missing == null || running);
         if (missing != null) {
             Ui.gap(setup, 20);
@@ -119,7 +162,7 @@ public final class AskActivity extends Activity {
             bp.topMargin = dp(12);
             setup.addView(Ui.button(this, "Set up", Ui.Style.DARK,
                     v -> startActivity(new Intent(this, AskSettingsActivity.class))), bp);
-        } else if (history.isEmpty() && thread.getChildCount() == 0) {
+        } else if (session.exchanges().isEmpty() && thread.getChildCount() == 0) {
             Ui.gap(setup, 12);
             setup.addView(Ui.text(this, "Try: \"What did Ana and I plan for Sunday?\" or \"What did I talk about on Tuesday?\"",
                     15, Ui.MUTED, false));
@@ -128,57 +171,9 @@ public final class AskActivity extends Activity {
 
     private void submit() {
         String q = question.getText().toString().trim();
-        if (q.isEmpty() || running || AskBackends.missingSetup(this) != null) return;
+        if (q.isEmpty() || session.running() || AskBackends.missingSetup(this) != null) return;
         question.setText("");
-        setup.removeAllViews();
-        TextView asked = Ui.text(this, q, 17, Ui.INK, true);
-        asked.setPadding(0, dp(24), 0, dp(8));
-        thread.addView(asked);
-        TextView pending = Ui.text(this, "", 16, Ui.INK, false);
-        thread.addView(pending);
-        running = true;
-        cancelled = false;
-        send.setText("Stop");
-        showStatus("Thinking…");
-        final List<LlmBackend.Turn> past = new ArrayList<>(history);
-        io.execute(() -> {
-            LlmBackend.Answer answer = null;
-            String error = null;
-            List<Long> cited = new ArrayList<>();
-            List<Items.Item> sources = new ArrayList<>();
-            try {
-                LlmBackend backend = AskBackends.create(this);
-                answer = backend.answer(past, q, new LlmBackend.Listener() {
-                    @Override public void status(String s) { main.post(() -> showStatus(s)); }
-                    @Override public void partial(String s) { main.post(() -> { if (!destroyed) pending.setText(s); }); }
-                }, () -> cancelled);
-                Db db = KnowledgeStore.get(this);
-                cited = Citations.existing(db, Citations.ids(answer.text));
-                for (Long id : cited) { Items.Item item = Items.get(db, id); if (item != null) sources.add(item); }
-            } catch (ClaudeBackend.AskException failed) {
-                error = failed.getMessage();
-            } catch (Exception failed) {
-                error = "Something went wrong (" + failed.getClass().getSimpleName() + ").";
-            }
-            final LlmBackend.Answer done = answer;
-            final String problem = error;
-            final List<Long> ids = cited;
-            final List<Items.Item> found = sources;
-            main.post(() -> {
-                if (destroyed) return;
-                running = false;
-                send.setText("Ask");
-                status.setVisibility(View.GONE);
-                if (done == null) {
-                    pending.setText(problem);
-                    pending.setTextColor(Ui.CORAL_TEXT);
-                } else {
-                    history.add(new LlmBackend.Turn(q, done.text));
-                    showAnswer(pending, done, ids, found, q);
-                }
-                scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
-            });
-        });
+        session.ask(q);
     }
 
     /** The answer with [n] citation links, a notice if any, and the cited sources. */
@@ -225,12 +220,6 @@ public final class AskActivity extends Activity {
     private void open(long id, String query) {
         startActivity(new Intent(this, ItemActivity.class).putExtra(ItemActivity.EXTRA_ID, id)
                 .putExtra(ItemActivity.EXTRA_QUERY, query));
-    }
-
-    private void showStatus(String s) {
-        if (destroyed || !running) return;
-        status.setText(s);
-        status.setVisibility(View.VISIBLE);
     }
 
     private int dp(int v) { return Ui.dp(this, v); }

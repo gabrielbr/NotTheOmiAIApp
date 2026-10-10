@@ -72,6 +72,7 @@ public final class OmiCaptureService extends Service {
     private boolean foreground;
     private String lastNotificationState;
     private String singleAction, doubleAction;
+    private int micGain = -1;
     private Thread worker;
     private OmiBle ble;
     private OmiPcmQueue incoming;
@@ -110,10 +111,11 @@ public final class OmiCaptureService extends Service {
                 return reject(startId, "Select a valid Omi device first — nothing recorded");
             }
             singleAction = buttonAction(prefs.getString("single_action", "bookmark"));
+            micGain = prefs.getInt("mic_gain", -1);
             doubleAction = buttonAction(prefs.getString("double_action", "stop"));
             owner = this;
             active = true;
-            RefinementJobService.pauseForCapture();
+            RefinementJobService.captureStarted();
             cancelled = receivedPcm = recovering = hadGap = false;
             lastPcmAt = 0;
             stopDeadlineNanos = 0;
@@ -357,6 +359,7 @@ public final class OmiCaptureService extends Service {
                 }
                 // Stop shares this exact monitor: cancelled preparation cannot connect.
                 ble = new OmiBle(this, listener);
+                ble.setMicGain(micGain);
                 setProgress("Connecting to Omi — waiting for audio…");
                 ble.connect(address);
                 connectEnqueued = true;

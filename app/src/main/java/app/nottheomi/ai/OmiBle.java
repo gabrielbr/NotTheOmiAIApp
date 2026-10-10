@@ -48,6 +48,12 @@ public final class OmiBle {
     // transport.c at the pin above: READ + WRITE, one unsigned byte 0..100.
     private static final UUID SETTINGS = UUID.fromString("19b10010-e8f2-537e-4f6c-d104768a1214");
     private static final UUID LED = UUID.fromString("19b10011-e8f2-537e-4f6c-d104768a1214");
+    // transport.c: READ + WRITE, one byte 0..8 (mute, -20, -10, 0, +6, +10, +20 default, +30, +40 dB);
+    // the firmware saves it, so it survives power-off.
+    private static final UUID MIC_GAIN = UUID.fromString("19b10012-e8f2-537e-4f6c-d104768a1214");
+    public static final int MIC_GAIN_MAX = 8;
+    /** Short losses (up to 200 ms of 20 ms frames) are concealed by the decoder, not split. */
+    static final int MAX_CONCEALED_FRAMES = 10, FRAME_SAMPLES = 320;
     private static final UUID BATTERY_SERVICE = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb");
     private static final UUID BATTERY = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb");
     private static final long BATTERY_REFRESH_MS = 60000L;
@@ -66,7 +72,8 @@ public final class OmiBle {
     private long activeSelection;
     // Operations 1..5 are connect/MTU/discover/codec/audio CCC; 6 is idle,
     // 7 is optional button CCC; 8/9/10 are LED read/write/readback; 11 is BAS read;
-    // 12 is the bounded settling delay before one incomplete-discovery recheck.
+    // 12 is the bounded settling delay before one incomplete-discovery recheck;
+    // 13 is the one mic-gain write per connection.
     // Audio and buttons keep flowing during optional operations.
     private Runnable deadline, audioDeadline, retryTask;
     private boolean audioReady, buttonReady, audioReceived, discoveryRechecked;
@@ -78,6 +85,9 @@ public final class OmiBle {
     private BluetoothGattCharacteristic batteryCharacteristic;
     private Runnable batteryPoll;
     private int ledRequested = -1;
+    /** Mic gain level to apply on each connection; -1 leaves the device's own. */
+    private volatile int micGain = -1;
+    private BluetoothGattCharacteristic micCharacteristic;
     private volatile LedState ledState = new LedState(false, false, -1,
         "LED brightness unknown; read during an existing live connection");
     private OpusDecoder decoder;
@@ -89,6 +99,8 @@ public final class OmiBle {
         listener.onLedState(ledState);
         listener.onBattery(-1);
     }
+    /** Gain level 0..8 written once after each connection's audio is ready; -1 leaves it. */
+    public void setMicGain(int level) { micGain = level >= 0 && level <= MIC_GAIN_MAX ? level : -1; }
     public void readLedBrightness() { requestLed(false, -1); }
     public void setLedBrightness(int value) { requestLed(true, value); }
     private void requestLed(boolean write, int value) {
@@ -214,6 +226,37 @@ public final class OmiBle {
             }
         } };
         handler.postDelayed(batteryPoll, delay);
+    }
+    /** After the button CCC: write the chosen mic gain (once), then start battery polling. */
+    private void applyMicGain(BluetoothGatt remote) {
+        int level = micGain;
+        if (level < 0 || !current(remote, 6) || ledQuarantined) { scheduleBattery(remote, 1000L); return; }
+        try {
+            BluetoothGattService service = remote.getService(SETTINGS);
+            BluetoothGattCharacteristic target = service == null ? null : service.getCharacteristic(MIC_GAIN);
+            int required = BluetoothGattCharacteristic.PROPERTY_READ | BluetoothGattCharacteristic.PROPERTY_WRITE;
+            if (target == null || !MIC_GAIN.equals(target.getUuid()) || (target.getProperties() & required) != required) {
+                listener.onStatus(streamStatus() + "; mic gain not supported by this firmware");
+                scheduleBattery(remote, 1000L); return;
+            }
+            target.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+            if (!target.setValue(new byte[]{(byte) level})) { micGainDone(remote, false); return; }
+            micCharacteristic = target; arm(13);
+            if (current(remote, 13) && !remote.writeCharacteristic(target)) micGainDone(remote, false);
+        } catch (RuntimeException e) {
+            // Native submission is uncertain: no further optional writes on this GATT.
+            if (!current(remote)) return;
+            cancelDeadline(); operation = 6;
+            quarantineOptional(); micCharacteristic = null;
+            listener.onStatus(streamStatus() + "; mic gain unavailable until the next reconnect");
+        }
+    }
+    private void micGainDone(BluetoothGatt remote, boolean ok) {
+        if (!current(remote)) return;
+        cancelDeadline(); operation = 6; micCharacteristic = null;
+        listener.onStatus(streamStatus() + (ok ? "; mic gain set" : "; mic gain not set"));
+        scheduleBattery(remote, 1000L);
+        // Like every optional control, never touches audio, gaps, retry or the connection.
     }
     private void batteryFailure(BluetoothGatt remote, boolean quarantine) {
         if (!current(remote)) return;
@@ -348,6 +391,7 @@ public final class OmiBle {
             else if (op >= 8 && op <= 10) ledFailure(remote,
                 "LED operation timed out; unavailable until next natural reconnect", true);
             else if (op == 11) batteryFailure(remote, true);
+            else if (op == 13) { quarantineOptional(); micGainDone(remote, false); }
             else fail((op == 1 ? "Omi connection" : op == 3 ? "Omi service discovery" : op == 4 ? "Omi audio format check" : "Omi audio subscription") + " timed out", true);
         } };
         handler.postDelayed(deadline, 15000);
@@ -360,7 +404,7 @@ public final class OmiBle {
         discoveryRechecked = false;
         codecCharacteristic = audioCharacteristic = buttonCharacteristic = null; pendingDescriptor = null;
         ledCharacteristic = null; ledReadConfirmed = ledQuarantined = false; ledRequested = -1;
-        batteryCharacteristic = null;
+        batteryCharacteristic = null; micCharacteristic = null;
         if (old != null) { try { old.disconnect(); } catch (RuntimeException ignored) {} try { old.close(); } catch (RuntimeException ignored) {} }
         frames.reset(); decoder = null;
         publishLed(false, false, -1, "LED brightness unknown; read during an existing live connection");
@@ -433,6 +477,9 @@ public final class OmiBle {
             if (characteristic != null) characteristicRead(remote, characteristic, value == null ? null : value.clone(), status);
         }
         @Override public void onCharacteristicWrite(BluetoothGatt remote, BluetoothGattCharacteristic characteristic, int status) { postEvent(() -> {
+            if (current(remote, 13) && characteristic != null && characteristic == micCharacteristic) {
+                micGainDone(remote, status == BluetoothGatt.GATT_SUCCESS); return;
+            }
             if (!current(remote, 9) || ledQuarantined || characteristic != ledCharacteristic) return;
             if (status != BluetoothGatt.GATT_SUCCESS) { ledFailure(remote, "LED write failed; read again", false); return; }
             try {
@@ -453,7 +500,7 @@ public final class OmiBle {
                 if (status != BluetoothGatt.GATT_SUCCESS) { buttonUnavailable(remote, "subscription rejected"); return; }
                 cancelDeadline(); pendingDescriptor = null; operation = 6; buttonReady = true;
                 listener.onStatus(streamStatus() + "; button controls ready");
-                scheduleBattery(remote, 1000L);
+                applyMicGain(remote);
             }
         }); }
         @Override public void onCharacteristicChanged(BluetoothGatt remote, BluetoothGattCharacteristic characteristic) {
@@ -542,7 +589,7 @@ public final class OmiBle {
         }
         buttonCharacteristic = null;
         listener.onStatus(streamStatus() + "; button controls unavailable (" + reason + ")");
-        scheduleBattery(remote, 1000L);
+        applyMicGain(remote);
         // No reconnect, audio gap, or audio watchdog reset for optional failure.
     }
     private String streamStatus() {
@@ -575,6 +622,7 @@ public final class OmiBle {
         // extend the startup allowance or reset reconnect backoff.
         if (frames.gap) { listener.onGap(); listener.onStatus("BLE audio gap: incomplete task discarded"); try { decoder = new OpusDecoder(16000, 1); } catch (Exception e) { fail("Opus decoder failed", false); return; } }
         if (opus == null) return;
+        int lost = frames.lost;
         try { short[] pcm = new short[1920]; int count = decoder.decode(opus, 0, opus.length, pcm, 0, pcm.length, false);
             if (count > 0 && current(remote)) {
                 boolean firstAudio = !audioReceived;
@@ -584,18 +632,36 @@ public final class OmiBle {
                         : operation == 7 ? "; enabling button controls" : "; button controls unavailable"));
                 }
             }
+            // Packets lost after this frame: the decoder's concealment fills them, so the
+            // recording keeps its timing and isn't split for a short radio blip.
+            for (int i = 0; i < lost && current(remote); i++) {
+                short[] filler = new short[FRAME_SAMPLES];
+                int n = decoder.decode(null, 0, 0, filler, 0, FRAME_SAMPLES, false);
+                if (n > 0) listener.onPcm(Arrays.copyOf(filler, n));
+            }
         } catch (Exception e) { frames.reset(); listener.onGap(); listener.onStatus("Invalid Opus frame: incomplete task discarded"); try { decoder = new OpusDecoder(16000, 1); } catch (Exception ignored) { fail("Opus decoder failed", false); } }
     }); }
     /** Package-visible pure packet parser for JVM tests. Last frame is discarded on stop. */
     static final class FrameAssembler {
         private final ByteArrayOutputStream pending = new ByteArrayOutputStream();
         private int last = -1, fragment = -1; boolean gap, accepted;
-        void reset() { last = fragment = -1; pending.reset(); gap = accepted = false; }
+        /** Whole frames missing just before this packet's frame, to conceal (no gap reported). */
+        int lost;
+        void reset() { last = fragment = -1; pending.reset(); gap = accepted = false; lost = 0; }
         byte[] accept(byte[] packet) {
-            gap = accepted = false;
+            gap = accepted = false; lost = 0;
             if (packet == null || packet.length <= 3) { reset(); gap = true; return null; }
             int seq = (packet[0] & 255) | ((packet[1] & 255) << 8), part = packet[2] & 255;
             if (seq == last) return null; // duplicated notification is not new audio
+            int missing = last == -1 ? 0 : (seq - last - 1) & 65535;
+            if (missing > 0 && missing <= MAX_CONCEALED_FRAMES && part == 0 && fragment == 0 && pending.size() > 0) {
+                // A short loss between unfragmented frames: the frame before it is whole.
+                byte[] complete = pending.toByteArray();
+                pending.reset();
+                pending.write(packet, 3, packet.length - 3); last = seq; fragment = 0; accepted = true;
+                lost = missing;
+                return complete;
+            }
             if (last != -1 && (seq != ((last + 1) & 65535) || (part != 0 && part != fragment + 1))) { reset(); gap = true; }
             if (last == -1 && part != 0) return null;
             byte[] complete = part == 0 && pending.size() > 0 ? pending.toByteArray() : null;

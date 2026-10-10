@@ -69,7 +69,16 @@ public final class ModelInstallerHostTest {
         ModelInstaller.prepare(upgrade, source, () -> false);
         for (String old : ModelInstaller.SUPERSEDED) check(!new File(upgrade, old).exists(), "Superseded model removed: " + old);
         check(new File(upgrade, "unrelated.bin").length() == 1, "Unrelated files kept");
-        System.out.println("ModelInstallerHostTest PASS: " + assertions + " assertions, real pinned Whisper model");
+        File vadAsset = new File(args[2]);
+        File vad = ModelInstaller.install(upgrade, ModelInstaller.VAD_FILE, ModelInstaller.VAD_SHA256, ModelInstaller.VAD_BYTES,
+                new String[0], () -> new FileInputStream(vadAsset), () -> false);
+        check(ModelInstaller.verify(vad, ModelInstaller.VAD_SHA256, ModelInstaller.VAD_BYTES, () -> false), "Pinned VAD model installed");
+        check(ModelInstaller.verify(new File(upgrade, ModelInstaller.MODEL_FILE), () -> false), "VAD install leaves Whisper model intact");
+        reject(() -> ModelInstaller.install(new File(temporary, "vad-bad"), ModelInstaller.VAD_FILE, ModelInstaller.VAD_SHA256,
+                ModelInstaller.VAD_BYTES, new String[0], () -> new ByteArrayInputStream(new byte[]{1}), () -> false),
+                IOException.class, "Wrong VAD bytes rejected");
+        check(!new File(new File(temporary, "vad-bad"), ModelInstaller.VAD_FILE).exists(), "Rejected VAD not published");
+        System.out.println("ModelInstallerHostTest PASS: " + assertions + " assertions, real pinned Whisper and VAD models");
     }
     private interface Checked { void run() throws Exception; }
     private static void reject(Checked code, Class<? extends Exception> expected, String label) throws Exception {

@@ -148,6 +148,14 @@ public final class NavigationTest {
         SettingsActivity settings = Robolectric.buildActivity(SettingsActivity.class).setup().get();
         ArrayList<View> found = new ArrayList<>();
         settings.getWindow().getDecorView().findViewsWithText(found, "About", View.FIND_VIEWS_WITH_TEXT);
+        // "About you" also matches; exactly one row is About itself.
+        found.removeIf(v -> !"About".contentEquals(((android.widget.TextView) v).getText()));
         assertEquals(1, found.size());
+        for (String label : new String[]{"Connect sources", "Ask", "About you", "People", "To-dos", "Chats for to-dos", "Updates"}) {
+            ArrayList<View> row = new ArrayList<>();
+            settings.getWindow().getDecorView().findViewsWithText(row, label, View.FIND_VIEWS_WITH_TEXT);
+            row.removeIf(v -> !label.contentEquals(((android.widget.TextView) v).getText()));
+            assertEquals(label, 1, row.size());
+        }
     }
 }

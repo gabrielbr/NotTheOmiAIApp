@@ -6,12 +6,14 @@
 
 - **Todoist: Option A**, share each task to the Todoist app. The app stays without INTERNET permission.
 - **Language: mixed Portuguese/English.** Whisper auto-detects the language per 30-second window. Vosk can only load one language, so the live draft uses the Portuguese model, and the final Whisper transcript handles both languages.
+- **Update (2026-10-10):** Whisper now defaults to Portuguese (English and per-window detection stay selectable), because detection on noisy wearable audio cost far more than it gained. See "Transcription quality" below.
 
 ## Status
 
 | Item | State |
 |---|---|
-| Whisper `language="auto"` when the model is multilingual (`whisper_jni.cpp`) | Done |
+| Whisper language setting, Portuguese by default (`whisper_jni.cpp`, Omi settings › Transcripts) | Done |
+| Silero VAD, pause-aligned windows, no extra no-speech filter; refinement runs during capture | Done |
 | Whisper model: multilingual **medium Q5_0** (`ggml-medium-q5_0.bin`, SHA-256 `19fea4b3…220f`); old small weights deleted on update | Done |
 | Vosk live-draft model `vosk-model-small-pt-0.3` | Done |
 | `TaskExtractor` + `TasksActivity` (Todoist share) | **Moved to Sentient.** Removed from `:app`; restore from commit `d6165d4` |
@@ -105,3 +107,30 @@ Recommendation: ship Option A first. Add Option B behind a setting once the extr
 - **Mixed languages.** If you speak PT and EN in the same day, `"auto"` per 30 s window may help. Decide once you see real data.
 - **Upstream sync.** The upstream repo publishes source snapshots, not granular history, so expect manual merges if you want future upstream fixes.
 - **Not certified upstream.** Long sessions and screen-off endurance are explicitly marked "not certified" in `verification/PUBLIC-SOURCE-0.4.4.md`.
+
+## Transcription quality (2026-10-10)
+
+Every recording sat at "Refining": the refinement job refused to start, and stopped, whenever a capture was active, so with all-day recording Whisper never ran and only the Vosk draft was visible. Refinement now runs during capture (2 threads, background priority) and a pass that hits its 7-minute limit continues at once instead of backing off.
+
+Measured on 32 FLEURS pt-BR clips (8 min, 721 words, a silent minute in the middle), mixed with room noise at ~11 dB SNR and passed through 16 kbps Opus like Omi audio. Word error rate, lower is better. Numbers are written as digits by Whisper and as words in the reference, which costs Whisper a few points.
+
+| Configuration | WER | Speed (4 x86 cores) |
+|---|---|---|
+| Vosk small-pt (live draft) | 35.6% | — |
+| Whisper medium, previous settings (auto language, hard 30 s windows, no-speech filter) | 91.6% (3-min subset) | 2.0× realtime |
+| + Portuguese, no extra no-speech filter | 54.9% (3-min subset) | 1.0× |
+| + Silero VAD | 18.5% | 1.0× |
+| + windows cut at the quietest moment between 18 and 30 s (**shipped**) | **11.2%** | 1.0× |
+
+The previous no-speech filter dropped any segment Whisper rated ≥ 0.6 likely to be silence, which in noise was most real speech. Without VAD, Whisper also skipped whole sentences in each window. No "Legendas pela comunidade Amara.org"-style hallucinations appeared in any run, so there is no phrase filter. The medium model stays; large-v3-turbo wasn't needed.
+
+### From the Omi app (2026-10-10)
+
+Compared with how upstream Omi handles audio (`BasedHardware/omi`), four techniques were portable to an offline phone app:
+
+| Technique | Outcome |
+|---|---|
+| Mic gain (BLE `19B10012`, 0–8) | Shipped: Omi settings › Microphone, written once per connection |
+| Concealing short Bluetooth losses | Shipped: up to 10 lost 20 ms frames are filled by the Opus decoder instead of splitting the recording |
+| Words to expect (Whisper prompt) | Shipped: Omi settings › Transcripts. Names absent from the test audio left WER unchanged (11.2%) |
+| Bounded peak normalisation before Whisper (×4 max, toward 0.8) | Not shipped: 10.7% vs 11.2% WER, within noise on this set, and 12% slower |

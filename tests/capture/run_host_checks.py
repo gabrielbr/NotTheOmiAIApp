@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Targeted host checks: real installer + mocked Android/native capture lifecycle.
 Not a replacement for APK/emulator/physical microphone acceptance.
-Run: python3 tests/capture/run_host_checks.py [--sdk /path/to/android-sdk] [--model /path/to/ggml-medium-q5_0.bin]
+Run: python3 tests/capture/run_host_checks.py [--sdk /path/to/android-sdk] [--model /path/to/ggml-medium-q5_0.bin] [--vad-model /path/to/ggml-silero-v5.1.2.bin]
 """
 import argparse
 import pathlib
@@ -16,6 +16,8 @@ parser.add_argument('--service-only', action='store_true', help='run service fix
 parser.add_argument('--model', type=pathlib.Path,
                     default=ROOT / 'app/src/main/assets/ggml-medium-q5_0.bin',
                     help='real Whisper model file (defaults to the packaged asset)')
+parser.add_argument('--vad-model', type=pathlib.Path,
+                    default=ROOT / 'app/src/main/assets/ggml-silero-v5.1.2.bin', help='pinned Silero VAD model')
 parser.add_argument('--preview-model', type=pathlib.Path,
                     default=ROOT / 'app/src/main/assets/model.zip', help='pinned Vosk model ZIP')
 args = parser.parse_args()
@@ -43,7 +45,7 @@ if not args.service_only:
         fixture = directory / 'fixture'
         fixture.mkdir()
         subprocess.run(['java', '-cp', f'{classes}:{android}', 'app.nottheomi.ai.ModelInstallerHostTest',
-                        str(args.model), str(fixture)], check=True, timeout=120)
+                        str(args.model), str(fixture), str(args.vad_model)], check=True, timeout=120)
         preview_fixture = directory / 'preview-fixture'
         preview_fixture.mkdir()
         subprocess.run(['java', '-cp', f'{classes}:{android}', 'app.nottheomi.ai.PreviewModelInstallerHostTest',
@@ -190,7 +192,7 @@ public class AudioRecord {
 }''',
 'app/nottheomi/ai/RefinementJobService.java': '''package app.nottheomi.ai; public class RefinementJobService {
  public static volatile int pauses,schedules;
- public static void pauseForCapture(){if(!CaptureService.active&&!OmiCaptureService.active)throw new AssertionError("pause before capture active");pauses++;}
+ public static void captureStarted(){if(!CaptureService.active&&!OmiCaptureService.active)throw new AssertionError("pause before capture active");pauses++;}
  public static void schedule(android.content.Context c){
   if(CaptureService.active||OmiCaptureService.active)throw new AssertionError("schedule while capture still active");
   if(PreviewModel.created!=PreviewModel.closed||PreviewRecognizer.created!=PreviewRecognizer.closed||android.os.PowerManager.held!=0)

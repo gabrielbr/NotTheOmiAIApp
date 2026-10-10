@@ -37,30 +37,38 @@ final class LocalBackend implements LlmBackend {
         if (cancelled.getAsBoolean()) throw new ClaudeBackend.AskException("Stopped.");
         synchronized (LOCK) {
             long h = load(listener);
-            listener.status("Writing the answer on this phone…");
+            listener.status("Reading your messages…");
             StringBuilder text = new StringBuilder();
             int result = generate(h, LocalPrompt.chat(about, sources, history, question), text, listener, cancelled);
-            if (result == LlamaNative.TOO_LONG) {
+            if (result == LlamaNative.TOO_LONG && !cancelled.getAsBoolean()) {
                 // Long history or sources: retry once with half the sources, no history and no portrait.
                 text.setLength(0);
                 String fewer = sources.substring(0, Math.min(sources.length(), SOURCE_BUDGET / 2));
                 fewer = fewer.substring(0, Math.max(0, fewer.lastIndexOf('\n') + 1));
                 result = generate(h, LocalPrompt.chat(fewer, java.util.Collections.emptyList(), question), text, listener, cancelled);
             }
-            if (result < 0) throw new ClaudeBackend.AskException("The on-device model couldn't answer (" + result + ").");
             if (cancelled.getAsBoolean()) return new Answer(text.toString().trim(), "Stopped.");
+            if (result < 0) throw new ClaudeBackend.AskException("The on-device model couldn't answer (" + result + ").");
             return new Answer(text.toString().trim(), result >= MAX_ANSWER ? "The answer was cut off." : null);
         }
     }
 
     private int generate(long h, String prompt, StringBuilder text, Listener listener, BooleanSupplier cancelled) {
         ByteArrayOutputStream utf8 = new ByteArrayOutputStream();
-        return LlamaNative.generate(h, prompt.getBytes(StandardCharsets.UTF_8), MAX_ANSWER, 0.3f, 42, chunk -> {
-            utf8.write(chunk, 0, chunk.length);
-            text.setLength(0);
-            text.append(new String(utf8.toByteArray(), StandardCharsets.UTF_8));
-            listener.partial(text.toString());
-            return !cancelled.getAsBoolean();
+        return LlamaNative.generate(h, prompt.getBytes(StandardCharsets.UTF_8), MAX_ANSWER, 0.3f, 42, new LlamaNative.TokenSink() {
+            @Override public boolean accept(byte[] chunk) {
+                utf8.write(chunk, 0, chunk.length);
+                text.setLength(0);
+                text.append(new String(utf8.toByteArray(), StandardCharsets.UTF_8));
+                listener.partial(text.toString());
+                return !cancelled.getAsBoolean();
+            }
+            @Override public boolean progress(int done, int total) {
+                // Reading the question and sources is most of the wait on a phone: show it moving.
+                listener.status(done >= total ? "Writing the answer on this phone…"
+                        : "Reading your messages… " + (100 * done / Math.max(1, total)) + "%");
+                return !cancelled.getAsBoolean();
+            }
         });
     }
 

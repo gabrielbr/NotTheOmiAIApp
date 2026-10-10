@@ -150,7 +150,7 @@ public final class HybridDeviceProbe {
                 }
             }, samples -> {
                 long call = System.nanoTime();
-                try { calls[0]++; return model.transcribe(samples); }
+                try { calls[0]++; return model.transcribe(samples, 4, "en", null); }
                 finally { compute[0] += System.nanoTime() - call; }
             }, new RefinementEngine.Sink() {
                 @Override public void commit(long expected, long next, String value) {
