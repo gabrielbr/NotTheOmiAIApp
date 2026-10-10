@@ -63,7 +63,7 @@ def main():
             expected[whisper] = native['abis'][abi]['sha256']
             if abi in native.get('dotprod', {}):
                 expected['lib/'+abi+'/libnottheomi-whisper-dotprod.so'] = native['dotprod'][abi]['sha256']
-            assert abi != 'arm64-v8a' or 'lib/arm64-v8a/libnottheomi-whisper-dotprod.so' in expected, 'Fast arm64 build missing
+            assert abi != 'arm64-v8a' or 'lib/arm64-v8a/libnottheomi-whisper-dotprod.so' in expected, 'Fast arm64 build missing'
             actual = {name:sha(archive.read(name)) for name in names if name.startswith('lib/'+abi+'/') and name.endswith('.so')}
             assert actual == expected, 'APK native libraries differ from pinned inputs'
             actual_native.update(actual)
