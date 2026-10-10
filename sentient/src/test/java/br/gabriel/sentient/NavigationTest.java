@@ -3,7 +3,9 @@ package br.gabriel.sentient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import android.app.Activity;
 import android.content.Intent;
+import android.provider.Settings;
 import android.view.View;
 
 import org.junit.Test;
@@ -14,6 +16,7 @@ import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 /** Where each entry point leads. */
 @RunWith(RobolectricTestRunner.class)
@@ -28,6 +31,51 @@ public final class NavigationTest {
         Intent next = Shadows.shadowOf(home).getNextStartedActivity();
         assertNotNull(next);
         assertEquals(SettingsActivity.class.getName(), next.getComponent().getClassName());
+    }
+
+    @Test public void sourceRowOpensItsScreen() throws Exception {
+        SentientActivity home = Robolectric.buildActivity(SentientActivity.class).setup().get();
+        SentientScreenshotTest.settle();
+        home.showSources(Arrays.asList(SentientScreenshotTest.state(ChatMessages.WHATSAPP, null, null, 0, null)));
+        View row = only(home, "WhatsApp", View.FIND_VIEWS_WITH_TEXT);
+        ((View) row.getParent()).performClick();
+        Intent next = Shadows.shadowOf(home).getNextStartedActivity();
+        assertEquals(SourceActivity.class.getName(), next.getComponent().getClassName());
+        assertEquals(ChatMessages.WHATSAPP, next.getStringExtra(SourceActivity.EXTRA_PLUGIN_ID));
+    }
+
+    @Test public void accessButtonOpensNotificationAccess() throws Exception {
+        SourceActivity source = SentientScreenshotTest.source(ChatMessages.WHATSAPP);
+        SentientScreenshotTest.grantWhatsApp(source, false);
+        source.show(SentientScreenshotTest.state(ChatMessages.WHATSAPP, null, null, 0, null));
+        only(source, "Allow notification access", View.FIND_VIEWS_WITH_TEXT).performClick();
+        Intent next = Shadows.shadowOf(source).getNextStartedActivity();
+        assertEquals(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS, next.getAction());
+    }
+
+    @Test public void chatSourcesHaveNoSyncButton() throws Exception {
+        SourceActivity source = SentientScreenshotTest.source(ChatMessages.WHATSAPP);
+        SentientScreenshotTest.grantWhatsApp(source, true);
+        source.show(SentientScreenshotTest.state(ChatMessages.WHATSAPP, 1L, "OK · live", 3, 1L));
+        assertEquals(0, find(source, "Sync now", View.FIND_VIEWS_WITH_TEXT).size());
+        SourceActivity omi = SentientScreenshotTest.source(OmiTranscripts.ID);
+        omi.show(SentientScreenshotTest.state(OmiTranscripts.ID, 1L, "OK", 3, 1L));
+        assertEquals(1, find(omi, "Sync now", View.FIND_VIEWS_WITH_TEXT).size());
+    }
+
+    /** Views whose text (or description) is exactly this; findViewsWithText also matches substrings. */
+    private static ArrayList<View> find(Activity a, String text, int flags) {
+        ArrayList<View> found = new ArrayList<>();
+        a.getWindow().getDecorView().findViewsWithText(found, text, flags);
+        found.removeIf(v -> !text.contentEquals(flags == View.FIND_VIEWS_WITH_TEXT
+                ? ((android.widget.TextView) v).getText() : v.getContentDescription()));
+        return found;
+    }
+
+    private static View only(Activity a, String text, int flags) {
+        ArrayList<View> found = find(a, text, flags);
+        assertEquals(text, 1, found.size());
+        return found.get(0);
     }
 
     @Test public void settingsListsAbout() {

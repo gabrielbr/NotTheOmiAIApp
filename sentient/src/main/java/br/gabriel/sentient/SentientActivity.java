@@ -23,33 +23,22 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import br.gabriel.sentient.plugin.SourcePlugin;
-
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Home: search everything synced; with no query, the sources and "Sync now". */
-public final class SentientActivity extends Activity {
+public final class SentientActivity extends Activity implements LiveSources.Listener {
     static final int MAX_HITS = 30;
-    private static final String OK = "OK";
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private LinearLayout body;
     private TextView searchNote;
+    private LiveSources sources;
     private String query = "";
     private int searchGeneration;
-    private long shownRevision = -1;
-    private boolean visible, destroyed, accessButtonShown, limitsExplained;
-
-    private final Runnable tick = new Runnable() {
-        @Override public void run() {
-            if (!visible) return;
-            if (SyncJobService.revision != shownRevision && query.isEmpty()) loadSources();
-            main.postDelayed(this, 1000);
-        }
-    };
+    private boolean destroyed;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -76,24 +65,16 @@ public final class SentientActivity extends Activity {
         body = Ui.column(this);
         content.addView(body);
 
+        sources = new LiveSources(this, this);
         SyncJobService.scheduleDaily(this);
     }
 
-    @Override protected void onResume() {
-        super.onResume();
-        visible = true;
-        shownRevision = -1;
-        main.post(tick);
-    }
-
-    @Override protected void onPause() {
-        visible = false;
-        main.removeCallbacks(tick);
-        super.onPause();
-    }
+    @Override protected void onResume() { super.onResume(); sources.resume(); }
+    @Override protected void onPause() { sources.pause(); super.onPause(); }
 
     @Override protected void onDestroy() {
         destroyed = true;
+        sources.destroy();
         io.shutdownNow();
         super.onDestroy();
     }
@@ -133,33 +114,17 @@ public final class SentientActivity extends Activity {
     }
 
     private void refresh() {
-        if (query.isEmpty()) { shownRevision = -1; loadSources(); }
+        if (query.isEmpty()) sources.reload();
         else search();
     }
 
     // --- Sources -------------------------------------------------------------------------------
 
-    private void loadSources() {
-        shownRevision = SyncJobService.revision;
-        final int generation = searchGeneration;
-        io.execute(() -> {
-            List<Sources.State> states;
-            try {
-                Db db = KnowledgeStore.get(this);
-                for (SourcePlugin plugin : PluginRegistry.plugins(this)) Sources.ensure(db, plugin.id());
-                states = Sources.all(db);
-            } catch (Exception failure) {
-                main.post(() -> { if (!destroyed && query.isEmpty()) showStoreError(failure); });
-                return;
-            }
-            main.post(() -> { if (!destroyed && generation == searchGeneration && query.isEmpty()) showSources(states); });
-        });
-    }
+    @Override public void onSources(List<Sources.State> states) { if (query.isEmpty()) showSources(states); }
+    @Override public void onStoreError(Exception failure) { if (query.isEmpty()) showStoreError(failure); }
 
     void showSources(List<Sources.State> states) {
         body.removeAllViews();
-        accessButtonShown = false;
-        limitsExplained = false;
         searchNote.setVisibility(View.GONE);
         long lastSync = 0;
         for (Sources.State s : states) if (s.lastSyncAt != null) lastSync = Math.max(lastSync, s.lastSyncAt);
@@ -177,99 +142,26 @@ public final class SentientActivity extends Activity {
         }
         body.addView(Ui.text(this, "Sources", 22, Ui.INK, true));
         Ui.gap(body, 6);
+        boolean access = ChatPlugin.accessGranted(this);
         for (Sources.State s : states) {
             body.addView(Ui.divider(this));
-            body.addView(sourceRow(s));
+            body.addView(SettingsActivity.sourceRow(this, s, access));
         }
         body.addView(Ui.divider(this));
         Ui.gap(body, 20);
         if (!empty) {
             String line = busy ? "Getting new messages and recordings…"
-                    : "Last synced " + ago(lastSync) + ". Syncs again once a day.";
+                    : "Last synced " + SourceStatus.ago(lastSync) + ". Syncs again once a day.";
             body.addView(Ui.text(this, line, 14, Ui.MUTED, false));
             Ui.gap(body, 12);
         }
         body.addView(syncButton(busy), new LinearLayout.LayoutParams(-1, -2));
     }
 
-    private View sourceRow(Sources.State s) {
-        LinearLayout r = Ui.column(this);
-        r.setPadding(0, dp(14), 0, dp(14));
-        LinearLayout top = Ui.row(this);
-        top.addView(Ui.text(this, PluginRegistry.displayName(this, s.pluginId), 17, Ui.INK, true),
-                new LinearLayout.LayoutParams(0, -2, 1));
-        ChatMessages.App app = ChatMessages.App.forId(s.pluginId);
-        boolean chat = app != null;
-        // A chat app's state is live: access can be granted or revoked between syncs.
-        boolean needsAccess = chat && !ChatPlugin.accessGranted(this);
-        boolean problem = chat ? needsAccess || s.notice != null
-                : s.lastStatus != null && !s.lastStatus.startsWith(OK);
-        if (problem) {
-            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, -2);
-            cp.leftMargin = dp(10);
-            top.addView(Ui.chip(this, "Needs attention", true), cp);
-        }
-        r.addView(top);
-        String metaText;
-        if (chat) metaText = s.lastItemAt == null ? "No messages yet"
-                : count(s.itemCount, "message") + " · last one " + ago(s.lastItemAt);
-        else metaText = count(s.itemCount, OmiTranscripts.ID.equals(s.pluginId) ? "recording" : "item") + " · "
-                + (s.lastSyncAt == null ? "Not synced yet" : "Synced " + ago(s.lastSyncAt));
-        TextView meta = Ui.text(this, metaText, 13, Ui.MUTED, false);
-        meta.setPadding(0, dp(6), 0, 0);
-        r.addView(meta);
-        if (problem) {
-            String why = needsAccess ? (accessButtonShown ? "Turns on with the same notification access."
-                    : ChatPlugin.needsAccess(app) + ".") : chat ? s.notice + "." : problemText(s.lastStatus);
-            TextView reason = Ui.text(this, why,
-                    15, Ui.CORAL_TEXT, false);
-            reason.setPadding(0, dp(8), 0, 0);
-            r.addView(reason);
-        }
-        if (chat && s.notice == null && (needsAccess || s.lastItemAt == null)) {
-            // Explain the limits once, on the first chat row being set up; later rows add only their own.
-            String limits = limitsExplained ? "" : "Saves the messages you receive from now on, and the replies you send "
-                    + "from a notification. Older history and muted chats aren't included.";
-            if (app == ChatMessages.App.SIGNAL_APP)
-                limits = (limits + " Signal's notifications must show the name and message.").trim();
-            limitsExplained = true;
-            TextView hint = Ui.text(this, limits, 13, Ui.MUTED, false);
-            hint.setPadding(0, dp(8), 0, 0);
-            r.addView(hint);
-        }
-        if (needsAccess && !accessButtonShown) {
-            // One grant covers every chat app, so offer the button once.
-            accessButtonShown = true;
-            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
-            bp.topMargin = dp(12);
-            r.addView(Ui.button(this, "Allow notification access", Ui.Style.DARK,
-                    v -> startActivity(ChatPlugin.accessSettings())), bp);
-        }
-        return r;
-    }
-
-    /** "Unavailable · <reason>" carries a user-facing reason; other failures only a class name. */
-    static String problemText(String status) {
-        String unavailable = "Unavailable · ";
-        if (status.startsWith(unavailable)) return status.substring(unavailable.length()) + ".";
-        return "The last sync failed. Sync now to try again.";
-    }
-
-    /** "2 hours ago"; passing now explicitly keeps it relative instead of a calendar date. */
-    private static String ago(long time) {
-        String value = DateUtils.getRelativeTimeSpanString(time, System.currentTimeMillis(),
-                DateUtils.MINUTE_IN_MILLIS).toString();
-        // Android capitalises "Yesterday"; it reads mid-sentence here ("Synced yesterday").
-        boolean english = "en".equals(java.util.Locale.getDefault().getLanguage());
-        return english && !value.isEmpty() ? Character.toLowerCase(value.charAt(0)) + value.substring(1) : value;
-    }
-
-    private static String count(long n, String noun) { return n + " " + noun + (n == 1 ? "" : "s"); }
-
     private Button syncButton(boolean busy) {
         Button b = Ui.button(this, busy ? "Syncing…" : "Sync now", Ui.Style.PRIMARY, v -> {
             SyncJobService.syncNow(this);
-            shownRevision = -1;
+            sources.reload();
         });
         b.setEnabled(!busy);
         return b;

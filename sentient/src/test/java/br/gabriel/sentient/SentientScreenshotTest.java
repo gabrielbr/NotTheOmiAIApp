@@ -73,7 +73,43 @@ public final class SentientScreenshotTest {
 
     @Test public void settings() throws Exception {
         SettingsActivity a = Robolectric.buildActivity(SettingsActivity.class).setup().get();
+        settle();
+        long now = System.currentTimeMillis();
+        grantWhatsApp(a, false);
+        a.showRows(Arrays.asList(
+                state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR),
+                state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L),
+                state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 41, now - 40 * 60_000L)));
         settle(); shot(a, "settings");
+    }
+
+    @Test public void sources() throws Exception {
+        long now = System.currentTimeMillis();
+        SourceActivity omi = source(OmiTranscripts.ID);
+        omi.show(state(OmiTranscripts.ID, now - 2 * HOUR, "OK · 3 new, 1 updated", 142, now - 3 * HOUR));
+        settle(); shot(omi, "source-gvoice");
+        omi.show(state(OmiTranscripts.ID, now - 26 * HOUR, "Unavailable · Install GVoice to sync recordings", 142, now - 30 * HOUR));
+        settle(); shot(omi, "source-gvoice-unavailable");
+
+        SourceActivity whatsApp = source(ChatMessages.WHATSAPP);
+        grantWhatsApp(whatsApp, false);
+        whatsApp.show(state(ChatMessages.WHATSAPP, null, null, 0, null));
+        settle(); shot(whatsApp, "source-whatsapp-access");
+        grantWhatsApp(whatsApp, true);
+        whatsApp.show(state(ChatMessages.WHATSAPP, now - 2 * HOUR, "OK · live", 318, now - 5 * 60_000L));
+        settle(); shot(whatsApp, "source-whatsapp");
+
+        SourceActivity signal = source(ChatMessages.SIGNAL);
+        grantWhatsApp(signal, true);
+        signal.show(noticed(state(ChatMessages.SIGNAL, now - 2 * HOUR, "OK · live", 0, null), MessagesListenerService.HIDDEN));
+        settle(); shot(signal, "source-signal-hidden");
+    }
+
+    static SourceActivity source(String pluginId) throws Exception {
+        SourceActivity a = Robolectric.buildActivity(SourceActivity.class,
+                new Intent().putExtra(SourceActivity.EXTRA_PLUGIN_ID, pluginId)).setup().get();
+        settle();
+        return a;
     }
 
     @Test public void item() throws Exception {

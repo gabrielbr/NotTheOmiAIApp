@@ -47,6 +47,13 @@ The UI update in [`PLAN-GMIND-UI.md`](../PLAN-GMIND-UI.md) splits the one long p
 - `Ui.listRow` is the Settings row: a bold label, a short status on the right (coral when something needs attention) and a chevron.
 - Settings never shows a row for a feature that doesn't work yet.
 
+![Sources](ui/gmind-sources.png)
+*Step 2: home and Settings list the sources as short rows; each opens its own screen.*
+
+- A source row says a few words: *318 messages*, *Not synced yet*, or in coral *Needs access* / *Needs attention*.
+- The source screen has the chip (*Working* or *Needs attention*), the counts, the problem in one coral sentence with its one fix (**Allow notification access**, **Open Signal**), **What it saves** (the limits, always shown) and, for GVoice recordings only, the sync line and **Sync now**. WhatsApp and Signal save messages as they arrive, so they have no sync button.
+- The setup paragraphs and the access button are gone from the home page.
+
 ## Screenshots
 
 `sentient/src/test/java/br/gabriel/sentient/SentientScreenshotTest.java` renders the real screens with Robolectric native graphics and sample rows. No database or Keystore is needed:
