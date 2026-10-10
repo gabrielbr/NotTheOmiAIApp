@@ -18,10 +18,11 @@ def run(argv):
     result = subprocess.run([str(x) for x in argv], check=True, text=True, capture_output=True)
     return result.stdout + result.stderr
 
-# GVoice must stay offline; GMind (module sentient) is the companion that may use the network.
+# Both apps declare INTERNET. GVoice uses it only to download its pinned Whisper models
+# (tests/hybrid/verify_apk.py checks the pins); GMind (module sentient) talks to online services.
 MODULES = {
     'app': {'dir': 'app', 'id': 'br.gabriel.omitarefas', 'label': 'GVoice', 'prefix': 'GVoice',
-            'input': r'app-[a-z0-9_-]+-release-unsigned\.apk', 'internet': False},
+            'input': r'app-[a-z0-9_-]+-release-unsigned\.apk', 'internet': True},
     # The companion app is named GMind; its module and package keep the name sentient.
     'sentient': {'dir': 'sentient', 'id': 'br.gabriel.sentient', 'label': 'GMind', 'prefix': 'GMind',
                  'input': r'sentient-release-unsigned\.apk', 'internet': True},
