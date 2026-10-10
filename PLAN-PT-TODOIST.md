@@ -123,3 +123,14 @@ Measured on 32 FLEURS pt-BR clips (8 min, 721 words, a silent minute in the midd
 | + windows cut at the quietest moment between 18 and 30 s (**shipped**) | **11.2%** | 1.0× |
 
 The previous no-speech filter dropped any segment Whisper rated ≥ 0.6 likely to be silence, which in noise was most real speech. Without VAD, Whisper also skipped whole sentences in each window. No "Legendas pela comunidade Amara.org"-style hallucinations appeared in any run, so there is no phrase filter. The medium model stays; large-v3-turbo wasn't needed.
+
+### From the Omi app (2026-10-10)
+
+Compared with how upstream Omi handles audio (`BasedHardware/omi`), four techniques were portable to an offline phone app:
+
+| Technique | Outcome |
+|---|---|
+| Mic gain (BLE `19B10012`, 0–8) | Shipped: Omi settings › Microphone, written once per connection |
+| Concealing short Bluetooth losses | Shipped: up to 10 lost 20 ms frames are filled by the Opus decoder instead of splitting the recording |
+| Words to expect (Whisper prompt) | Shipped: Omi settings › Transcripts. Names absent from the test audio left WER unchanged (11.2%) |
+| Bounded peak normalisation before Whisper (×4 max, toward 0.8) | Not shipped: 10.7% vs 11.2% WER, within noise on this set, and 12% slower |
